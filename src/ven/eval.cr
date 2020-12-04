@@ -11,17 +11,11 @@ module Ven
     # Maximum amount of traces before we die of recursion
     MAX_TRACE = 500
 
-    def initialize
+    def initialize(@context = Context.new)
       @computes = 0
     end
 
-    macro die(message)
-      # DeathException is defined and handled in Visitor,
-      # the parent of this class
-      raise DeathException.new({{message}})
-    end
-
-    def die(message : String, scope : Context)
+    def die(message : String)
       # This method is required to be implemented. It is
       # actively used in Visitor, though, and has no uses
       # in this class. Macro `die` is used instead
@@ -33,51 +27,47 @@ module Ven
       # since the scope is copied every function call.
       last = @last.not_nil!
       trace = Trace.new(last.tag, "<unit>")
-      message = ([message] + scope.traces + [trace]).join("\n  from ")
+      message = ([message] + @context.traces + [trace]).join("\n  from ")
 
       raise RuntimeError.new(last.tag, message)
     end
 
     ### Top-level visitors
 
-    def visit!(q : QSymbol, scope)
-      unless value = scope.fetch(q.value)
+    def visit!(q : QSymbol)
+      unless value = @context.fetch(q.value)
         die("could not find '#{q.value}' in current scope")
       end
 
       value.as(Model)
     end
 
-    def visit!(q : QNumber, scope)
+    def visit!(q : QNumber)
       Num.new(str2num(q.value))
     end
 
-    def visit!(q : QString, scope)
+    def visit!(q : QString)
       Str.new(q.value)
     end
 
-    def visit!(q : QVector, scope)
-      Vec.new(visit(q.items, scope))
+    def visit!(q : QVector)
+      Vec.new(visit(q.items))
     end
 
-    def visit!(q : QUnary, scope)
-      unary(q.operator, visit(q.operand, scope))
+    def visit!(q : QUnary)
+      unary(q.operator, visit(q.operand))
     end
 
-    def visit!(q : QBinary, scope)
-      binary(q.operator,
-        visit(q.left, scope),
-        visit(q.right, scope))
+    def visit!(q : QBinary)
+      binary(q.operator, visit(q.left), visit(q.right))
     end
 
-    def visit!(q : QIntoBool, scope)
-      value = visit(q.value, scope)
-
-      MBool.new(!false?(value))
+    def visit!(q : QIntoBool)
+      MBool.new(!false?(visit(q.value)))
     end
 
-    def visit!(q : QBinarySpread, scope)
-      body = visit(q.body, scope)
+    def visit!(q : QBinarySpread)
+      body = visit(q.body)
 
       if !body.is_a?(Vec)
         die("could not spread on this value: #{body}")
@@ -96,8 +86,8 @@ module Ven
       end
     end
 
-    def visit!(q : QLambdaSpread, scope)
-      operand = visit(q.operand, scope)
+    def visit!(q : QLambdaSpread)
+      operand = visit(q.operand)
 
       unless operand.is_a?(Vec)
         die("could not spread over this value: #{operand}")
@@ -105,10 +95,10 @@ module Ven
 
       result = [] of Model
 
-      scope.local(nil, {q.tag, "<spread>"}) do
+      @context.local(nil, {q.tag, "<spread>"}) do
         operand.value.each_with_index do |item, index|
-          scope.define("_", item)
-          factor = visit(q.lambda, scope)
+          @context.define("_", item)
+          factor = visit(q.lambda)
           unless factor.is_a?(MBool) && !factor.value
             result << (factor.is_a?(MHole) ? item : factor)
           end
@@ -118,25 +108,24 @@ module Ven
       Vec.new(result)
     end
 
-    def visit!(q : QInlineWhen, scope)
-      if false? visit(q.cond, scope)
-        return q.alt.nil? \
-          ? MHole.new
-          : visit(q.alt.not_nil!, scope)
+    def visit!(q : QInlineWhen)
+      if false? visit(q.cond)
+        return q.alt.nil? ? MHole.new : visit(q.alt.not_nil!)
       end
-      visit(q.suc, scope)
+
+      visit(q.suc)
     end
 
-    def visit!(q : QAssign, scope)
-      scope.define(q.target, visit(q.value, scope))
+    def visit!(q : QAssign)
+      @context.define(q.target, visit(q.value))
     end
 
-    def visit!(q : QBasicFun, scope)
-      scope.define(q.name, MFunction.new(q.tag, q.name, q.params, q.body))
+    def visit!(q : QBasicFun)
+      @context.define(q.name, MFunction.new(q.tag, q.name, q.params, q.body))
     end
 
-    def visit!(q : QCall, scope)
-      callee, args = visit(q.callee, scope), visit(q.args, scope)
+    def visit!(q : QCall)
+      callee, args = visit(q.callee), visit(q.args)
 
       if !callee.is_a?(MFunction)
         die("callee is not a function: #{callee}")
@@ -144,10 +133,10 @@ module Ven
         die("#{callee} expected #{exp} argument(s), but found #{fnd}")
       end
 
-      scope.local({callee.params, args}, trace: {callee.tag, callee.name}) do
-        if scope.trace.amount > MAX_TRACE
+      @context.local({callee.params, args}, trace: {callee.tag, callee.name}) do
+        if @context.trace.amount > MAX_TRACE
           die("too many calls: very deep or infinite recursion")
-        elsif (result = visit(callee.body, scope).last).is_a?(MHole)
+        elsif (result = visit(callee.body).last).is_a?(MHole)
           die("illegal operation: #{callee} returned a hole")
         else
           result
@@ -339,7 +328,7 @@ module Ven
     ### Interaction with the outside world
 
     def self.from(tree : Quotes, scope : Context)
-      new.visit(tree, scope.clear)
+      new(scope).visit(tree)
     end
   end
 end
