@@ -1,0 +1,90 @@
+module Ven
+  private module Parselet
+    abstract struct Nud
+      macro block
+        p.expect("{"); p.repeat("}", ";")
+      end
+
+      abstract def parse(
+        p : Parser,
+        tag : NodeTag,
+        token : Token)
+    end
+
+    struct Unary < Nud
+      def initialize(
+        @precedence : Int32)
+      end
+
+      def parse(p, tag, token)
+        QUnary.new(tag, token[:type].downcase, p.infix(@precedence))
+      end
+    end
+
+    struct Symbol < Nud
+      def parse(p, tag, token)
+        QSymbol.new(tag, token[:raw])
+      end
+    end
+
+    struct String < Nud
+      def parse(p, tag, token)
+        QString.new(tag, token[:raw][1...-1])
+      end
+    end
+
+    struct Number < Nud
+      def parse(p, tag, token)
+        QNumber.new(tag, token[:raw])
+      end
+    end
+
+    struct Group < Nud
+      def parse(p, tag, token)
+        p.followed_by(")")
+      end
+    end
+
+    struct Vector < Nud
+      def parse(p, tag, token)
+        QVector.new(tag, p.repeat("]", ",", ->p.infix))
+      end
+    end
+
+    struct Spread < Nud
+      def parse(p, tag, token)
+        # Grab all binary operator token types (so keys)
+        binaries = p.@led.reject { |_, v| !v.is_a?(Binary) }.keys
+        if operator = binaries.find { |binary| p.consume(binary) }
+          # If consumed a binary operator, it's a binary spread
+          QBinarySpread.new(tag, operator.downcase, body!)
+        else
+          QLambdaSpread.new(tag, p.infix, body!)
+        end
+      end
+
+      private macro body!
+        p.expect("|"); p.infix
+      end
+    end
+
+    struct Fun < Nud
+      def parse(p, tag, token)
+        name = p.expect("SYMBOL")[:raw]
+        if p.consume("(")
+          args = p.repeat(")", ",", -> { p.expect("SYMBOL")[:raw] })
+        else
+          args = [] of ::String
+        end
+        if p.consume("=")
+          body = [p.infix]
+          # `=` functions must end with a semicolon:
+          p.expect(";", "EOF")
+        else
+          body = block
+        end
+        QBasicFun.new(tag, name, args, body)
+      end
+    end
+  end
+end

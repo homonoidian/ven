@@ -1,0 +1,4 @@
+shard.lock
+bin
+.vscode
+lib

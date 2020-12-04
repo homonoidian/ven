@@ -1,0 +1,10 @@
+name: ven
+version: 0.1.0
+
+targets:
+  ven:
+    main: src/ven.cr
+
+dependencies:
+  fancyline:
+    github: papierkorb/fancyline
