@@ -27,9 +27,13 @@ else
     begin
       unless source.empty?
         repeat = 1
+        do_print = true
         if source =~ /\.e(\d+)(.*)/
           repeat = $1.to_i
           source = $2
+        elsif source =~ /\.\!(.*)/
+          do_print = false
+          source = $1
         end
         tree = Ven::Parser.from("<interactive>", source)
         stats = [] of Int32
@@ -40,7 +44,7 @@ else
           after_exec = Time.monotonic
           stats << (after_exec - before_exec).microseconds
         end
-        puts code.last unless code.empty?
+        puts code.last if do_print && !code.empty?
         puts "{ran in mean (_ / #{repeat}): #{stats.sum / stats.size}qs}"
       end
     rescue e : Ven::InternalError

@@ -9,7 +9,7 @@ module Ven
     {% elsif name == :STRING %}
       /"([^\n"])*"/
     {% elsif name == :NUMBER %}
-      /[1-9][0-9]*|0/
+      /\d*\.\d+|[1-9]\d*|0/
     {% elsif name == :SPECIAL %}
       /--|\+\+|=>|<=|>=|[-<>~+*\/()[\]{},:;=?|]/
     {% elsif name == :IGNORE %}
@@ -26,10 +26,30 @@ module Ven
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
   private KEYWORDS   = ["is", "fun", "else"]
 
-  alias Token = { type: String, raw: String, line: Int32 }
+  alias Token = {
+    type: String,
+    raw: String,
+    line: Int32
+  }
+
+  enum Precedence
+    ZERO
+    ASSIGNMENT
+    CONDITIONAL
+    IDENTITY
+    ADDITION
+    PRODUCT
+    POSTFIX
+    PREFIX
+    CALL
+  end
 
   class Parser
-    @tok : Token = { type: "BOL", raw: "beginning-of-line", line: 1 }
+    @tok : Token = {
+      type: "START",
+      raw: "start anchor",
+      line: 1,
+    }
 
     def initialize(@file : String, @src : String)
       @buf = ""
@@ -38,14 +58,14 @@ module Ven
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
       @line = 1
-      @tok = _accept
+      @tok = accept
     end
 
     def die(message : String)
       raise ParseError.new(@tok, @file, message)
     end
 
-    private def _match(pattern : Regex) : Bool?
+    private def match(pattern : Regex) : Bool?
       if pattern =~ @src[@pos..]
         @pos += $0.size
         @buf = $0
@@ -53,42 +73,43 @@ module Ven
       end
     end
 
-    private macro _token(type)
+    private macro token(type)
       { type: {{type}}, raw: @buf, line: @line }
     end
 
-    private def _accept
+    private def accept
       loop do
-        return case when _match(RX_IGNORE)
+        return case
+        when match(RX_IGNORE)
           next @line += @buf.count("\n")
-        when _match(RX_SPECIAL)
-          _token(@buf.upcase)
-        when _match(RX_SYMBOL)
-          _token(KEYWORDS.includes?(@buf) ? @buf.upcase : "SYMBOL")
-        when _match(RX_NUMBER)
-          _token("NUMBER")
-        when _match(RX_STRING)
-          _token("STRING")
+        when match(RX_SPECIAL)
+          token(@buf.upcase)
+        when match(RX_SYMBOL)
+          token(KEYWORDS.includes?(@buf) ? @buf.upcase : "SYMBOL")
+        when match(RX_NUMBER)
+          token("NUMBER")
+        when match(RX_STRING)
+          token("STRING")
         when @pos == @src.size
-          _token("EOF")
+          token("EOF")
         else
           raise ParseError.new(@src[@pos].to_s, @line, @file, "malformed input")
         end
       end
     end
 
-    private def _precedence?
+    private def precedence?
       # Symbol `x` is an infix if met in an infix position.
       # Mangle the token so it is.
       if @tok[:type] == "SYMBOL" && @tok[:raw] == "x"
-        @tok = { type: "X", raw: "x", line: @tok[:line] }
+        @tok = {type: "X", raw: "x", line: @tok[:line]}
       end
 
       @led.fetch(@tok[:type]) { return 0 }.precedence
     end
 
     def consume
-      @tok, _ = _accept, @tok
+      @tok, _ = accept, @tok
     end
 
     def consume(type : String)
@@ -105,7 +126,7 @@ module Ven
       end.not_nil!
     end
 
-    def followed_by(type : String, unit : ->Quote = ->infix)
+    def before(type : String, unit : -> Quote = ->infix)
       value = unit.call; expect(type); value
     end
 
@@ -132,7 +153,7 @@ module Ven
 
     def infix(level = 0) : Quote
       left = prefix
-      while level < _precedence?
+      while level < precedence?
         operator = consume
         left = @led
           .[(operator[:type])]
@@ -141,7 +162,7 @@ module Ven
       return left
     end
 
-    def stmt : Quote
+    def statement : Quote
       if parselet = @stmt.fetch(@tok[:type], false)
         parselet
           .as(Parselet::Nud)
@@ -152,25 +173,25 @@ module Ven
     end
 
     def start : Quotes
-      repeat("EOF", unit: ->stmt)
+      repeat("EOF", unit: ->statement)
     end
 
-    private macro defnud(type, *tail, storage = @nud, precedence = 0)
+    private macro defnud(type, *tail, storage = @nud, precedence = ZERO)
       {% unless tail.first.is_a?(StringLiteral) %}
         {{storage}}[{{type}}] = {{tail.first}}.new
       {% else %}
         {% for prefix in [type] + tail %}
-          {{storage}}[{{prefix}}] = Parselet::Unary.new({{precedence}})
+          {{storage}}[{{prefix}}] = Parselet::Unary.new(Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
 
-    private macro defled(type, *tail, precedence = 0)
+    private macro defled(type, *tail, precedence = ZERO)
       {% unless tail.first.is_a?(StringLiteral) || !tail.first %}
-        @led[{{type}}] = {{tail.first}}.new({{precedence}})
+        @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}}.value)
       {% else %}
         {% for infix in [type] + tail %}
-          @led[{{infix}}] = Parselet::Binary.new({{precedence}})
+          @led[{{infix}}] = Parselet::Binary.new(Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
@@ -180,9 +201,8 @@ module Ven
     end
 
     def register
-      # XXX TODO: tidy up precedences (mb into Precedence)
       # Prefixes (NUDs):
-      defnud("+", "-", "~", precedence: 8)
+      defnud("+", "-", "~", precedence: PREFIX)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
       defnud("STRING", Parselet::String)
@@ -190,15 +210,15 @@ module Ven
       defnud("(", Parselet::Group)
       defnud("[", Parselet::Vector)
       # Infixes (LUDs):
-      defled("=", Parselet::Assign, precedence: 1)
-      defled("?", Parselet::IntoBool, precedence: 1)
-      defled("=>", Parselet::InlineWhen, precedence: 2)
-      defled("IS", ">", "<", ">=", "<=", precedence: 3)
-      defled("+", "-", "~", precedence: 4)
-      defled("*", "/", "X", precedence: 5)
-      defled("(", Parselet::Call, precedence: 10)
-      defled("++", Parselet::RetInc, precedence: 7)
-      defled("--", Parselet::RetDec, precedence: 7)
+      defled("=", Parselet::Assign, precedence: ASSIGNMENT)
+      defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
+      defled("=>", Parselet::InlineWhen, precedence: CONDITIONAL)
+      defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)
+      defled("+", "-", "~", precedence: ADDITION)
+      defled("*", "/", "X", precedence: PRODUCT)
+      defled("(", Parselet::Call, precedence: CALL)
+      defled("++", Parselet::RetInc, precedence: POSTFIX)
+      defled("--", Parselet::RetDec, precedence: POSTFIX)
       # Statements:
       defstmt("FUN", Parselet::Fun)
       ###

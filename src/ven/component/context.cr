@@ -38,7 +38,7 @@ module Ven
         @traces << Trace.new(t.first, t.last)
       end
 
-      trace.amount += 1
+      trace.use
 
       if initial
         initial.first.zip(initial.last) do |name, value|
@@ -52,7 +52,7 @@ module Ven
 
       # Properly (?) get rid of the trace
       if trace.amount > 1
-        trace.amount -= 1
+        trace.unuse
       elsif trace.amount == 1
         @traces.pop
       end

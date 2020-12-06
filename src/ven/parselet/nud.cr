@@ -41,7 +41,7 @@ module Ven
 
     struct Group < Nud
       def parse(p, tag, token)
-        p.followed_by(")")
+        p.before(")")
       end
     end
 

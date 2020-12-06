@@ -8,12 +8,17 @@ module Ven
     private alias Str = MString
     private alias Vec = MVector
 
-    # Maximum amount of traces before we die of recursion
+    # Maximum amount of traces (die of recursion if more)
     MAX_TRACE = 500
+
+    # Maximum amount of normalization passes
+    MAX_NORMALIZE_PASSES = 500
 
     def initialize(@context = Context.new)
       @computes = 0
     end
+
+    ### Handling death (what a soothing name this is!)
 
     def die(message : String)
       # This method is required to be implemented. It is
@@ -39,7 +44,9 @@ module Ven
         die("could not find '#{q.value}' in current scope")
       end
 
-      value.as(Model)
+      # Shallow copy so operations with this value yield a
+      # new value. Can it be done better though?
+      value.as(Model).dup
     end
 
     def visit!(q : QNumber)
@@ -148,7 +155,7 @@ module Ven
 
     # `false?` is the helper identity contexts and statements
     # use to check if a thing is falsey. Note that it returns
-    # Crystal's bool, not Ven's.
+    # Crystal's bool, not Ven's
     def false?(model : Model) : Bool
       case model
       when Vec
@@ -164,8 +171,20 @@ module Ven
       end
     end
 
+    # Yield an inverse of `true?`
+    private macro true?(model)
+      !false?({{model}})
+    end
+
+    # Construct an MBool based on `true?`
+    private macro to_bool(model)
+      MBool.new(true?({{model}}))
+    end
+
+    # A method to convert String to BigFloat and have the
+    # same death rescuing ArgumentError
     def str2num(str : String)
-      str.includes?(".") ? str.to_big_f : str.to_big_i
+      str.to_big_f
     rescue ArgumentError
       die("'#{str}': not a base-10 number")
     end
@@ -193,6 +212,7 @@ module Ven
     # used with `operator`
     def normalize?(operator, left : Model, right : Model)
       case {operator, left, right}
+      # when {"is", MBool, MBool}
       when {"is", Num, Num},
            {"<", Num, Num},
            {">", Num, Num},
@@ -220,9 +240,21 @@ module Ven
     # to the specification, which can be found in `normalize?`)
     def normalize!(operator, left : Model, right : Model)
       case operator
-      when "is"
-        # -> {Vec, Vec}
-        {left.to_vec, right.to_vec}
+      when "is" then case {left, right}
+        # -> Balance both sides: {Vec, Vec} | {Str, Str} ...
+        # 'is' is one of the few operators that have no fallback,
+        # meaning it can sometimes fail (e.g., fun is fun)
+        when {Vec, _}, {_, Vec}
+          {left.to_vec, right.to_vec}
+        when {Str, _}, {_, Str}
+          {left.to_str, right.to_str}
+        when {Num, _}, {_, Num}
+          {left.to_num, right.to_num}
+        when {MBool, _}
+          {left, to_bool(right)}
+        when {_, MBool}
+          {to_bool(left), right}
+        end
       when "<", ">", "<=", ">="
         # -> {Num, Num}
         {left.to_num, right.to_num}
@@ -258,16 +290,15 @@ module Ven
           # _ x _ -> {Vec, Num}
           {left.to_vec, right.to_num}
         end
-      else
-        die("'#{operator}': could not normalize these operands: #{left}, #{right}")
-      end
+      end || die("'#{operator}': could not normalize these operands: #{left}, #{right}")
     end
 
-    # Interpret the binary operations.
+    # Interpret the binary operations
     def compute(operator, left : Model, right : Model)
       if (@computes += 1) > 1000
         die("too many compute cycles; you've probably found " \
-            "an implementation bug")
+            "an implementation bug: normalizing this operator " \
+            "('#{operator}') causes an infinite loop")
       end
 
       case {operator, left, right}
@@ -275,6 +306,8 @@ module Ven
         left = MBool.new(left.value == right.value)
       when {"is", Str, Str}
         left = MBool.new(left.value == right.value)
+      when {"is", MBool, MBool}
+        left.value = left.value == right.value
       when {"<", Num, Num}
         left = MBool.new(left.value < right.value)
       when {">", Num, Num}
@@ -314,13 +347,21 @@ module Ven
 
     # The gateway to binary operations machinery.
     def binary(operator, left : Model, right : Model)
+      passes = 0
+
       # Normalize until satisfied
       while normalize?(operator, left, right)
+        if (passes += 1) > MAX_NORMALIZE_PASSES
+          die("too many normalization passes; you've probably " \
+              "found an implementation bug, as '#{operator}' " \
+              "requested normalization (thus was not normalized " \
+              "into one of the computable forms) more than " \
+              "#{MAX_NORMALIZE_PASSES} passes")
+        end
         left, right = normalize!(operator, left, right)
       end
 
-      # .dup so we're working with copies of args we were given
-      compute(operator, left.dup, right.dup)
+      compute(operator, left, right)
     rescue e : ModelCastError
       die("'#{operator}': cast error for #{left}, #{right}: #{e.message}")
     end
@@ -328,7 +369,7 @@ module Ven
     ### Interaction with the outside world
 
     def self.from(tree : Quotes, scope : Context)
-      new(scope).visit(tree)
+      new(scope.clear).visit(tree)
     end
   end
 end

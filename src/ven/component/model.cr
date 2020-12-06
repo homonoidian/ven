@@ -50,10 +50,10 @@ module Ven
   end
 
   class MNumber < Model
-    @value : BigFloat | BigInt | Int32
+    @value : BigFloat | Int32
 
     def to_s(io)
-      io << (@value % 1 == 0 ? @value.round : @value)
+      io << (@value % 1 == 0 ? @value.to_big_i : @value)
     end
 
     def to_num

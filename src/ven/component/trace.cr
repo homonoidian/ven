@@ -1,11 +1,17 @@
 module Ven
   class Trace
-    getter tag, name
-
-    property amount
+    getter tag, name, amount
 
     def initialize(@tag : QTag, @name : String)
       @amount = 0
+    end
+
+    def use
+      @amount += 1
+    end
+
+    def unuse
+      @amount -= 1
     end
 
     def ==(right : Trace)
