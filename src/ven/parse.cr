@@ -24,7 +24,7 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = ["is", "fun", "else"]
+  private KEYWORDS   = ["is", "fun", "if", "else"]
 
   alias Token = {
     type: String,
@@ -151,7 +151,7 @@ module Ven
         .parse(self, QTag.new(@file, @line), consume)
     end
 
-    def infix(level = 0) : Quote
+    def infix(level = Precedence::ZERO.value) : Quote
       left = prefix
       while level < precedence?
         operator = consume
@@ -162,13 +162,19 @@ module Ven
       return left
     end
 
-    def statement : Quote
+    def statement(trail = "EOF", detrail = true) : Quote
       if parselet = @stmt.fetch(@tok[:type], false)
         parselet
           .as(Parselet::Nud)
           .parse(self, QTag.new(@file, @line), consume)
       else
-        expr = infix; expect(";", "EOF"); expr
+        expression = infix
+        if consume(";") || detrail && consume(trail) || (@tok[:type] == trail)
+          expression
+        else
+          # Just to print an 'expected' error:
+          expect(";", trail)
+        end.as(Quote)
       end
     end
 
@@ -203,16 +209,17 @@ module Ven
     def register
       # Prefixes (NUDs):
       defnud("+", "-", "~", precedence: PREFIX)
+      defnud("IF", Parselet::If, precedence: CONDITIONAL)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
       defnud("STRING", Parselet::String)
       defnud("|", Parselet::Spread)
       defnud("(", Parselet::Group)
+      defnud("{", Parselet::Block)
       defnud("[", Parselet::Vector)
       # Infixes (LUDs):
       defled("=", Parselet::Assign, precedence: ASSIGNMENT)
       defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
-      defled("=>", Parselet::InlineWhen, precedence: CONDITIONAL)
       defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)

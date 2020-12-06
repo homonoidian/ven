@@ -54,13 +54,5 @@ module Ven
           : QReturnDecrement.new(tag, left.value)
       end
     end
-
-    struct InlineWhen < Led
-      def parse(p, tag, left, token)
-        suc = p.infix
-        alt = p.consume("ELSE") ? p.infix : nil
-        QInlineWhen.new(tag, left, suc, alt)
-      end
-    end
   end
 end

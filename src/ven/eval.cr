@@ -44,9 +44,7 @@ module Ven
         die("could not find '#{q.value}' in current scope")
       end
 
-      # Shallow copy so operations with this value yield a
-      # new value. Can it be done better though?
-      value.as(Model).dup
+      value.as(Model)
     end
 
     def visit!(q : QNumber)
@@ -115,12 +113,16 @@ module Ven
       Vec.new(result)
     end
 
-    def visit!(q : QInlineWhen)
+    def visit!(q : QIf)
       if false? visit(q.cond)
         return q.alt.nil? ? MHole.new : visit(q.alt.not_nil!)
       end
 
       visit(q.suc)
+    end
+
+    def visit!(q : QBlock)
+      visit(q.body).last
     end
 
     def visit!(q : QAssign)
@@ -300,6 +302,10 @@ module Ven
             "an implementation bug: normalizing this operator " \
             "('#{operator}') causes an infinite loop")
       end
+
+      # `left` is going to be changed throughout `compute`
+      # Shallowly (XXX right?) un-link it from the original Model
+      left = left.dup
 
       case {operator, left, right}
       when {"is", Num, Num}

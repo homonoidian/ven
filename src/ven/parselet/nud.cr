@@ -2,7 +2,7 @@ module Ven
   private module Parselet
     abstract struct Nud
       macro block
-        p.expect("{"); p.repeat("}", ";")
+        p.expect("{"); p.repeat("}", unit: -> { p.statement("}", detrail: false) })
       end
 
       abstract def parse(
@@ -65,6 +65,18 @@ module Ven
 
       private macro body!
         p.expect("|"); p.infix
+      end
+    end
+
+    struct Block < Nud
+      def parse(p, tag, tok)
+        QBlock.new(tag, p.repeat("}", unit: -> { p.statement("}", detrail: false) }))
+      end
+    end
+
+    struct If < Nud
+      def parse(p, tag, tok)
+        QIf.new(tag, p.infix, p.infix, p.consume("ELSE") ? p.infix : nil)
       end
     end
 

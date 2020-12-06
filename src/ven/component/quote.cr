@@ -173,7 +173,19 @@ module Ven
     end
   end
 
-  class QInlineWhen < Quote
+  class QBlock < Quote
+    getter body
+
+    def initialize(@tag,
+      @body : Quotes)
+    end
+
+    def to_s(io)
+      io << "{ " << @body.join("; ") << " }"
+    end
+  end
+
+  class QIf < Quote
     getter cond, suc, alt
 
     def initialize(@tag,
