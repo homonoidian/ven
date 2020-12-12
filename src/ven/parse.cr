@@ -46,11 +46,7 @@ module Ven
   end
 
   class Parser
-    @tok : Token = {
-      type: "START",
-      raw: "start anchor",
-      line: 1,
-    }
+    @tok : Token = { type: "START", raw: "start anchor", line: 1 }
 
     def initialize(@file : String, @src : String)
       @buf = ""
@@ -100,13 +96,13 @@ module Ven
     end
 
     private def precedence?
-      # Symbol `x` is an infix if met in an infix position.
-      # Mangle the token so it is.
+      # Symbol `x` is an operator if met in a position where
+      # infix is expected.
       if @tok[:type] == "SYMBOL" && @tok[:raw] == "x"
         @tok = {type: "X", raw: "x", line: @tok[:line]}
       end
 
-      @led.fetch(@tok[:type]) { return 0 }.precedence
+      (@led.fetch(@tok[:type]) { return 0 }).precedence
     end
 
     def consume
@@ -120,11 +116,13 @@ module Ven
     end
 
     def expect(*types : String)
-      if types.includes?(@tok[:type])
-        consume
-      elsif tys = types.map { |x| "'#{x}'" }
-        die("expected #{tys.join(", ")}")
-      end.not_nil!
+      return consume if types.includes?(@tok[:type])
+
+      types = types.map do |x|
+        "'#{x}'"
+      end
+
+      die("expected #{types.join(", ")}")
     end
 
     def before(type : String, unit : -> Quote = ->infix)
@@ -133,6 +131,11 @@ module Ven
 
     def repeat(stop : String? = nil, sep : String? = nil, unit : -> T = ->infix) forall T
       result = [] of T
+
+      unless stop || sep
+        raise "expected stop or sep or stop and sep; none given"
+      end
+
       until stop && consume(stop)
         result << unit.call
         if stop && sep
@@ -143,6 +146,7 @@ module Ven
           break
         end
       end
+
       result
     end
 
@@ -154,13 +158,14 @@ module Ven
 
     def infix(level = Precedence::ZERO.value) : Quote
       left = prefix
+
       while level < precedence?
+        tag = QTag.new(@file, @line)
         operator = consume
-        left = @led
-          .[(operator[:type])]
-          .parse(self, QTag.new(@file, @line), left, operator)
+        left = @led[(operator[:type])].parse(self, tag, left, operator)
       end
-      return left
+
+      left
     end
 
     def statement(trail = "EOF", detrail = true) : Quote
@@ -173,7 +178,7 @@ module Ven
         if consume(";") || detrail && consume(trail) || (@tok[:type] == trail)
           expression
         else
-          # Just to print an 'expected' error:
+          # Just so expected error looks nice
           expect(";", trail)
         end.as(Quote)
       end
@@ -209,7 +214,7 @@ module Ven
 
     def register
       # Prefixes (NUDs):
-      defnud("+", "-", "~", precedence: PREFIX)
+      defnud("+", "-", "~")
       defnud("IF", Parselet::If, precedence: CONDITIONAL)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
@@ -220,7 +225,7 @@ module Ven
       defnud("[", Parselet::Vector)
       defnud("_", Parselet::UPop)
       defnud("&_", Parselet::URef)
-      # Infixes (LUDs):
+      # Infixes (LEDs):
       defled("=", Parselet::Assign, precedence: ASSIGNMENT)
       defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
       defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)

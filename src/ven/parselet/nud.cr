@@ -1,6 +1,7 @@
 module Ven
   private module Parselet
     abstract struct Nud
+      # TODO: make this more flexible!
       macro block
         p.expect("{"); p.repeat("}", unit: -> { p.statement("}", detrail: false) })
       end
@@ -59,20 +60,23 @@ module Ven
 
     struct Vector < Nud
       def parse(p, tag, token)
-        QVector.new(tag, p.repeat("]", ",", ->p.infix))
+        QVector.new(tag, p.repeat("]", ","))
       end
     end
 
     struct Spread < Nud
       def parse(p, tag, token)
-        # Grab all binary operator token types (so keys)
+        # Grab all binary operator token types
         binaries = p.@led.reject { |_, v| !v.is_a?(Binary) }.keys
-        if operator = binaries.find { |binary| p.consume(binary) }
-          # If consumed a binary operator, it's a binary spread
-          QBinarySpread.new(tag, operator.downcase, body!)
-        else
-          QLambdaSpread.new(tag, p.infix, body!)
+
+        # If consumed a binary token type, it's a binary spread
+        binaries.each do |binary|
+          if p.consume(binary)
+            return QBinarySpread.new(tag, binary.downcase, body!)
+          end
         end
+
+        QLambdaSpread.new(tag, p.infix, body!)
       end
 
       private macro body!
@@ -110,7 +114,7 @@ module Ven
 
         if p.consume("=")
           body = [p.infix]
-          # `=` functions must end with a semicolon:
+          # `=` functions must end with a semicolon (or EOF)
           p.expect(";", "EOF")
         else
           body = block

@@ -21,18 +21,12 @@ module Ven
       @computes = 0
     end
 
-    ### Handling death (what a soothing name this is!)
+    ### Handling death
 
     def die(message : String)
-      # This method is required to be implemented. It is
-      # actively used in Visitor, though, and has no uses
-      # in this class. Macro `die` is used instead
-
       raise InternalError.new("no last node") if @last.nil?
 
-      # Construct the stack trace in a clever (?) way
-      # Note that traceback is in the Scope, which is (?) bad
-      # since the scope is copied every function call.
+      # Construct the traceback in a clever (?) way
       last = @last.not_nil!
       trace = Trace.new(last.tag, "<unit>")
       message = ([message] + @context.traces + [trace]).join("\n  from ")
@@ -97,7 +91,7 @@ module Ven
         return body.value.first
       end
 
-      # Apply the operation on two first items to deduce
+      # Apply the operation on two first items to induce
       # the type of the accumulator
       memo = binary(q.operator, body.value.first, body.value[1])
 
@@ -137,7 +131,7 @@ module Ven
     end
 
     def visit!(q : QIf)
-      if false? visit(q.cond)
+      if false?(visit(q.cond))
         return q.alt.nil? ? MHole.new : visit(q.alt.not_nil!)
       end
 
@@ -154,7 +148,7 @@ module Ven
 
     def visit!(q : QFun)
       # First, find out what the parameter types are. By
-      # default, it's `any`
+      # default, they're `any`
       rest = MType.new("any", Model)
       params = q.params.zip?(q.types).map do |param, type|
         type.nil? || (rest = visit(type)).is_a?(MType) \
@@ -170,14 +164,11 @@ module Ven
         generic = @context.define(q.name, MGenericFunction.new(q.name))
       end
 
-      # Add the concrete to the generic. `unless`es if
-      # such implementation already exists
       unless generic.add(concrete)
         die("could not add #{concrete} to #{generic}: such implementation " \
             "already exists")
       end
 
-      # Return the generic so the REPL displays it
       generic
     end
 
@@ -187,17 +178,17 @@ module Ven
 
     ### Helpers
 
-    # `false?` is the helper identity contexts and statements
-    # use to check if a thing is falsey. Note that it returns
-    # Crystal's bool, not Ven's
+    # Check if a thing is falsey, according to Ven. Note that
+    # it returns Crystal's bool, not Ven's
     def false?(model : Model) : Bool
       case model
       when Vec
-        model.value.each do|item|
+        model.value.each do |item|
           if false?(item)
             return true
           end
         end
+
         false
       when Str
         model.value.empty?
@@ -215,19 +206,19 @@ module Ven
       right.type == Model ? true : left.class == right.type
     end
 
-    # Yield an inverse of `true?`
+    # Yield an inverse of `false?`
     private macro true?(model)
       !false?({{model}})
     end
 
-    # Construct an MBool based on `true?`
+    # Call `true?` with `model` and make the result an MBool
     private macro to_bool(model)
       MBool.new(true?({{model}}))
     end
 
     ### Calls
 
-    private def typecheck(params : Array(TypedParam), args : Array(Model))
+    private def typecheck(params : Array(Ven::TypedParam), args : Array(Model))
       params.zip?(args).each do |param, arg|
         unless !arg.nil? && of?(arg, param[1])
           return false
@@ -239,7 +230,8 @@ module Ven
 
     def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
       if typecheck && !typecheck(callee.params, args)
-        die("typecheck failed: TODO better error!")
+        # TODO: better error
+        die("typecheck failed")
       end
 
       @context.local({callee.params.map(&.first), args}, {callee.tag, callee.name}) do
@@ -327,7 +319,7 @@ module Ven
            {"x", Vec, Num}
       when {_, Vec, Vec}
         # Other vector operations are distributed on vector items;
-        # so there is no need nor support for normalization
+        # so there is no need nor support for their normalization
       else
         true
       end
@@ -345,49 +337,35 @@ module Ven
           {left.to_str, right.to_str}
         when {Num, _}, {_, Num}
           {left.to_num, right.to_num}
-        when {MBool, _}
-          {left, to_bool(right)}
-        when {_, MBool}
-          {to_bool(left), right}
+        when {MBool, _}, {_, MBool}
+          {to_bool(left), to_bool(right)}
         end
       when "<", ">", "<=", ">=" then case {left, right}
         when {Vec, _}
-          # [] <> _ -> {Vec, Vec}
           {left, right.to_vec}
         else
-          # {Num, Num}
           {left.to_num, right.to_num}
         end
       when "+", "-", "*", "/" then case {left, right}
-        # -> {Vec, Vec} | {Num, Num}
         when {Vec, _}, {_, Vec}
-          # -> [] <> _, _ <> [] -> [] <> [] -> {Vec, Vec}
           {left.to_vec, right.to_vec}
         else
           {left.to_num, right.to_num}
         end
       when "~" then case {left, right}
-        # -> {Vec, Vec} | {Str, Str}
         when {Vec, _}, {_, Vec}
-          # -> [] ~ _, _ ~ [] -> [] ~ [] -> {Vec, Vec}
           {left.to_vec, right.to_vec}
         when {Str, _}, {_, Str}
-          # _ ~ "", "" ~ _ -> "_" ~ "", "" ~ "_" -> {Str, Str}
           {left.to_str, right.to_str}
         else
-          # _ ~ _ -> [_] ~ [_] -> {Vec, Vec}
           {left.to_vec, right.to_vec}
         end
       when "x" then case {left, right}
-        # -> {Vec, Num} | {Str, Num}
         when {_, Vec}, {_, Str}
-          # _ x [...] -> {Num, Vec} -> (commutative) -> {Vec, Num}
           {right, left.to_num}
         when {Vec, _}, {Str, _}
-          # [...] x _, "" x _ -> {Vec, Num}, {Str, Num}
           {left, right.to_num}
         else
-          # _ x _ -> {Vec, Num}
           {left.to_vec, right.to_num}
         end
       end || die("'#{operator}': could not normalize these operands: #{left}, #{right}")
@@ -401,8 +379,8 @@ module Ven
             "('#{operator}') causes an infinite loop")
       end
 
-      # `left` is going to be changed throughout `compute`
-      # Copy so we're not modifying the original value
+      # `left` is going to be changed soon. Copy so we're
+      # not modifying its original value
       left = left.dup
 
       case {operator, left, right}
@@ -429,7 +407,7 @@ module Ven
       when {"*", Num, Num}
         left.value *= right.value
       when {"/", Num, Num}
-        left.value /= right.value.to_big_f
+        left.value /= right.value
       when {"~", Str, Str}
         left.value += right.value
       when {"x", Str, Num}
@@ -453,7 +431,7 @@ module Ven
       die("'#{operator}': division by zero: #{left}, #{right}")
     end
 
-    # The gateway to binary operations machinery.
+    # Top-level entry to the interpretation of binary operations
     def binary(operator, left : Model, right : Model)
       passes = 0
 
@@ -465,6 +443,7 @@ module Ven
               "requested normalization  more than " \
               "#{MAX_NORMALIZE_PASSES} times")
         end
+
         left, right = normalize!(operator, left, right)
       end
 

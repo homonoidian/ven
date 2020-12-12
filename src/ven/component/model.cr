@@ -9,7 +9,8 @@ module Ven
   abstract class Model
     property value
 
-    def initialize(@value)
+    def initialize(
+      @value)
     end
 
     def to_num : MNumber

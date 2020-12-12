@@ -1,7 +1,4 @@
 module Ven
-  class HubHasGeneralFormError < Exception
-  end
-
   class Context
     getter traces
 
@@ -93,32 +90,6 @@ module Ven
       end
       result
     end
-
-    # Clarify a function: declare a new MFunctionHub if
-    # there was no such Hub declared (otherwise use the
-    # declared one) and prepend to this hub the form given
-    # todo
-    def clarify(name : String, form : MFunction, meaning : Quotes)
-      # TODO: wrong. have general function required
-      already = fetch(name)
-
-      if already.is_a?(MFunctionHub)
-        if already.general? && meaning.empty?
-          raise HubHasGeneralFormError.new
-        end
-        already.add(form, meaning)
-      elsif already.is_a?(MFunction) && !meaning.empty?
-        # If `name` is already a general function,
-        # and we're the meaning function, it should
-        # always be evaluated *last*.
-        define(name, MFunctionHub.new(name, already).add(form, meaning))
-      else
-        define(name, meaning.empty? \
-          ? MFunctionHub.new(name, form)
-          : MFunctionHub.new(name).add(form, meaning))
-      end
-    end
-
 
     # Clear the context, namely .clear the traces and erase all
     # but global scopes. Used to clean up after an in-function

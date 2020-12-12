@@ -3,11 +3,12 @@ module Ven
     abstract struct Led
       getter precedence : Int32
 
-      def initialize(@precedence)
+      def initialize(
+        @precedence)
       end
 
       abstract def parse(
-        p : Reader,
+        p : Parser,
         tag : NodeTag,
         left : Node,
         token : Token)
