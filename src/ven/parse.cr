@@ -25,7 +25,7 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = %w(_ &_ is fun meaning if else)
+  private KEYWORDS   = %w(_ &_ is fun given if else)
 
   alias Token = {
     type: String,

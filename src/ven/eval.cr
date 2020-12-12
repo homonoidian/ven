@@ -159,7 +159,7 @@ module Ven
       params = q.params.zip?(q.types).map do |param, type|
         type.nil? || (rest = visit(type)).is_a?(MType) \
           ? {param, rest.as(MType)}
-          : die("this 'meaning' expression did not return a type: #{type}")
+          : die("this 'given' expression does not return a type: #{type}")
       end
 
       # Now we are able to create a concrete function:

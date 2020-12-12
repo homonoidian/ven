@@ -95,18 +95,19 @@ module Ven
     struct Fun < Nud
       def parse(p, tag, token)
         name = p.expect("SYMBOL")[:raw]
-        # Params part
+
         params = p.consume("(") \
           ? p.repeat(")", ",", -> { p.expect("SYMBOL")[:raw] })
           : [] of ::String
-        # Meaning part
-        meanings = [] of Quote
-        if p.consume("MEANING")
-          meanings = params.empty? \
-            ? p.die("'meaning' illegal when given no parameters")
-            : p.repeat(sep: ",", unit: -> p.prefix)
+
+        given = [] of Quote
+        if p.consume("GIVEN")
+          given = params.empty? \
+            ? p.die("'given' illegal for zero-arity functions")
+            # Infixes with precedence greater (!) than ASSIGNMENT
+            : p.repeat(sep: ",", unit: -> { p.infix(Precedence::ASSIGNMENT.value) })
         end
-        # `= ...` or `{ ... }` part
+
         if p.consume("=")
           body = [p.infix]
           # `=` functions must end with a semicolon:
@@ -114,7 +115,8 @@ module Ven
         else
           body = block
         end
-        QFun.new(tag, name, params, body, meanings)
+
+        QFun.new(tag, name, params, body, given)
       end
     end
   end

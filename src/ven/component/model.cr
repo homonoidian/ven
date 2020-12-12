@@ -130,7 +130,7 @@ module Ven
     end
 
     def general?
-      @params.empty? || @params.any? { |meaning| meaning[1].type == Model }
+      @params.empty? || @params.any? { |given| given[1].type == Model }
     end
 
     def to_s(io)
