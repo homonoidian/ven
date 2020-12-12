@@ -1,9 +1,0 @@
-
-# The pipe thing, if given an operator, will *inject*
-# If given anything else, it will try to map (call on every element)
-# Introduces the concept of context of an expression
-
-|_ + 1| [1, 2, 3];
-
-
-x is y => 12 else 34
