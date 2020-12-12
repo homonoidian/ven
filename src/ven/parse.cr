@@ -5,7 +5,8 @@ require "./component/error"
 module Ven
   macro regex_for(name)
     {% if name == :SYMBOL %}
-      /[_a-zA-Z](\-?\w)*[?!]?/
+      # &?_ is here because it should be handled like a keyword
+      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_/
     {% elsif name == :STRING %}
       /"([^\n"])*"/
     {% elsif name == :NUMBER %}
@@ -24,7 +25,7 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = ["is", "fun", "if", "else"]
+  private KEYWORDS   = %w(_ &_ is fun meaning if else)
 
   alias Token = {
     type: String,
@@ -132,13 +133,13 @@ module Ven
 
     def repeat(stop : String? = nil, sep : String? = nil, unit : -> T = ->infix) forall T
       result = [] of T
-      until consume(stop)
+      until stop && consume(stop)
         result << unit.call
         if stop && sep
           consume(sep) ? next : break expect(stop, sep)
         elsif sep && !consume(sep)
           break
-        elsif consume(stop)
+        elsif stop && consume(stop)
           break
         end
       end
@@ -182,7 +183,7 @@ module Ven
       repeat("EOF", unit: ->statement)
     end
 
-    private macro defnud(type, *tail, storage = @nud, precedence = ZERO)
+    private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
         {{storage}}[{{type}}] = {{tail.first}}.new
       {% else %}
@@ -217,6 +218,8 @@ module Ven
       defnud("(", Parselet::Group)
       defnud("{", Parselet::Block)
       defnud("[", Parselet::Vector)
+      defnud("_", Parselet::UPop)
+      defnud("&_", Parselet::URef)
       # Infixes (LUDs):
       defled("=", Parselet::Assign, precedence: ASSIGNMENT)
       defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)

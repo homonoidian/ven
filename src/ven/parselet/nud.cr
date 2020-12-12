@@ -39,6 +39,18 @@ module Ven
       end
     end
 
+    struct UPop < Nud
+      def parse(p, tag, token)
+        QUPop.new(tag)
+      end
+    end
+
+    struct URef < Nud
+      def parse(p, tag, token)
+        QURef.new(tag)
+      end
+    end
+
     struct Group < Nud
       def parse(p, tag, token)
         p.before(")")
@@ -83,11 +95,18 @@ module Ven
     struct Fun < Nud
       def parse(p, tag, token)
         name = p.expect("SYMBOL")[:raw]
-        if p.consume("(")
-          args = p.repeat(")", ",", -> { p.expect("SYMBOL")[:raw] })
-        else
-          args = [] of ::String
+        # Params part
+        params = p.consume("(") \
+          ? p.repeat(")", ",", -> { p.expect("SYMBOL")[:raw] })
+          : [] of ::String
+        # Meaning part
+        meanings = [] of Quote
+        if p.consume("MEANING")
+          meanings = params.empty? \
+            ? p.die("'meaning' illegal when given no parameters")
+            : p.repeat(sep: ",", unit: -> p.prefix)
         end
+        # `= ...` or `{ ... }` part
         if p.consume("=")
           body = [p.infix]
           # `=` functions must end with a semicolon:
@@ -95,7 +114,7 @@ module Ven
         else
           body = block
         end
-        QBasicFun.new(tag, name, args, body)
+        QFun.new(tag, name, params, body, meanings)
       end
     end
   end

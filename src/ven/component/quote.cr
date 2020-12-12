@@ -58,6 +58,18 @@ module Ven
     end
   end
 
+  class QUPop < Quote
+    def to_s(io)
+      io << "_"
+    end
+  end
+
+  class QURef < Quote
+    def to_s(io)
+      io << "&_"
+    end
+  end
+
   class QUnary < Quote
     getter operator, operand
 
@@ -200,17 +212,21 @@ module Ven
     end
   end
 
-  class QBasicFun < Quote
-    getter name, params, body
+  class QFun < Quote
+    getter name, params, body, types
 
     def initialize(@tag,
       @name : String,
       @params : Array(String),
-      @body : Quotes)
+      @body : Quotes,
+      @types : Quotes)
     end
 
     def to_s(io)
       io << "fun " << @name << "(" << @params.join(", ") << ") "
+      unless @types.empty?
+        io << "meaning " << @types.join(", ") << " "
+      end
       pretty(io, @body)
     end
   end

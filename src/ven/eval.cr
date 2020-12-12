@@ -8,11 +8,14 @@ module Ven
     private alias Str = MString
     private alias Vec = MVector
 
-    # Maximum amount of traces (die of recursion if more)
-    MAX_TRACE = 500
+    # Maximum depth of calls (see 'call(MConcreteFunction, ...)')
+    MAX_CALL_DEPTH = 500
 
-    # Maximum amount of normalization passes
+    # Maximum amount of normalization passes (see 'normalize!')
     MAX_NORMALIZE_PASSES = 500
+
+    # Maximum amount of compute cycles (see 'compute')
+    MAX_COMPUTE_CYCLES = 1000
 
     def initialize(@context = Context.new)
       @computes = 0
@@ -48,7 +51,7 @@ module Ven
     end
 
     def visit!(q : QNumber)
-      Num.new(str2num(q.value))
+      Num.new(q.value.to_big_d)
     end
 
     def visit!(q : QString)
@@ -57,6 +60,18 @@ module Ven
 
     def visit!(q : QVector)
       Vec.new(visit(q.items))
+    end
+
+    def visit!(q : QUPop)
+      @context.u?
+    rescue IndexError
+      die("'_' used outside of context: context stack is empty")
+    end
+
+    def visit!(q : QURef)
+      @context.us.last
+    rescue IndexError
+      die("'&_' used outside of context: context stack is empty")
     end
 
     def visit!(q : QUnary)
@@ -94,18 +109,26 @@ module Ven
     def visit!(q : QLambdaSpread)
       operand = visit(q.operand)
 
-      unless operand.is_a?(Vec)
+      if !operand.is_a?(Vec)
         die("could not spread over this value: #{operand}")
+      elsif operand.value.empty?
+        die("could not spread over an empty vector")
       end
 
       result = [] of Model
+      item = operand.value.first
 
       @context.local(nil, {q.tag, "<spread>"}) do
         operand.value.each_with_index do |item, index|
-          @context.define("_", item)
-          factor = visit(q.lambda)
-          unless factor.is_a?(MBool) && !factor.value
-            result << (factor.is_a?(MHole) ? item : factor)
+          @context.with_u([Num.new(index), item]) do
+            factor = visit(q.lambda)
+            case factor
+            when MHole
+              next
+            when MBool
+              factor = (factor.value ? item : next)
+            end
+            result << factor
           end
         end
       end
@@ -129,28 +152,37 @@ module Ven
       @context.define(q.target, visit(q.value))
     end
 
-    def visit!(q : QBasicFun)
-      @context.define(q.name, MFunction.new(q.tag, q.name, q.params, q.body))
+    def visit!(q : QFun)
+      # First, find out what the parameter types are. By
+      # default, it's `any`
+      rest = MType.new("any", Model)
+      params = q.params.zip?(q.types).map do |param, type|
+        type.nil? || (rest = visit(type)).is_a?(MType) \
+          ? {param, rest.as(MType)}
+          : die("this 'meaning' expression did not return a type: #{type}")
+      end
+
+      # Now we are able to create a concrete function:
+      concrete = MConcreteFunction.new(q.tag, q.name, params, q.body)
+
+      # Use the existing generic or create a new one
+      unless (generic = @context.fetch(q.name)).is_a?(MGenericFunction)
+        generic = @context.define(q.name, MGenericFunction.new(q.name))
+      end
+
+      # Add the concrete to the generic. `unless`es if
+      # such implementation already exists
+      unless generic.add(concrete)
+        die("could not add #{concrete} to #{generic}: such implementation " \
+            "already exists")
+      end
+
+      # Return the generic so the REPL displays it
+      generic
     end
 
     def visit!(q : QCall)
-      callee, args = visit(q.callee), visit(q.args)
-
-      if !callee.is_a?(MFunction)
-        die("callee is not a function: #{callee}")
-      elsif (exp = callee.params.size) != (fnd = q.args.size)
-        die("#{callee} expected #{exp} argument(s), but found #{fnd}")
-      end
-
-      @context.local({callee.params, args}, trace: {callee.tag, callee.name}) do
-        if @context.trace.amount > MAX_TRACE
-          die("too many calls: very deep or infinite recursion")
-        elsif (result = visit(callee.body).last).is_a?(MHole)
-          die("illegal operation: #{callee} returned a hole")
-        else
-          result
-        end
-      end
+      call(visit(q.callee), visit(q.args))
     end
 
     ### Helpers
@@ -161,7 +193,12 @@ module Ven
     def false?(model : Model) : Bool
       case model
       when Vec
-        model.value.all? { |item| false?(item) }
+        model.value.each do|item|
+          if false?(item)
+            return true
+          end
+        end
+        false
       when Str
         model.value.empty?
       when Num
@@ -171,6 +208,11 @@ module Ven
       else
         false
       end
+    end
+
+    # `of?` checks if Model `left` is of the MType `right`
+    def of?(left : Model, right : MType) : Bool
+      right.type == Model ? true : left.class == right.type
     end
 
     # Yield an inverse of `true?`
@@ -183,12 +225,63 @@ module Ven
       MBool.new(true?({{model}}))
     end
 
-    # A method to convert String to BigFloat and have the
-    # same death rescuing ArgumentError
-    def str2num(str : String)
-      str.to_big_f
-    rescue ArgumentError
-      die("'#{str}': not a base-10 number")
+    ### Calls
+
+    private def typecheck(params : Array(TypedParam), args : Array(Model))
+      params.zip?(args).each do |param, arg|
+        unless !arg.nil? && of?(arg, param[1])
+          return false
+        end
+      end
+
+      true
+    end
+
+    def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
+      if typecheck && !typecheck(callee.params, args)
+        die("typecheck failed: TODO better error!")
+      end
+
+      @context.local({callee.params.map(&.first), args}, {callee.tag, callee.name}) do
+        @context.with_u(args.reverse) do
+          if @context.trace.amount > MAX_CALL_DEPTH
+            die("too many calls: very deep or infinite recursion")
+          elsif (result = visit(callee.body).last).is_a?(MHole)
+            die("illegal operation: #{callee} returned a hole")
+          else
+            result
+          end
+        end
+      end
+    end
+
+    def call(callee : MGenericFunction, args)
+      callee.concretes.each do |concrete|
+        if concrete.params.size == args.size && typecheck(concrete.params, args)
+          return call(concrete, args, typecheck: false)
+        end
+      end
+
+      die("no concrete of #{callee} could receive these arguments: #{args.join(", ")}")
+    end
+
+    def call(callee : MVector, args)
+      items = args.map! do |arg|
+        if !arg.is_a?(MNumber)
+          die("vector index must be a num, got: #{arg}")
+        elsif !arg.value.denominator == 1
+          die("vector index must be a whole num, got rational: #{arg}")
+        elsif (item = callee.value[arg.value.numerator]?).nil?
+          die("vector has no item with index #{arg}")
+        end
+        item
+      end
+
+      items.size > 1 ? MVector.new(items) : items.first
+    end
+
+    def call(callee : Model, args)
+      die("could not call this callee: #{callee}")
     end
 
     ### Unary (prefix) operations
@@ -206,6 +299,8 @@ module Ven
       else
         die("'#{operator}': could not interpret for this operand: #{operand}")
       end
+    rescue e : ModelCastError
+      die("'#{operator}': cannot cast (to normalize) #{operand}: #{e.message}")
     end
 
     ### Binary operations
@@ -214,7 +309,8 @@ module Ven
     # used with `operator`
     def normalize?(operator, left : Model, right : Model)
       case {operator, left, right}
-      # when {"is", MBool, MBool}
+      when {"is", MBool, MBool}
+      when {"is", _, MType}
       when {"is", Num, Num},
            {"<", Num, Num},
            {">", Num, Num},
@@ -243,9 +339,6 @@ module Ven
     def normalize!(operator, left : Model, right : Model)
       case operator
       when "is" then case {left, right}
-        # -> Balance both sides: {Vec, Vec} | {Str, Str} ...
-        # 'is' is one of the few operators that have no fallback,
-        # meaning it can sometimes fail (e.g., fun is fun)
         when {Vec, _}, {_, Vec}
           {left.to_vec, right.to_vec}
         when {Str, _}, {_, Str}
@@ -257,9 +350,14 @@ module Ven
         when {_, MBool}
           {to_bool(left), right}
         end
-      when "<", ">", "<=", ">="
-        # -> {Num, Num}
-        {left.to_num, right.to_num}
+      when "<", ">", "<=", ">=" then case {left, right}
+        when {Vec, _}
+          # [] <> _ -> {Vec, Vec}
+          {left, right.to_vec}
+        else
+          # {Num, Num}
+          {left.to_num, right.to_num}
+        end
       when "+", "-", "*", "/" then case {left, right}
         # -> {Vec, Vec} | {Num, Num}
         when {Vec, _}, {_, Vec}
@@ -297,14 +395,14 @@ module Ven
 
     # Interpret the binary operations
     def compute(operator, left : Model, right : Model)
-      if (@computes += 1) > 1000
+      if (@computes += 1) > MAX_COMPUTE_CYCLES
         die("too many compute cycles; you've probably found " \
             "an implementation bug: normalizing this operator " \
             "('#{operator}') causes an infinite loop")
       end
 
       # `left` is going to be changed throughout `compute`
-      # Shallowly (XXX right?) un-link it from the original Model
+      # Copy so we're not modifying the original value
       left = left.dup
 
       case {operator, left, right}
@@ -314,6 +412,8 @@ module Ven
         left = MBool.new(left.value == right.value)
       when {"is", MBool, MBool}
         left.value = left.value == right.value
+      when {"is", _, MType}
+        left = MBool.new(of?(left, right))
       when {"<", Num, Num}
         left = MBool.new(left.value < right.value)
       when {">", Num, Num}
@@ -349,6 +449,8 @@ module Ven
       @computes -= 1
 
       left
+    rescue DivisionByZeroError
+      die("'#{operator}': division by zero: #{left}, #{right}")
     end
 
     # The gateway to binary operations machinery.
@@ -360,16 +462,15 @@ module Ven
         if (passes += 1) > MAX_NORMALIZE_PASSES
           die("too many normalization passes; you've probably " \
               "found an implementation bug, as '#{operator}' " \
-              "requested normalization (thus was not normalized " \
-              "into one of the computable forms) more than " \
-              "#{MAX_NORMALIZE_PASSES} passes")
+              "requested normalization  more than " \
+              "#{MAX_NORMALIZE_PASSES} times")
         end
         left, right = normalize!(operator, left, right)
       end
 
       compute(operator, left, right)
     rescue e : ModelCastError
-      die("'#{operator}': cast error for #{left}, #{right}: #{e.message}")
+      die("'#{operator}': cannot cast (to normalize): #{left}, #{right}: #{e.message}")
     end
 
     ### Interaction with the outside world

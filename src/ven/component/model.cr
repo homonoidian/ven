@@ -2,6 +2,8 @@ require "big"
 
 module Ven
   class ModelCastError < Exception
+    # ModelCastError is be raised when to_num, to_str, to_vec,
+    # etc. fail for some reason
   end
 
   abstract class Model
@@ -11,7 +13,7 @@ module Ven
     end
 
     def to_num : MNumber
-      raise ModelCastError.new
+      raise ModelCastError.new("could not convert to num")
     end
 
     def to_str : MString
@@ -31,12 +33,6 @@ module Ven
     end
   end
 
-  class MHole < AbstractModel
-    def to_s(io)
-      io << "hole"
-    end
-  end
-
   class MBool < Model
     @value : Bool
 
@@ -50,10 +46,17 @@ module Ven
   end
 
   class MNumber < Model
-    @value : BigFloat | Int32
+    @value : BigRational
+
+    def initialize(value : BigDecimal | Int32)
+      @value = value.to_big_r
+    end
 
     def to_s(io)
-      io << (@value % 1 == 0 ? @value.to_big_i : @value)
+      io <<
+        (@value.denominator == 1 \
+          ? @value.numerator
+          : @value.numerator / @value.denominator)
     end
 
     def to_num
@@ -69,9 +72,8 @@ module Ven
     end
 
     def to_num
-      MNumber.new(@value.to_big_f)
-    rescue ArgumentError
-      # This is getting crazy...
+      MNumber.new(@value.to_big_d)
+    rescue InvalidBigDecimalException
       MNumber.new(@value.size)
     end
 
@@ -96,20 +98,74 @@ module Ven
     end
   end
 
-  class MFunction < AbstractModel
-    getter tag, name, params, body
+  class MType < AbstractModel
+    getter name, type
 
-    property scope
+    def initialize(
+      @name : String,
+      @type : Model.class)
+    end
+
+    def to_s(io)
+      io << "type " << @name
+    end
+  end
+
+  class MHole < AbstractModel
+    def to_s(io)
+      io << "hole"
+    end
+  end
+
+  alias TypedParam = {String, MType}
+
+  class MConcreteFunction < AbstractModel
+    getter tag, name, params, body
 
     def initialize(
       @tag : QTag,
       @name : String,
-      @params : Array(String),
+      @params : Array(TypedParam),
       @body : Quotes)
     end
 
+    def general?
+      @params.empty? || @params.any? { |meaning| meaning[1].type == Model }
+    end
+
     def to_s(io)
-      io << "fun " << @name << "(" << @params.join(", ") << ")"
+      io << "concrete fun " << @name << "(" << @params.map(&.join(": ")).join(", ") << ")"
+    end
+  end
+
+  class MGenericFunction < AbstractModel
+    getter concretes
+
+    def initialize(@name : String)
+      @concretes = [] of MConcreteFunction
+    end
+
+    # Insert a concrete implementation of this generic function.
+    # On failure (i.e., identical / overlapping function found)
+    # returns false, otherwise true
+    def add(concrete : MConcreteFunction) : Bool
+      if concrete.general?
+        @concretes.select(&.general?).each do |existing|
+          # If we're general and have the same arity, we're identical
+          if existing.params.size == concrete.params.size
+            return false
+          end
+        end
+        @concretes << concrete
+      else
+        @concretes.unshift(concrete)
+      end
+
+      true
+    end
+
+    def to_s(io)
+      io << "generic fun " << @name << " with " << @concretes.size << " concrete(s)"
     end
   end
 end

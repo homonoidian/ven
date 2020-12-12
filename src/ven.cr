@@ -20,6 +20,17 @@ else
   scope = Ven::Context.new
   scope.define("true", Ven::MBool.new(true))
   scope.define("false", Ven::MBool.new(false))
+
+  scope.define("any", Ven::MType.new("any", Ven::Model))
+  scope.define("str", Ven::MType.new("str", Ven::MString))
+  scope.define("num", Ven::MType.new("num", Ven::MNumber))
+  scope.define("vec", Ven::MType.new("vec", Ven::MVector))
+  scope.define("bool", Ven::MType.new("bool", Ven::MBool))
+  scope.define("type", Ven::MType.new("type", Ven::MType))
+  scope.define("generic", Ven::MType.new("generic", Ven::MGenericFunction))
+  scope.define("hole", Ven::MType.new("hole", Ven::MHole))
+  scope.define("concrete", Ven::MType.new("concrete", Ven::MConcreteFunction))
+
   puts "Note that you can prefix a line with .e<times>",
        "to evaluate this line <times> times and get",
        "*arithmetic mean* of the execution time"
