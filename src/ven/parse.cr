@@ -12,7 +12,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9]\d*|0/
     {% elsif name == :SPECIAL %}
-      /--|\+\+|=>|<=|>=|[-<>~+*\/()[\]{},:;=?|]/
+      /--|\+\+|=>|<=|>=|[-<>~+*\/()[\]{},:;=?.|]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#[^\n]*)/
     {% else %}
@@ -43,6 +43,7 @@ module Ven
     POSTFIX
     PREFIX
     CALL
+    FIELD
   end
 
   class Parser
@@ -231,9 +232,10 @@ module Ven
       defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
+      defled("++", Parselet::ReturnIncrement, precedence: POSTFIX)
+      defled("--", Parselet::ReturnDecrement, precedence: POSTFIX)
       defled("(", Parselet::Call, precedence: CALL)
-      defled("++", Parselet::RetInc, precedence: POSTFIX)
-      defled("--", Parselet::RetDec, precedence: POSTFIX)
+      defled(".", Parselet::FieldAccess, precedence: FIELD)
       # Statements:
       defstmt("FUN", Parselet::Fun)
       ###

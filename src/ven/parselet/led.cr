@@ -22,7 +22,21 @@ module Ven
 
     struct Call < Led
       def parse(p, tag, left, token)
-        QCall.new(tag, left, p.repeat(")", ","))
+        args = p.repeat(")", ",")
+
+        if left.is_a?(QFieldAccess)
+          # If calling QFieldAccess, rearrange so to provide
+          # UFCS-like behavior. XXX but calling fields?
+          call = left.head
+
+          left.path[...-1].each do |unit|
+            call = QCall.new(tag, QSymbol.new(tag, unit), [call])
+          end
+
+          return QCall.new(tag, QSymbol.new(tag, left.path.last), [call] + args)
+        end
+
+        QCall.new(tag, left, args)
       end
     end
 
@@ -40,7 +54,7 @@ module Ven
       end
     end
 
-    struct RetInc < Led
+    struct ReturnIncrement < Led
       def parse(p, tag, left, token)
         !left.is_a?(QSymbol) \
           ? p.die("postfix '++' is an assignment, so symbol must be given")
@@ -48,11 +62,24 @@ module Ven
       end
     end
 
-    struct RetDec < Led
+    struct ReturnDecrement < Led
       def parse(p, tag, left, token)
         !left.is_a?(QSymbol) \
           ? p.die("postfix '--' is an assignment, so symbol must be given")
           : QReturnDecrement.new(tag, left.value)
+      end
+    end
+
+    struct FieldAccess < Led
+      def parse(p, tag, left, token)
+        path = [] of ::String
+
+        while token && token[:type] == "."
+          path << p.expect("SYMBOL")[:raw]
+          token = p.consume(".")
+        end
+
+        QFieldAccess.new(tag, left, path)
       end
     end
   end

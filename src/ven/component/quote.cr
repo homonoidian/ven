@@ -159,6 +159,19 @@ module Ven
     end
   end
 
+  class QFieldAccess < Quote
+    getter head, path
+
+    def initialize(@tag,
+      @head : Quote,
+      @path : Array(String))
+    end
+
+    def to_s(io)
+      io << "(" << @head << ")." << @path.join(".")
+    end
+  end
+
   class QBinarySpread < Quote
     getter operator, body
 

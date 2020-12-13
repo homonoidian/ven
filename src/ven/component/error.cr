@@ -1,5 +1,8 @@
 module Ven
-  class ParseError < Exception
+  class VenError < Exception
+  end
+
+  class ParseError < VenError
     getter char, line, file, message
 
     def initialize(token : Token, @file : String, @message : String)
@@ -15,7 +18,7 @@ module Ven
     end
   end
 
-  class RuntimeError < Exception
+  class RuntimeError < VenError
     getter file, line, message
 
     @file : String
@@ -27,7 +30,7 @@ module Ven
     end
   end
 
-  class InternalError < Exception
+  class InternalError < VenError
     getter message
 
     def initialize(

@@ -13,6 +13,11 @@ module Ven
       @traces.last
     end
 
+    # Get the latest scope
+    def scope
+      @scopes.last
+    end
+
     # Make an entry in the localmost (rightmost) scope
     def define(name : String, value : Model)
       @scopes.last[name] = value

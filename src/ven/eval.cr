@@ -4,10 +4,6 @@ require "big"
 
 module Ven
   class Machine < Visitor
-    private alias Num = MNumber
-    private alias Str = MString
-    private alias Vec = MVector
-
     # Maximum depth of calls (see 'call(MConcreteFunction, ...)')
     MAX_CALL_DEPTH = 500
 
@@ -80,6 +76,16 @@ module Ven
       MBool.new(!false?(visit(q.value)))
     end
 
+    def visit!(q : QFieldAccess)
+      head = visit(q.head)
+
+      q.path.each do |unit|
+        head = field(head, unit)
+      end
+
+      head
+    end
+
     def visit!(q : QBinarySpread)
       body = visit(q.body)
 
@@ -106,7 +112,7 @@ module Ven
       if !operand.is_a?(Vec)
         die("could not spread over this value: #{operand}")
       elsif operand.value.empty?
-        die("could not spread over an empty vector")
+        return operand
       end
 
       result = [] of Model
@@ -216,10 +222,47 @@ module Ven
       MBool.new(true?({{model}}))
     end
 
+    ### Fields
+    # XXX right now, only builtin fields are available
+    # TODO: allow & add name=, params=, body=, etc.
+
+    def field(head : Model, field : String)
+      unless result = field!(head, field)
+        die("field '#{field}' not found for this value: #{head}")
+      end
+
+      result.as(Model)
+    end
+
+    def field!(head : MConcreteFunction, field : String)
+      case field
+      when "name"
+        Str.new(head.name)
+      when "params"
+        Vec.new(head.params.map { |param| Str.new(param).as(Model) })
+      when "body"
+        die("TODO: MQuote")
+      end
+    end
+
+    def field!(head : MGenericFunction, field : String)
+      case field
+      when "name"
+        Str.new(head.name)
+      when "concretes"
+        Vec.new(head.concretes.map(&.as(Model)))
+      end
+    end
+
+    def field!(head, field)
+      false
+    end
+
     ### Calls
 
     private def typecheck(params : Array(Ven::TypedParam), args : Array(Model))
       params.zip?(args).each do |param, arg|
+        # Ignore missing arguments
         unless !arg.nil? && of?(arg, param[1])
           return false
         end
@@ -229,12 +272,12 @@ module Ven
     end
 
     def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
-      if typecheck && !typecheck(callee.params, args)
+      if typecheck && !typecheck(callee.constraints, args)
         # TODO: better error
         die("typecheck failed")
       end
 
-      @context.local({callee.params.map(&.first), args}, {callee.tag, callee.name}) do
+      @context.local({callee.params, args}, {callee.tag, callee.to_s}) do
         @context.with_u(args.reverse) do
           if @context.trace.amount > MAX_CALL_DEPTH
             die("too many calls: very deep or infinite recursion")
@@ -249,7 +292,7 @@ module Ven
 
     def call(callee : MGenericFunction, args)
       callee.concretes.each do |concrete|
-        if concrete.params.size == args.size && typecheck(concrete.params, args)
+        if concrete.params.size == args.size && typecheck(concrete.constraints, args)
           return call(concrete, args, typecheck: false)
         end
       end
@@ -257,7 +300,11 @@ module Ven
       die("no concrete of #{callee} could receive these arguments: #{args.join(", ")}")
     end
 
-    def call(callee : MVector, args)
+    def call(callee : MBuiltinFunction, args)
+      callee.block.call(self, args)
+    end
+
+    def call(callee : Vec, args)
       items = args.map! do |arg|
         if !arg.is_a?(MNumber)
           die("vector index must be a num, got: #{arg}")
@@ -269,7 +316,7 @@ module Ven
         item
       end
 
-      items.size > 1 ? MVector.new(items) : items.first
+      items.size > 1 ? Vec.new(items) : items.first
     end
 
     def call(callee : Model, args)
@@ -417,6 +464,8 @@ module Ven
       when {"x", Vec, Num}
         left.value *= right.value.to_big_i
       when {_, Vec, Vec}
+        return right if right.value.empty?
+
         left.value = left.value.zip?(right.value).map do |a, b|
           binary(operator, a, b || right.value.last).as(Model)
         end
@@ -436,6 +485,7 @@ module Ven
       passes = 0
 
       # Normalize until satisfied
+
       while normalize?(operator, left, right)
         if (passes += 1) > MAX_NORMALIZE_PASSES
           die("too many normalization passes; you've probably " \
@@ -454,7 +504,7 @@ module Ven
 
     ### Interaction with the outside world
 
-    def self.from(tree : Quotes, scope : Context)
+    def self.run(tree : Quotes, scope : Context)
       new(scope.clear).visit(tree)
     end
   end

@@ -1,69 +1,146 @@
 require "fancyline"
+require "option_parser"
 
 require "./ven/*"
+require "./ven/library/*"
 
-fancy = Fancyline.new
+module Ven
+  VERSION = "0.1.0"
 
-unless ARGV.empty?
-  source = File.read(ARGV.first)
-  # before_tree = Time.monotonic
-  tree = Ven::Parser.from(ARGV.first, source)
-  # after_tree = Time.monotonic
-  # tree.map { |x| puts x }
-  # puts "reading took #{(after_tree - before_tree).microseconds}qs"
-  begin
-    Ven::Machine.from(tree, Ven::Context.new)
-  rescue e : Ven::RuntimeError
-    puts "runtime error: #{e.message}"
-  end
-else
-  scope = Ven::Context.new
-  scope.define("true", Ven::MBool.new(true))
-  scope.define("false", Ven::MBool.new(false))
+  module CLI
+    extend self
 
-  scope.define("any", Ven::MType.new("any", Ven::Model))
-  scope.define("str", Ven::MType.new("str", Ven::MString))
-  scope.define("num", Ven::MType.new("num", Ven::MNumber))
-  scope.define("vec", Ven::MType.new("vec", Ven::MVector))
-  scope.define("bool", Ven::MType.new("bool", Ven::MBool))
-  scope.define("type", Ven::MType.new("type", Ven::MType))
-  scope.define("generic", Ven::MType.new("generic", Ven::MGenericFunction))
-  scope.define("hole", Ven::MType.new("hole", Ven::MHole))
-  scope.define("concrete", Ven::MType.new("concrete", Ven::MConcreteFunction))
+    # Format and print an error (without exiting)
+    def error(kind : String, explanation : String)
+      puts "#{kind.colorize(:light_red).bold}: #{explanation}"
+    end
 
-  puts "Note that you can prefix a line with .e<times>",
-       "to evaluate this line <times> times and get",
-       "*arithmetic mean* of the execution time"
-  while source = fancy.readline("> ")
-    begin
-      unless source.empty?
-        repeat = 1
-        do_print = true
-        if source =~ /\.e(\d+)(.*)/
-          repeat = $1.to_i
-          source = $2
-        elsif source =~ /\.\!(.*)/
-          do_print = false
-          source = $1
-        end
-        tree = Ven::Parser.from("<interactive>", source)
-        stats = [] of Int32
-        code = [] of Ven::Model
-        repeat.times do
-          before_exec = Time.monotonic
-          code = Ven::Machine.from(tree, scope)
-          after_exec = Time.monotonic
-          stats << (after_exec - before_exec).microseconds
-        end
-        puts code.last if do_print && !code.empty?
-        puts "{ran in mean (_ / #{repeat}): #{stats.sum / stats.size}qs}"
+    # Handle a VenError: print it and exit with status 1
+    # (if `quit` is true)
+    def error?(e : VenError, quit = true)
+      message = e.message.not_nil!
+
+      case e
+      when ParseError
+        error("parse error", "#{message} (in #{e.file}:#{e.line}, near '#{e.char}')")
+      when RuntimeError
+        error("runtime error", message)
+      when InternalError
+        error("internal error", message)
       end
-    rescue e : Ven::InternalError
-      puts "internal error: #{e.message}"
-    rescue e : Ven::ParseError
-      puts "parse error (#{e.file}:#{e.line}, near '#{e.char}'): #{e.message}"
-    rescue e : Ven::RuntimeError
-      puts "runtime error: #{e.message}"
+
+      if quit
+        exit(1)
+      end
+    end
+
+    # Print the `message` and exit with status 0
+    def quit(message : String)
+      puts message
+      exit(0)
+    end
+
+    # Create a Ven::Manager and initialize all builtin libraries
+    def manager?(file : String)
+      manager = Manager.new(file)
+
+      manager.load(Library::Core)
+
+      manager
+    end
+
+    # Read and execute source from `path`. Exit on VenError.
+    # Handle Path::Error (for file not found / invalid path)
+    def file(path : String)
+      path = Path[path].expand(home: true).to_s
+      source = File.read(path)
+      manager = manager?(path)
+
+      manager.feed(source)
+    rescue e : VenError
+      error?(e)
+    rescue e : Path::Error
+      error("command-line error", "file not found (or path invalid): #{path}")
+    end
+
+    # Prepare for and start a REPL
+    def repl
+      manager = manager?("<interactive>")
+
+      fancy = Fancyline.new
+
+      # Autocomplete symbols
+      fancy.autocomplete.add do |ctx, range, word, yielder|
+        completions = yielder.call(ctx, range, word)
+
+        line = ctx.editor.line
+        scope = manager.context.scope
+
+        if line =~ /#{Ven.regex_for(:SYMBOL)}\-?$/
+          range = (ctx.editor.line.size - $0.size)..-1
+
+          scope.select(&.includes?($0)).each do |n, v|
+            completions << Fancyline::Completion.new(range, n, "#{n} (#{v})")
+          end
+        end
+
+        completions
+      end
+
+      puts "Hit CTRL+D to exit, or Tab to autocomplete a symbol."
+
+      loop do
+        begin
+          source = fancy.readline(" ~> ")
+        rescue Fancyline::Interrupt
+          next puts
+        end
+
+        if source.nil?
+          quit("Bye bye!")
+        elsif source.empty?
+          next
+        end
+
+        begin
+          puts manager.feed(source)
+        rescue e : VenError
+          error?(e, quit: false)
+        end
+      end
+    end
+
+    # Parse the command-line arguments and dispatch.
+    # The entry point to binary Ven
+    def run
+      OptionParser.parse do |parser|
+        parser.banner = "Ven, a toy programming language project"
+
+        parser.on "-v", "--version", "Show version and quit" do
+          quit(VERSION)
+        end
+
+        parser.on "-h", "--help", "Show this message and quit" do
+          quit(parser.to_s)
+        end
+
+        parser.invalid_option do |option|
+          error("command-line error", "'#{option}' is not a valid option")
+        end
+
+        parser.unknown_args do |args|
+          case args.size
+          when 0
+            repl
+          when 1
+            file(args.first)
+          else
+            error("command-line error", "unrecognized argument(s): #{args.join(", ")}")
+          end
+        end
+      end
     end
   end
 end
+
+Ven::CLI.run

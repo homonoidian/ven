@@ -6,6 +6,11 @@ module Ven
     # etc. fail for some reason
   end
 
+  alias Num = MNumber
+  alias Str = MString
+  alias Vec = MVector
+  alias TypedParam = {String, MType}
+
   abstract class Model
     property value
 
@@ -107,6 +112,10 @@ module Ven
       @type : Model.class)
     end
 
+    def ==(right : MType)
+      name == right.name && type == right.type
+    end
+
     def to_s(io)
       io << "type " << @name
     end
@@ -118,55 +127,63 @@ module Ven
     end
   end
 
-  alias TypedParam = {String, MType}
-
   class MConcreteFunction < AbstractModel
-    getter tag, name, params, body
+    getter tag, name, params, constraints, body
+
+    @params : Array(String)
 
     def initialize(
-      @tag : QTag,
-      @name : String,
-      @params : Array(TypedParam),
-      @body : Quotes)
+        @tag : QTag,
+        @name : String,
+        @constraints : Array(TypedParam),
+        @body : Quotes)
+
+      @params = @constraints.map(&.first)
     end
 
     def general?
-      @params.empty? || @params.any? { |given| given[1].type == Model }
+      @params.empty? || @constraints.any? { |given| given[1].type == Model }
     end
 
     def to_s(io)
-      io << "concrete fun " << @name << "(" << @params.map(&.join(": ")).join(", ") << ")"
+      io << "concrete fun " << @name << "(" << @constraints.map(&.join(": ")).join(", ") << ")"
     end
   end
 
   class MGenericFunction < AbstractModel
-    getter concretes
+    getter name, concretes
 
     def initialize(@name : String)
       @concretes = [] of MConcreteFunction
     end
 
     # Insert a concrete implementation of this generic function.
-    # On failure (i.e., identical / overlapping function found)
-    # returns false, otherwise true
-    def add(concrete : MConcreteFunction) : Bool
-      if concrete.general?
-        @concretes.select(&.general?).each do |existing|
-          # If we're general and have the same arity, we're identical
-          if existing.params.size == concrete.params.size
-            return false
-          end
+    # Overwrite identical if it already exists.
+    def add(concrete : MConcreteFunction)
+      @concretes.each_with_index do |existing, index|
+        if existing.constraints == concrete.constraints
+          return @concretes[index] = concrete
         end
-        @concretes << concrete
-      else
-        @concretes.unshift(concrete)
       end
 
-      true
+      concrete.general? ? (@concretes << concrete) : @concretes.unshift(concrete)
     end
 
     def to_s(io)
       io << "generic fun " << @name << " with " << @concretes.size << " concrete(s)"
+    end
+  end
+
+  class MBuiltinFunction < AbstractModel
+    getter name, block
+
+    def initialize(
+      @name : String,
+      @block : Proc(Machine, Array(Model), Model))
+    end
+
+    def to_s(io)
+      io << "builtin " << @name
     end
   end
 end
