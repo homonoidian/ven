@@ -31,5 +31,5 @@
   + Code looks as good as I could make it, for now at least.
 
 * **I. Need. Performance!**
-  OK! How about 100x Python's? I'll repeat, this implementation
+  OK! How about 100x slower than Python? I'll repeat: this implementation
   isn't geared towards performance at all.

@@ -157,8 +157,8 @@ module Ven
       @concretes = [] of MConcreteFunction
     end
 
-    # Insert a concrete implementation of this generic function.
-    # Overwrite identical if it already exists.
+    # Add a `concrete` implementation of this generic function.
+    # Overwrite if identical concrete already exists.
     def add(concrete : MConcreteFunction)
       @concretes.each_with_index do |existing, index|
         if existing.constraints == concrete.constraints

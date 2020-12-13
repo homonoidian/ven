@@ -114,7 +114,9 @@ module Ven
     # The entry point to binary Ven
     def run
       OptionParser.parse do |parser|
-        parser.banner = "Ven, a toy programming language project"
+        parser.banner = "Usage: #{PROGRAM_NAME} [options] [path/to/script.ven]"
+
+        parser.separator("\nOptions and arguments:")
 
         parser.on "-v", "--version", "Show version and quit" do
           quit(VERSION)

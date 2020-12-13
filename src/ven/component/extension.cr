@@ -66,7 +66,7 @@ module Ven
       end
     end
 
-    # defvar, deftype and defun all should be situated in `load`
+    # defvar, deftype and declare all should be situated in `load`
     abstract def load
   end
 end
