@@ -1,4 +1,6 @@
-module Ven
+module Ven::Component
+  # The trace a capsule (see `Context.local`) leaves while
+  # being evaluated.
   class Trace
     getter tag, name, amount
 
@@ -6,10 +8,12 @@ module Ven
       @amount = 0
     end
 
+    # Increments the amount of times this trace was mentioned.
     def use
       @amount += 1
     end
 
+    # Decrements the amount of times this trace was mentioned.
     def unuse
       @amount -= 1
     end

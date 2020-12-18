@@ -1,31 +1,58 @@
-module Ven
+module Ven::Component
+  # The base class of any built-in (that is, written in Crystal).
+  # To get a feel of a real extension, see `Library::Core`
+  # (src/ven/library/core.cr)
   abstract class Extension
+    include Component
+
     def initialize(
       @context : Context)
     end
 
-    # Define a variable
+    # Defines a Ven variable. *name* is a String, and *value*
+    # is a `Model`.
+    # ```
+    #   defvar("PI", Num.new(3.14))
+    # ```
     macro defvar(name, value)
       @context.define({{name}}, {{value}})
     end
 
-    # Define a type. `model` is the model this type represents
+    # Defines a Ven type. *name* is a String, and *model* is
+    # the `Model.class` the type 'matches' on, in other words,
+    # the type represents.
+    # ```
+    #   deftype("num", Num)
+    # ```
     macro deftype(name, model)
       defvar({{name}}, MType.new({{name}}, {{model}}))
     end
 
-    # Define a builtin function. `name` must be an existing
-    # method that returns a Proc; class-level `defun` could
-    # help to define this method
-    macro declare(name)
+    # Registers (makes visible) a Ven builtin function. *name*,
+    # a String, is the name of an existing, reachable Crystal
+    # method (see `fun!`)
+    # ```
+    #     fun! greet, name : Str do |m|
+    #        puts "Hi, #{name.value}!"
+    #     end
+    #
+    #     def load
+    #       defun("greet")
+    #     end
+    # ```
+    macro defun(name)
       defvar({{name}}, MBuiltinFunction.new({{name}}, {{name.id}}))
     end
 
-    # Define a Crystal method `name` that returns a Proc.
-    # This Proc knows how to handle Ven calls properly.
-    # `takes` is one or more type declarations. `block`
-    # is a block that takes one argument, Machine
-    macro defun(name, *takes, &block)
+    # Defines a Crystal method, *name*, which returns a Proc
+    # to-be-used by Ven as the implementation of a builtin
+    # function. This returned proc performs an arity check and
+    # a type check based on *takes*, a sequence of TypeDeclarations.
+    # *block* is the block that will be executed after these checks,
+    # and is the body of the builtin function. It must accept
+    # (but not necessarily use) one argument, `Machine`. For a usage
+    # example, see `defun`.
+    macro fun!(name, *takes, &block)
       {% types = [] of Constant %}
       {% params = [] of Constant %}
 
@@ -66,7 +93,9 @@ module Ven
       end
     end
 
-    # defvar, deftype and declare all should be situated in `load`
+    # `load` is called once when an extension is 'included',
+    # and so is a reasonable place to define all top-level
+    # things, in other words, the entities this extension exports.
     abstract def load
   end
 end

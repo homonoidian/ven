@@ -1,16 +1,26 @@
 require "big"
 
-module Ven
-  class ModelCastError < Exception
-    # ModelCastError is be raised when to_num, to_str, to_vec,
-    # etc. fail for some reason
+module Ven::Component
+  # A pseudo-exception, in the same way the currently absent
+  # `ReturnException` and `QueueException` are. The 'pseudo-'
+  # part means they do not always cause death (`Machine.die`).
+  class ModelCastException < Exception
   end
 
+  # :nodoc:
   alias Num = MNumber
+  # :nodoc:
   alias Str = MString
+  # :nodoc:
   alias Vec = MVector
-  alias TypedParam = {String, MType}
+  # :nodoc:
+  alias TypedParameter = {String, MType}
 
+  # The base class of Ven's value system and, therefore, the
+  # root type of Ven's type system. Anything Ven can work with
+  # is, and must be, a subclass of Model. In Ven, Model is known
+  # as `any`. And curiously, since types are Models too (see
+  # `MType`), `num is any` yields true, as well as `any is any`.
   abstract class Model
     property value
 
@@ -18,19 +28,23 @@ module Ven
       @value)
     end
 
+    # Converts (casts) this model into an `MNumber`.
     def to_num : MNumber
-      raise ModelCastError.new("could not convert to num")
+      raise ModelCastException.new("could not convert to num")
     end
 
+    # Converts (casts) this model into an `MString`.
     def to_str : MString
       MString.new(to_s)
     end
 
+    # Converts (casts) this model into an `MVector`.
     def to_vec : MVector
       MVector.new([self])
     end
   end
 
+  # A `Model` that does not embox one particular value.
   abstract class AbstractModel < Model
     @value : Nil
 
@@ -39,6 +53,7 @@ module Ven
     end
   end
 
+  # Ven boolean (`bool`) model. Emboxes a Bool.
   class MBool < Model
     @value : Bool
 
@@ -46,11 +61,16 @@ module Ven
       io << @value
     end
 
+    # Yields 1 if the boolean is true, 0 otherwise.
     def to_num
       MNumber.new(@value ? 1 : 0)
     end
   end
 
+  # Ven number (`num`) model. Emboxes a BigRational, implementing
+  # a trade-off: speed is exchanged for accuracy and high-levelness.
+  # Accepts either a BigDecimal or an Int32, converting it into
+  # a BigRational.
   class MNumber < Model
     @value : BigRational
 
@@ -70,6 +90,7 @@ module Ven
     end
   end
 
+  # Ven string (`str`) model. Emboxes a Crystal String.
   class MString < Model
     @value : String
 
@@ -77,6 +98,9 @@ module Ven
       io << '"' << @value << '"'
     end
 
+    # Produces either the length of this string (in case it
+    # could not be parsed into a number), or the number that
+    # this string was parsed into.
     def to_num
       MNumber.new(@value.to_big_d)
     rescue InvalidBigDecimalException
@@ -88,6 +112,10 @@ module Ven
     end
   end
 
+  # Ven vector (`vec`) model. In Ven's particular case, 'vector'
+  # is just a fancy (and memorable) name for a list. It emboxes
+  # an Array of Models. The elements of a vector in Ven realm
+  # are called 'items'.
   class MVector < Model
     @value : Array(Model)
 
@@ -95,6 +123,7 @@ module Ven
       io << "[" << @value.join(", ") << "]"
     end
 
+    # Returns the length of this array.
     def to_num
       MNumber.new(@value.size)
     end
@@ -104,6 +133,26 @@ module Ven
     end
   end
 
+  # Ven hole (`hole`) model. This model is the simplest kind of
+  # AbstractModel; that is, it's a valueless model. It is produced
+  # by several operations, but mainly by a condition that has no
+  # truthy branch, e.g., `if (false) 0`, which yields a `hole`
+  # ('else' branch is truthy but absent). Holes are actually
+  # interpreted only in lambda spreads, where they mean 'do not
+  # add this item to the resulting list'; when used anywhere else
+  # they cause a death.
+  class MHole < AbstractModel
+    def to_s(io)
+      io << "hole"
+    end
+  end
+
+  # Ven type (`type`) model. Emboxes a type's name and the
+  # `Model.class` this type represents. The latter will be used
+  # by the interpreter in an `is_a?`-like call to check whether
+  # a value is of this type or not. This also allows to use
+  # Crystal's inheritance as the foundation for Ven's types
+  # hierarchy.
   class MType < AbstractModel
     getter name, type
 
@@ -121,13 +170,20 @@ module Ven
     end
   end
 
-  class MHole < AbstractModel
-    def to_s(io)
-      io << "hole"
-    end
+  # A dummy model whose subclasses are various function models,
+  # and whose purpose is to be an umbrella `function` type. It
+  # allows a type check like `foo is function` to work without
+  # the user having to think of `concrete`, `generic` and so on.
+  class MFunction < AbstractModel
   end
 
-  class MConcreteFunction < AbstractModel
+  # A particular variant of a generic function, known as
+  # `concrete` in Ven. Emboxes this variation's name, body
+  # and `QTag`, as well as its *given* constraints. This
+  # means that any function is constrained; it's just that
+  # the default restrictions are weak (`any`), as opposed
+  # to strong restrictions (`num`, `vec`, etc.)
+  class MConcreteFunction < MFunction
     getter tag, name, params, constraints, body
 
     @params : Array(String)
@@ -135,12 +191,14 @@ module Ven
     def initialize(
         @tag : QTag,
         @name : String,
-        @constraints : Array(TypedParam),
+        @constraints : Array(TypedParameter),
         @body : Quotes)
 
       @params = @constraints.map(&.first)
     end
 
+    # Returns true if any of this concrete's parameters is
+    # constrained by `any`.
     def general?
       @params.empty? || @constraints.any? { |given| given[1].type == Model }
     end
@@ -150,15 +208,19 @@ module Ven
     end
   end
 
-  class MGenericFunction < AbstractModel
+  # An abstract, callable entity that is a collection of concretes
+  # (`MConcreteFunction`). In Ven, it is known as `generic`.
+  # Emboxes the name of this generic and the collection itself,
+  # an Array of concretes.
+  class MGenericFunction < MFunction
     getter name, concretes
 
     def initialize(@name : String)
       @concretes = [] of MConcreteFunction
     end
 
-    # Add a `concrete` implementation of this generic function.
-    # Overwrite if identical concrete already exists.
+    # Add a *concrete* variant of this generic function.
+    # Overwrite if an identical concrete exists.
     def add(concrete : MConcreteFunction)
       @concretes.each_with_index do |existing, index|
         if existing.constraints == concrete.constraints
@@ -174,7 +236,12 @@ module Ven
     end
   end
 
-  class MBuiltinFunction < AbstractModel
+  # Ven builtin function (`builtin`) type. The bridge from Crystal
+  # to Ven. Emboxes the name of this builtin and a Crystal Proc,
+  # which takes two arguments: the first for `Machine`, the other
+  # for an Array of arguments (them being `Model`s), and returns
+  # a Model.
+  class MBuiltinFunction < MFunction
     getter name, block
 
     def initialize(

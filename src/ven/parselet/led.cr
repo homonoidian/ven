@@ -1,5 +1,7 @@
 module Ven
   private module Parselet
+    include Component
+
     abstract struct Led
       getter precedence : Int32
 
@@ -24,8 +26,8 @@ module Ven
       def parse(p, tag, left, token)
         args = p.repeat(")", ",")
 
-        if left.is_a?(QFieldAccess)
-          # If calling QFieldAccess, rearrange so to provide
+        if left.is_a?(QAccessField)
+          # If calling QAccessField, rearrange so to provide
           # UFCS-like behavior. XXX but calling fields?
           call = left.head
 
@@ -70,7 +72,7 @@ module Ven
       end
     end
 
-    struct FieldAccess < Led
+    struct AccessField < Led
       def parse(p, tag, left, token)
         path = [] of ::String
 
@@ -79,7 +81,7 @@ module Ven
           token = p.consume(".")
         end
 
-        QFieldAccess.new(tag, left, path)
+        QAccessField.new(tag, left, path)
       end
     end
   end

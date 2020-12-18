@@ -1,4 +1,5 @@
-module Ven
+module Ven::Component
+  # The location (filename and line number) of a `Quote`.
   struct QTag
     getter file, line
 
@@ -8,6 +9,8 @@ module Ven
     end
   end
 
+  # The base class of all Ven AST nodes, which are called *quotes*
+  # in Ven.
   abstract class Quote
     getter tag
 
@@ -20,8 +23,11 @@ module Ven
     end
   end
 
+  # :nodoc:
   alias Quotes = Array(Quote)
 
+  # The base class of all literal quotes, that is, quotes
+  # that only have a String *value*.
   abstract class QAtom < Quote
     getter value
 
@@ -34,18 +40,23 @@ module Ven
     end
   end
 
+  # A symbol (also known as identifier), e.g.: `foo-bar-12`,
+  # `baz_quux?`, `bar!`.
   class QSymbol < QAtom
   end
 
+  # A string, e.g., `"hello\nworld"`.
   class QString < QAtom
     def to_s(io)
       io << '"' << @value << '"'
     end
   end
 
+  # A number, e.g.: `12.34`, `1234`.
   class QNumber < QAtom
   end
 
+  # A vector, e.g., `[1, "a", [], quux]`.
   class QVector < Quote
     getter items
 
@@ -58,18 +69,23 @@ module Ven
     end
   end
 
+  # The name (underscores pop) describes the semantic action.
+  # Lexically `_`.
   class QUPop < Quote
     def to_s(io)
       io << "_"
     end
   end
 
+  # The name (underscores reference) describes the semantic action.
+  # Lexically `&_`.
   class QURef < Quote
     def to_s(io)
       io << "&_"
     end
   end
 
+  # A unary operation, e.g.: `+1234`, `-"doe"`
   class QUnary < Quote
     getter operator, operand
 
@@ -83,6 +99,7 @@ module Ven
     end
   end
 
+  # A binary operation, e.g.: `12 + 34`, `"hello" ~ "world"`.
   class QBinary < Quote
     getter operator, left, right
 
@@ -97,6 +114,7 @@ module Ven
     end
   end
 
+  # A call, e.g., `foo(1, 2, 3)`.
   class QCall < Quote
     getter callee, args
 
@@ -110,6 +128,7 @@ module Ven
     end
   end
 
+  # An assignment, e.g., `x = y`.
   class QAssign < Quote
     getter target, value
 
@@ -123,6 +142,10 @@ module Ven
     end
   end
 
+  # The name (into boolean) describes the semantic action.
+  # Syntactically an expression (precedence > assignment)
+  # ending with a `?`: `1 + 2?`, `[1, 2, 3] is 2?`, but
+  # `x = (false)?` satisfies `ensure x is false`.
   class QIntoBool < Quote
     getter value
 
@@ -135,6 +158,8 @@ module Ven
     end
   end
 
+  # The name describes the semantic action. Syntactically,
+  # e.g., `foo--` (left-to-right: return *foo*, decrement).
   class QReturnDecrement < Quote
     getter target
 
@@ -147,6 +172,8 @@ module Ven
     end
   end
 
+  # The name describes the semantic action. Syntactically, e.g.,
+  # `foo++` (left-to-right: return *foo*, increment).
   class QReturnIncrement < Quote
     getter target
 
@@ -159,7 +186,9 @@ module Ven
     end
   end
 
-  class QFieldAccess < Quote
+  # The name describes the semantic action. Syntactically, e.g.,
+  # `a.b.c` (access field *c* of field *b* of *a*).
+  class QAccessField < Quote
     getter head, path
 
     def initialize(@tag,
@@ -172,6 +201,7 @@ module Ven
     end
   end
 
+  # A binary spread, e.g.: `|+| [1, 2, 3]`, `|*| [5, 4, 3, 2, 1]`.
   class QBinarySpread < Quote
     getter operator, body
 
@@ -185,6 +215,7 @@ module Ven
     end
   end
 
+  # A lambda spread, e.g., `|_ + 1| [1, 2, 3]`.
   class QLambdaSpread < Quote
     getter lambda, operand
 
@@ -198,6 +229,7 @@ module Ven
     end
   end
 
+  # A block (that is, a group of quotes), e.g., `{ 1; 2; 3 }`.
   class QBlock < Quote
     getter body
 
@@ -210,6 +242,8 @@ module Ven
     end
   end
 
+  # An inline (or spanning) *if* statement, e.g.: `if (true) 1 else 0`,
+  # `if (foo is num) true`.
   class QIf < Quote
     getter cond, suc, alt
 
@@ -225,6 +259,8 @@ module Ven
     end
   end
 
+  # A function definition, e.g.: `fun a = 10`, `fun a(x, y, z) = x + y + z`,
+  # `fun a(x, y) given num, str { y = +y; y ~ x }`.
   class QFun < Quote
     getter name, params, body, types
 
@@ -241,6 +277,18 @@ module Ven
         io << "meaning " << @types.join(", ") << " "
       end
       pretty(io, @body)
+    end
+  end
+
+  class QEnsure < Quote
+    getter expression
+
+    def initialize(@tag,
+      @expression : Quote)
+    end
+
+    def to_s(io)
+      io << "ensure " << @expression
     end
   end
 end

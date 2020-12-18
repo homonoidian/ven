@@ -1,4 +1,8 @@
-module Ven
+module Ven::Component
+  # Context is the bridge between different `Visitor.visit`s.
+  # It implements the *scopes* stack (globalmost to localmost),
+  # the *traces* stack (for tracebacking), and the *underscores*
+  # stack, whose purpose is to implement  `_`, the contextual value.
   class Context
     getter traces
 
@@ -8,23 +12,23 @@ module Ven
       @underscores = [] of Model
     end
 
-    # Get the latest trace
+    # Returns the latest trace.
     def trace
       @traces.last
     end
 
-    # Get the latest scope
+    # Returns the latest scope.
     def scope
       @scopes.last
     end
 
-    # Make an entry in the localmost (rightmost) scope
+    # Makes an entry in the localmost (rightmost) scope.
     def define(name : String, value : Model)
       @scopes.last[name] = value
     end
 
-    # Try searching for an entry's value starting from the
-    # localmost, ending with the globalmost scope
+    # Tries searching for an entry right-to-left, that is, from
+    # the localmost to the globalmost scope.
     def fetch(name : String) : Model?
       @scopes.reverse_each do |scope|
         if value = scope.fetch(name, false)
@@ -33,10 +37,11 @@ module Ven
       end
     end
 
-    # Run a block of code in a local scope: push a new scope,
-    # execute the block and pop the scope. `initial` is a
-    # tuple of initial entries: keys and values. `trace` is
-    # the trace the block will leave as it is executed
+    # Makes a local scope and executes the given *block*. *initial*
+    # is a tuple of keys (variable names) and values (variable values)
+    # the scope will be initialized with. It may be `nil` if such
+    # initialization is unwanted. *trace* is the trace left during
+    # the *block*'s evaluation.
     def local(initial : {Array(String), Array(Model)}?, trace t : {QTag, String}, &)
       @scopes << {} of String => Model
 
@@ -68,23 +73,24 @@ module Ven
       result
     end
 
-    # Push `values` onto the underscores (context) stack
+    # Pushes a *value* onto the underscores stack.
     def u!(value : Model)
       @underscores << value
     end
 
-    # Pop from the underscores (context) stack
+    # Pops and returns a value from the underscores stack.
     def u?
       @underscores.pop
     end
 
-    # Return the underscores stack
+    # Returns the underscores stack.
     def us
       @underscores
     end
 
-    # Push given values onto the underscore stack, evaluate
-    # the block and pop the values if they weren't used
+    # Pushes given *values* onto the underscores stack,
+    # evaluates the *block* and cleans the underscores stack
+    # by removing unused *values*, if any.
     def with_u(values : Array(Model), &)
       size, _ = @underscores.size, values.each { |value| u!(value) }
       result = yield
@@ -96,9 +102,8 @@ module Ven
       result
     end
 
-    # Clear the context, namely .clear the traces and erase all
-    # but global scopes. Used to clean up after an in-function
-    # error when using the REPL
+    # Cleans-up the context, namely the traces. Removes all
+    # scopes but the globalmost (leftmost).
     def clear
       @traces.clear
       @scopes.pop(@scopes.size - 1)

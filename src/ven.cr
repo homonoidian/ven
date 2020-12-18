@@ -17,15 +17,15 @@ module Ven
 
     # Handle a VenError: print it and exit with status 1
     # (if `quit` is true)
-    def error?(e : VenError, quit = true)
+    def error?(e : Component::VenError, quit = true)
       message = e.message.not_nil!
 
       case e
-      when ParseError
+      when Component::ParseError
         error("parse error", "#{message} (in #{e.file}:#{e.line}, near '#{e.char}')")
-      when RuntimeError
+      when Component::RuntimeError
         error("runtime error", message)
-      when InternalError
+      when Component::InternalError
         error("internal error", message)
       end
 
@@ -57,7 +57,7 @@ module Ven
       manager = manager?(path)
 
       manager.feed(source)
-    rescue e : VenError
+    rescue e : Component::VenError
       error?(e)
     rescue e : Path::Error
       error("command-line error", "file not found (or path invalid): #{path}")
@@ -104,7 +104,7 @@ module Ven
 
         begin
           puts manager.feed(source)
-        rescue e : VenError
+        rescue e : Component::VenError
           error?(e, quit: false)
         end
       end

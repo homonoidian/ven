@@ -3,6 +3,9 @@ require "./component/quote"
 require "./component/error"
 
 module Ven
+  # Return the regex pattern for a lexeme *name*. Available
+  # *name*s are: `:SYMBOL`, `:STRING`, `:NUMBER`, `:SPECIAL`,
+  # `:IGNORE`.
   macro regex_for(name)
     {% if name == :SYMBOL %}
       # &?_ is here because it should be handled like a keyword
@@ -25,7 +28,7 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = %w(_ &_ is fun given if else)
+  private KEYWORDS   = %w(_ &_ is fun given ensure if else)
 
   alias Token = {
     type: String,
@@ -47,6 +50,8 @@ module Ven
   end
 
   class Parser
+    include Component
+
     @tok : Token = { type: "START", raw: "start anchor", line: 1 }
 
     def initialize(@file : String, @src : String)
@@ -217,6 +222,7 @@ module Ven
       # Prefixes (NUDs):
       defnud("+", "-", "~")
       defnud("IF", Parselet::If, precedence: CONDITIONAL)
+      defnud("ENSURE", Parselet::Ensure, precedence: ZERO)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
       defnud("STRING", Parselet::String)
@@ -235,7 +241,7 @@ module Ven
       defled("++", Parselet::ReturnIncrement, precedence: POSTFIX)
       defled("--", Parselet::ReturnDecrement, precedence: POSTFIX)
       defled("(", Parselet::Call, precedence: CALL)
-      defled(".", Parselet::FieldAccess, precedence: FIELD)
+      defled(".", Parselet::AccessField, precedence: FIELD)
       # Statements:
       defstmt("FUN", Parselet::Fun)
       ###

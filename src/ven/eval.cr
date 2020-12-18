@@ -3,21 +3,23 @@ require "./component/*"
 require "big"
 
 module Ven
-  class Machine < Visitor
-    # Maximum depth of calls (see 'call(MConcreteFunction, ...)')
+  class Machine < Component::Visitor
+    include Component
+
+    # Maximum depth of calls (see `call`).
     MAX_CALL_DEPTH = 500
 
-    # Maximum amount of normalization passes (see 'normalize!')
+    # Maximum amount of normalization passes (see `normalize!`).
     MAX_NORMALIZE_PASSES = 500
 
-    # Maximum amount of compute cycles (see 'compute')
+    # Maximum amount of compute cycles (see `compute`).
     MAX_COMPUTE_CYCLES = 1000
 
     def initialize(@context = Context.new)
       @computes = 0
     end
 
-    ### Handling death
+    ### Error handling
 
     def die(message : String)
       raise InternalError.new("no last node") if @last.nil?
@@ -76,7 +78,7 @@ module Ven
       MBool.new(!false?(visit(q.value)))
     end
 
-    def visit!(q : QFieldAccess)
+    def visit!(q : QAccessField)
       head = visit(q.head)
 
       q.path.each do |unit|
@@ -178,14 +180,21 @@ module Ven
       generic
     end
 
+    def visit!(q : QEnsure)
+      if false?(value = visit(q.expression))
+        die("#{value} is false (ensuring: #{q.expression})")
+      end
+
+      value
+    end
+
     def visit!(q : QCall)
       call(visit(q.callee), visit(q.args))
     end
 
     ### Helpers
 
-    # Check if a thing is falsey, according to Ven. Note that
-    # it returns Crystal's bool, not Ven's
+    # Checks if *model* is false (according to Ven).
     def false?(model : Model) : Bool
       case model
       when Vec
@@ -207,25 +216,24 @@ module Ven
       end
     end
 
-    # `of?` checks if Model `left` is of the MType `right`
+    # Checks if *left* is of the type *right*.
     def of?(left : Model, right : MType) : Bool
-      right.type == Model ? true : left.class == right.type
+      right.type == Model ? true : left.class <= right.type
     end
 
-    # Yield an inverse of `false?`
+    # Returns an inverse of `false?`.
     private macro true?(model)
       !false?({{model}})
     end
 
-    # Call `true?` with `model` and make the result an MBool
+    # Calls `true?(model)` and makes the result an `MBool`.
     private macro to_bool(model)
       MBool.new(true?({{model}}))
     end
 
     ### Fields
-    # XXX right now, only builtin fields are available
-    # TODO: allow & add name=, params=, body=, etc.
 
+    # Accesses *head*'s field.
     def field(head : Model, field : String)
       unless result = field!(head, field)
         die("field '#{field}' not found for this value: #{head}")
@@ -260,7 +268,7 @@ module Ven
 
     ### Calls
 
-    private def typecheck(params : Array(Ven::TypedParam), args : Array(Model))
+    private def typecheck(params : Array(TypedParameter), args : Array(Model))
       params.zip?(args).each do |param, arg|
         # Ignore missing arguments
         unless !arg.nil? && of?(arg, param[1])
@@ -271,6 +279,7 @@ module Ven
       true
     end
 
+    # Interprets a call to an `MConcreteFunction`.
     def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
       if typecheck && !typecheck(callee.constraints, args)
         # TODO: better error
@@ -290,6 +299,7 @@ module Ven
       end
     end
 
+    # Interprets a call to an `MGenericFunction`.
     def call(callee : MGenericFunction, args)
       callee.concretes.each do |concrete|
         if concrete.params.size == args.size && typecheck(concrete.constraints, args)
@@ -300,10 +310,12 @@ module Ven
       die("no concrete of #{callee} could receive these arguments: #{args.join(", ")}")
     end
 
+    # Interprets a call to an `MBuiltinFunction`.
     def call(callee : MBuiltinFunction, args)
       callee.block.call(self, args)
     end
 
+    # Interprets a call to an `MVector` (XXX: will be removed soon)
     def call(callee : Vec, args)
       items = args.map! do |arg|
         if !arg.is_a?(MNumber)
@@ -325,6 +337,7 @@ module Ven
 
     ### Unary (prefix) operations
 
+    # Interprets a unary operation.
     def unary(operator, operand : Model)
       case operator
       when "+"
@@ -338,14 +351,14 @@ module Ven
       else
         die("'#{operator}': could not interpret for this operand: #{operand}")
       end
-    rescue e : ModelCastError
+    rescue e : ModelCastException
       die("'#{operator}': cannot cast (to normalize) #{operand}: #{e.message}")
     end
 
     ### Binary operations
 
-    # True if `left` and `right` need normalization to be
-    # used with `operator`
+    # Returns true if *left* and *right* need a `normalize!`
+    # pass to be used with *operator*.
     def normalize?(operator, left : Model, right : Model)
       case {operator, left, right}
       when {"is", MBool, MBool}
@@ -372,9 +385,8 @@ module Ven
       end
     end
 
-    # Return a tuple {left, right} where left, right are
-    # normalized `left`, `right` (i.e., converted according
-    # to the specification, which can be found in `normalize?`)
+    # Returns a tuple `{left, right}` where left, right are
+    # **normalized** *left*, *right*.
     def normalize!(operator, left : Model, right : Model)
       case operator
       when "is" then case {left, right}
@@ -418,7 +430,7 @@ module Ven
       end || die("'#{operator}': could not normalize these operands: #{left}, #{right}")
     end
 
-    # Interpret the binary operations
+    # Computes a binary operation.
     def compute(operator, left : Model, right : Model)
       if (@computes += 1) > MAX_COMPUTE_CYCLES
         die("too many compute cycles; you've probably found " \
@@ -480,7 +492,7 @@ module Ven
       die("'#{operator}': division by zero: #{left}, #{right}")
     end
 
-    # Top-level entry to the interpretation of binary operations
+    # Interprets a binary operation.
     def binary(operator, left : Model, right : Model)
       passes = 0
 
@@ -498,14 +510,16 @@ module Ven
       end
 
       compute(operator, left, right)
-    rescue e : ModelCastError
+    rescue e : ModelCastException
       die("'#{operator}': cannot cast (to normalize): #{left}, #{right}: #{e.message}")
     end
 
     ### Interaction with the outside world
 
-    def self.run(tree : Quotes, scope : Context)
-      new(scope.clear).visit(tree)
+    # Evaluates *tree* within the given *context*. Cleans this
+    # context beforehand.
+    def self.run(tree : Quotes, context : Context)
+      new(context.clear).visit(tree)
     end
   end
 end

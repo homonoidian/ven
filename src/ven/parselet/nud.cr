@@ -1,9 +1,17 @@
 module Ven
   private module Parselet
+    include Component
+
     abstract struct Nud
       # TODO: make this more flexible!
       macro block
         p.expect("{"); p.repeat("}", unit: -> { p.statement("}", detrail: false) })
+      end
+
+      macro semicolon(&block)
+        result = {{yield}}
+        p.expect(";", "EOF")
+        result
       end
 
       abstract def parse(
@@ -121,6 +129,12 @@ module Ven
         end
 
         QFun.new(tag, name, params, body, given)
+      end
+    end
+
+    struct Ensure < Nud
+      def parse(p, tag, token)
+        QEnsure.new(tag, p.infix)
       end
     end
   end

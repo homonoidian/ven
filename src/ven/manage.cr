@@ -3,12 +3,12 @@ module Ven
     getter context
 
     def initialize(@file : String)
-      @context = Context.new
+      @context = Component::Context.new
     end
 
     # Load given of extensions. An extension is a subclass
     # of Extension (raw, not instance)
-    def load(*extensions : Extension.class)
+    def load(*extensions : Component::Extension.class)
       extensions.each do |extension|
         extension.new(@context).load
       end
