@@ -17,7 +17,7 @@ module Ven
     # Interpret `input`, which must be one or more lines of
     # source code. Return the result of the last evaluation
     def feed(input : String)
-      Machine.run(Parser.from(@file, input), @context).last
+      Machine.run(Parser.from(@file, input), @context).last?
     end
   end
 end

@@ -45,12 +45,13 @@ module Ven
       manager = Manager.new(file)
 
       manager.load(Library::Core)
+      manager.load(Library::System)
 
       manager
     end
 
     # Read and execute source from `path`. Exit on VenError.
-    # Handle Path::Error (for file not found / invalid path)
+    # Handle File::NotFoundError (for file not found / invalid path)
     def file(path : String)
       path = Path[path].expand(home: true).to_s
       source = File.read(path)
@@ -59,7 +60,7 @@ module Ven
       manager.feed(source)
     rescue e : Component::VenError
       error?(e)
-    rescue e : Path::Error
+    rescue e : File::NotFoundError
       error("command-line error", "file not found (or path invalid): #{path}")
     end
 
@@ -98,7 +99,7 @@ module Ven
 
         if source.nil?
           quit("Bye bye!")
-        elsif source.empty?
+        elsif source.empty? || source.starts_with?("#")
           next
         end
 

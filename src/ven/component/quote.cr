@@ -242,8 +242,9 @@ module Ven::Component
     end
   end
 
-  # An inline (or spanning) *if* statement, e.g.: `if (true) 1 else 0`,
-  # `if (foo is num) true`.
+  # An inline (or spanning) *if* statement, e.g.:
+  #  `if (true) 1 else 0`,
+  #  `if (foo is num) true`.
   class QIf < Quote
     getter cond, suc, alt
 
@@ -259,27 +260,38 @@ module Ven::Component
     end
   end
 
-  # A function definition, e.g.: `fun a = 10`, `fun a(x, y, z) = x + y + z`,
-  # `fun a(x, y) given num, str { y = +y; y ~ x }`.
+  # A function definition, e.g.:
+  #  `fun a = 10`,
+  #  `fun a(x, y, z) = x + y + z`,
+  #  `fun a(x, y) given num, str { y = +y; y ~ x }`,
+  #  `fun a(x, *) = x`.
   class QFun < Quote
-    getter name, params, body, types
+    getter name, params, body, given, slurpy
 
     def initialize(@tag,
       @name : String,
       @params : Array(String),
       @body : Quotes,
-      @types : Quotes)
+      @given : Quotes,
+      @slurpy : Bool)
     end
 
     def to_s(io)
-      io << "fun " << @name << "(" << @params.join(", ") << ") "
-      unless @types.empty?
-        io << "meaning " << @types.join(", ") << " "
+      # TODO: beautify?
+
+      io << "fun " << @name << "(" << @params.join(", ")
+
+      io << (@slurpy ? ", *) " : ") ")
+
+      unless @given.empty?
+        io << "given " << @given.join(", ") << " "
       end
+
       pretty(io, @body)
     end
   end
 
+  # An ensure expression, e.g. the famous `ensure "hello" + "world" is 10`.
   class QEnsure < Quote
     getter expression
 

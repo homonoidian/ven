@@ -1,10 +1,10 @@
 module Ven::Component
-  # Context is the bridge between different `Visitor.visit`s.
+  # The context shared between different `Visitor.visit`s.
   # It implements the *scopes* stack (globalmost to localmost),
   # the *traces* stack (for tracebacking), and the *underscores*
   # stack, whose purpose is to implement  `_`, the contextual value.
   class Context
-    getter traces
+    property traces
 
     def initialize
       @traces = [] of Trace
@@ -40,17 +40,9 @@ module Ven::Component
     # Makes a local scope and executes the given *block*. *initial*
     # is a tuple of keys (variable names) and values (variable values)
     # the scope will be initialized with. It may be `nil` if such
-    # initialization is unwanted. *trace* is the trace left during
-    # the *block*'s evaluation.
-    def local(initial : {Array(String), Array(Model)}?, trace t : {QTag, String}, &)
+    # initialization is unwanted.
+    def local(initial : {Array(String), Array(Model)}? = nil, &)
       @scopes << {} of String => Model
-
-      unless (last = @traces.last?) && {last.tag, last.name} == t
-        @traces << Trace.new(t.first, t.last)
-      end
-
-      # += trace amount
-      trace.use
 
       if initial
         initial.first.zip(initial.last) do |name, value|
@@ -62,13 +54,15 @@ module Ven::Component
 
       @scopes.pop
 
-      # Properly (?) get rid of the trace
-      if trace.amount > 1
-        # -= trace amount
-        trace.unuse
-      elsif trace.amount == 1
-        @traces.pop
-      end
+      result
+    end
+
+    # Records the evaluation of *block* as *trace* and properly
+    # gets rid of this trace after the *block* has been executed.
+    def tracing(t : {QTag, String}, &)
+      @traces << Trace.new(t.first, t.last)
+      result = yield
+      @traces.pop
 
       result
     end
@@ -102,11 +96,17 @@ module Ven::Component
       result
     end
 
-    # Cleans-up the context, namely the traces. Removes all
-    # scopes but the globalmost (leftmost).
+    # Clears the context: erases the traces, removes all
+    # scopes but the globalmost (leftmost), and clears
+    # the underscores stack (XXX).
     def clear
       @traces.clear
       @scopes.pop(@scopes.size - 1)
+
+      # XXX: this is disputed. Although '_' and '&_' are
+      # illegal at top-level, this may break the REPL in
+      # some mysterious way.
+      @underscores.clear
 
       self
     end

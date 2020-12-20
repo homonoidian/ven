@@ -42,6 +42,11 @@ module Ven::Component
     def to_vec : MVector
       MVector.new([self])
     end
+
+    # Returns a field's value for this model.
+    def field(name : String) : Model?
+      nil
+    end
   end
 
   # A `Model` that does not embox one particular value.
@@ -184,7 +189,7 @@ module Ven::Component
   # the default restrictions are weak (`any`), as opposed
   # to strong restrictions (`num`, `vec`, etc.)
   class MConcreteFunction < MFunction
-    getter tag, name, params, constraints, body
+    getter tag, name, params, constraints, body, slurpy
 
     @params : Array(String)
 
@@ -192,15 +197,36 @@ module Ven::Component
         @tag : QTag,
         @name : String,
         @constraints : Array(TypedParameter),
-        @body : Quotes)
+        @body : Quotes,
+        @slurpy : Bool)
 
       @params = @constraints.map(&.first)
     end
 
     # Returns true if any of this concrete's parameters is
-    # constrained by `any`.
+    # constrained by `any`, or this concrete has no parameters,
+    # or this concrete is slurpy.
     def general?
-      @params.empty? || @constraints.any? { |given| given[1].type == Model }
+      @slurpy ||
+      @params.empty? ||
+      @constraints.any? { |given| given[1].type == Model }
+    end
+
+    def <=>(right : MConcreteFunction)
+      params.size <=> right.params.size
+    end
+
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "params"
+        Vec.new(@params.map { |param| Str.new(param).as(Model) })
+      when "slurpy?"
+        MBool.new(@slurpy)
+      when "general?"
+        MBool.new(general?)
+      end
     end
 
     def to_s(io)
@@ -213,26 +239,54 @@ module Ven::Component
   # Emboxes the name of this generic and the collection itself,
   # an Array of concretes.
   class MGenericFunction < MFunction
-    getter name, concretes
+    getter name
 
     def initialize(@name : String)
-      @concretes = [] of MConcreteFunction
+      @general = [] of MConcreteFunction
+      @constrained = [] of MConcreteFunction
     end
 
     # Add a *concrete* variant of this generic function.
     # Overwrite if an identical concrete exists.
     def add(concrete : MConcreteFunction)
-      @concretes.each_with_index do |existing, index|
-        if existing.constraints == concrete.constraints
-          return @concretes[index] = concrete
+      if concrete.general?
+        @general.each_with_index do |existing, index|
+          if existing.params.size == concrete.params.size
+            return @general[index] = concrete
+          end
         end
+
+        @general << concrete
+        @general.sort! { |a, b| b <=> a }
+      else
+        @constrained.each_with_index do |existing, index|
+          if existing.constraints == concrete.constraints
+            return @constrained[index] = concrete
+          end
+        end
+
+        @constrained << concrete
+        @constrained.sort! { |a, b| b <=> a }
       end
 
-      concrete.general? ? (@concretes << concrete) : @concretes.unshift(concrete)
+      concrete
+    end
+
+    def concretes
+      @constrained + @general
+    end
+
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "concretes"
+        Vec.new(concretes.map(&.as(Model)))
+      end
     end
 
     def to_s(io)
-      io << "generic fun " << @name << " with " << @concretes.size << " concrete(s)"
+      io << "generic fun " << @name << " with " << concretes.size << " concrete(s)"
     end
   end
 

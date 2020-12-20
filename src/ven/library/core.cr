@@ -1,15 +1,6 @@
-require "../component/model"
-require "../component/extension"
-
 module Ven::Library
   class Core < Component::Extension
-    fun! "add", x : Num, y : Num do |machine|
-      machine.compute("+", x, y)
-    end
-
     def load
-      defun "add"
-
       deftype "any", Model
       deftype "num", Num
       deftype "str", Str

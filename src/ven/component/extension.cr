@@ -1,6 +1,6 @@
 module Ven::Component
-  # The base class of any built-in (that is, written in Crystal).
-  # To get a feel of a real extension, see `Library::Core`
+  # The base class of all built-in (that is, written in Crystal)
+  # libraries. To get a feel of a real extension, see `Library::Core`
   # (src/ven/library/core.cr)
   abstract class Extension
     include Component

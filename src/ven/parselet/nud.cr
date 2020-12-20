@@ -3,19 +3,31 @@ module Ven
     include Component
 
     abstract struct Nud
-      # TODO: make this more flexible!
-      macro block
-        p.expect("{"); p.repeat("}", unit: -> { p.statement("}", detrail: false) })
+      # Parses a block (requiring initial '{' if *initial* is true).
+      def block(parser, initial = true)
+        if initial
+          parser.expect("{")
+        end
+
+        statement = -> do
+          parser.statement("}", detrail: false)
+        end
+
+        parser.repeat("}", unit: statement)
       end
 
-      macro semicolon(&block)
-        result = {{yield}}
-        p.expect(";", "EOF")
+      # Ensures that what the given *block* parses is followed
+      # by a semicolon (or EOF).
+      def semicolon(parser, &)
+        result = yield
+
+        parser.expect(";", "EOF")
+
         result
       end
 
       abstract def parse(
-        p : Parser,
+        parser : Parser,
         tag : NodeTag,
         token : Token)
     end
@@ -25,116 +37,158 @@ module Ven
         @precedence : Int32)
       end
 
-      def parse(p, tag, token)
-        QUnary.new(tag, token[:type].downcase, p.infix(@precedence))
+      def parse(parser, tag, token)
+        operand = parser.infix(@precedence)
+
+        QUnary.new(tag, token[:type].downcase, operand)
       end
     end
 
     struct Symbol < Nud
-      def parse(p, tag, token)
+      def parse(parser, tag, token)
         QSymbol.new(tag, token[:raw])
       end
     end
 
     struct String < Nud
-      def parse(p, tag, token)
+      def parse(parser, tag, token)
         QString.new(tag, token[:raw][1...-1])
       end
     end
 
     struct Number < Nud
-      def parse(p, tag, token)
+      def parse(parser, tag, token)
         QNumber.new(tag, token[:raw])
       end
     end
 
     struct UPop < Nud
-      def parse(p, tag, token)
+      def parse(parser, tag, token)
         QUPop.new(tag)
       end
     end
 
     struct URef < Nud
-      def parse(p, tag, token)
+      def parse(parser, tag, token)
         QURef.new(tag)
       end
     end
 
     struct Group < Nud
-      def parse(p, tag, token)
-        p.before(")")
+      def parse(parser, tag, token)
+        parser.before(")")
       end
     end
 
     struct Vector < Nud
-      def parse(p, tag, token)
-        QVector.new(tag, p.repeat("]", ","))
+      def parse(parser, tag, token)
+        items = parser.repeat("]", ",")
+
+        QVector.new(tag, items)
       end
     end
 
     struct Spread < Nud
-      def parse(p, tag, token)
-        # Grab all binary operator token types
-        binaries = p.@led.reject { |_, v| !v.is_a?(Binary) }.keys
-
-        # If consumed a binary token type, it's a binary spread
-        binaries.each do |binary|
-          if p.consume(binary)
-            return QBinarySpread.new(tag, binary.downcase, body!)
+      def parse(parser, tag, token)
+        binaries(parser).each do |operator|
+          if parser.consume(operator)
+            return QBinarySpread.new(tag, operator.downcase, body(parser))
           end
         end
 
-        QLambdaSpread.new(tag, p.infix, body!)
+        QLambdaSpread.new(tag, parser.infix, body(parser))
       end
 
-      private macro body!
-        p.expect("|"); p.infix
+      # Collects the token types of Binary LEDs.
+      private def binaries(parser)
+        parser.@led.reject { |_, led| !led.is_a?(Binary) }.keys
+      end
+
+      # Parses this spread's body.
+      private def body(parser)
+        parser.expect("|")
+
+        parser.infix
       end
     end
 
     struct Block < Nud
-      def parse(p, tag, tok)
-        QBlock.new(tag, p.repeat("}", unit: -> { p.statement("}", detrail: false) }))
+      def parse(parser, tag, token)
+        statements = block(parser, initial: false)
+
+        QBlock.new(tag, statements)
       end
     end
 
     struct If < Nud
-      def parse(p, tag, tok)
-        QIf.new(tag, p.infix, p.infix, p.consume("ELSE") ? p.infix : nil)
+      def parse(parser, tag, tok)
+        cond = parser.infix
+        succ = parser.infix
+        fail = parser.consume("ELSE") ? parser.infix : nil
+
+        QIf.new(tag, cond, succ, fail)
       end
     end
 
     struct Fun < Nud
-      def parse(p, tag, token)
-        name = p.expect("SYMBOL")[:raw]
+      def parse(parser, tag, token)
+        name = parser.expect("SYMBOL")[:raw]
+        params, slurpy = parameters(parser)
+        given = given(parser)
+        body = body(parser)
 
-        params = p.consume("(") \
-          ? p.repeat(")", ",", -> { p.expect("SYMBOL")[:raw] })
-          : [] of ::String
-
-        given = [] of Quote
-        if p.consume("GIVEN")
-          given = params.empty? \
-            ? p.die("'given' illegal for zero-arity functions")
-            # Infixes with precedence greater (!) than ASSIGNMENT
-            : p.repeat(sep: ",", unit: -> { p.infix(Precedence::ASSIGNMENT.value) })
+        if params.empty? && !given.empty?
+          parser.die("could not use 'given' for a zero-arity function")
         end
 
-        if p.consume("=")
-          body = [p.infix]
-          # `=` functions must end with a semicolon (or EOF)
-          p.expect(";", "EOF")
+        QFun.new(tag, name, params, body, given, slurpy)
+      end
+
+      # Parses this function's parameters. Returns a Tuple
+      # that consists of (an Array of parameters) and slurpiness
+      # (i.e., whether or not this function is slurpy).
+      private def parameters(parser) : {Array(::String), Bool}
+        return {[] of ::String, false} unless parser.consume("(")
+
+        slurpy = false
+
+        parameter = -> do
+          if parser.consume("*")
+            unless slurpy = !slurpy
+              parser.die("having several '*' in function parameters is forbidden")
+            end
+          else
+            parser.expect("SYMBOL")[:raw]
+          end
+        end
+
+        {parser.repeat(")", ",", unit: parameter).compact, slurpy}
+      end
+
+      # Parses this function's 'given' appendix.
+      private def given(parser) : Array(Quote)
+        return [] of Quote unless parser.consume("GIVEN")
+
+        type = -> do
+          parser.infix(Precedence::ASSIGNMENT.value)
+        end
+
+        parser.repeat(sep: ",", unit: type)
+      end
+
+      # Parses this function's body.
+      private def body(parser) : Array(Quote)
+        if parser.consume("=")
+          semicolon(parser) { [parser.infix] }
         else
-          body = block
+          block(parser)
         end
-
-        QFun.new(tag, name, params, body, given)
       end
     end
 
     struct Ensure < Nud
-      def parse(p, tag, token)
-        QEnsure.new(tag, p.infix)
+      def parse(parser, tag, token)
+        QEnsure.new(tag, parser.infix)
       end
     end
   end

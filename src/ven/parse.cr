@@ -11,7 +11,7 @@ module Ven
       # &?_ is here because it should be handled like a keyword
       /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_/
     {% elsif name == :STRING %}
-      /"([^\n"])*"/
+      /"([^\n"\\]|\\[ntr\\"])*"/
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9]\d*|0/
     {% elsif name == :SPECIAL %}

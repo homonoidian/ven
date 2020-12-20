@@ -10,75 +10,79 @@ module Ven
       end
 
       abstract def parse(
-        p : Parser,
+        parser : Parser,
         tag : NodeTag,
         left : Node,
         token : Token)
     end
 
     struct Binary < Led
-      def parse(p, tag, left, token)
-        QBinary.new(tag, token[:type].downcase, left, p.infix(@precedence))
+      def parse(parser, tag, left, token)
+        right = parser.infix(@precedence)
+
+        QBinary.new(tag, token[:type].downcase, left, right)
       end
     end
 
     struct Call < Led
-      def parse(p, tag, left, token)
-        args = p.repeat(")", ",")
+      def parse(parser, tag, left, token)
+        args = parser.repeat(")", ",")
 
         if left.is_a?(QAccessField)
-          # If calling QAccessField, rearrange so to provide
-          # UFCS-like behavior. XXX but calling fields?
-          call = left.head
-
-          left.path[...-1].each do |unit|
-            call = QCall.new(tag, QSymbol.new(tag, unit), [call])
-          end
-
-          return QCall.new(tag, QSymbol.new(tag, left.path.last), [call] + args)
+          return ufcs(tag, left, args)
         end
 
         QCall.new(tag, left, args)
       end
+
+      private def ufcs(tag, left, args)
+        callee = left.head
+
+        left.path[...-1].each do |field|
+          callee = QCall.new(tag, QSymbol.new(tag, field), [callee])
+        end
+
+        QCall.new(tag, QSymbol.new(tag, left.path.last), [callee] + args)
+      end
     end
 
     struct Assign < Led
-      def parse(p, tag, left, token)
+      def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
-          ? p.die("left-hand side of '=' is not a symbol")
-          : QAssign.new(tag, left.value, p.infix)
+          ? parser.die("left-hand side of '=' is not a symbol")
+          : QAssign.new(tag, left.value, parser.infix)
       end
     end
 
     struct IntoBool < Led
-      def parse(p, tag, left, token)
+      def parse(parser, tag, left, token)
         QIntoBool.new(tag, left)
       end
     end
 
     struct ReturnIncrement < Led
-      def parse(p, tag, left, token)
+      def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
-          ? p.die("postfix '++' is an assignment, so symbol must be given")
+          ? parser.die("postfix '++' expects a symbol")
           : QReturnIncrement.new(tag, left.value)
       end
     end
 
     struct ReturnDecrement < Led
-      def parse(p, tag, left, token)
+      def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
-          ? p.die("postfix '--' is an assignment, so symbol must be given")
+          ? parser.die("postfix '--' expects a symbol")
           : QReturnDecrement.new(tag, left.value)
       end
     end
 
     struct AccessField < Led
-      def parse(p, tag, left, token)
+      def parse(parser, tag, left, token)
         path = [] of ::String
 
         while token && token[:type] == "."
-          path << p.expect("SYMBOL")[:raw]
-          token = p.consume(".")
+          path << parser.expect("SYMBOL")[:raw]
+          token = parser.consume(".")
         end
 
         QAccessField.new(tag, left, path)

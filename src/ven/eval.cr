@@ -57,13 +57,13 @@ module Ven
     def visit!(q : QUPop)
       @context.u?
     rescue IndexError
-      die("'_' used outside of context: context stack is empty")
+      die("'_' used outside of context: underscores stack is empty")
     end
 
     def visit!(q : QURef)
       @context.us.last
     rescue IndexError
-      die("'&_' used outside of context: context stack is empty")
+      die("'&_' used outside of context: underscores stack is empty")
     end
 
     def visit!(q : QUnary)
@@ -120,17 +120,19 @@ module Ven
       result = [] of Model
       item = operand.value.first
 
-      @context.local(nil, {q.tag, "<spread>"}) do
-        operand.value.each_with_index do |item, index|
-          @context.with_u([Num.new(index), item]) do
-            factor = visit(q.lambda)
-            case factor
-            when MHole
-              next
-            when MBool
-              factor = (factor.value ? item : next)
+      @context.tracing({q.tag, "<spread>"}) do
+        @context.local do
+          operand.value.each_with_index do |item, index|
+            @context.with_u([Num.new(index), item]) do
+              factor = visit(q.lambda)
+              case factor
+              when MHole
+                next
+              when MBool
+                factor = (factor.value ? item : next)
+              end
+              result << factor
             end
-            result << factor
           end
         end
       end
@@ -139,11 +141,11 @@ module Ven
     end
 
     def visit!(q : QIf)
-      if false?(visit(q.cond))
-        return q.alt.nil? ? MHole.new : visit(q.alt.not_nil!)
-      end
+      branch = false?(value = visit(q.cond)) ? q.alt : q.suc
 
-      visit(q.suc)
+      branch.nil? \
+        ? MHole.new
+        : @context.with_u([value]) { visit(branch) }
     end
 
     def visit!(q : QBlock)
@@ -155,29 +157,36 @@ module Ven
     end
 
     def visit!(q : QFun)
-      # First, find out what the parameter types are. By
-      # default, they're `any`
-      rest = MType.new("any", Model)
-      params = q.params.zip?(q.types).map do |param, type|
-        type.nil? || (rest = visit(type)).is_a?(MType) \
-          ? {param, rest.as(MType)}
-          : die("this 'given' expression does not return a type: #{type}")
+      # Evaluate the 'given' expressions, making sure that
+      # each returns a type (TODO: or a model). If the type
+      # for a parameter is missing, let it be 'any'.
+      last = MType.new("any", Model)
+
+      params = q.params.zip?(q.given).map do |param, type|
+        if !type.nil? && !(last = visit(type)).is_a?(MType)
+          die("this 'given' expression did not return a type: #{type}")
+        end
+
+        {param, last.as(MType)}
       end
 
-      # Now we are able to create a concrete function:
-      concrete = MConcreteFunction.new(q.tag, q.name, params, q.body)
+      concrete = MConcreteFunction.new(
+        q.tag,
+        q.name,
+        params,
+        q.body,
+        q.slurpy)
 
-      # Use the existing generic or create a new one
-      unless (generic = @context.fetch(q.name)).is_a?(MGenericFunction)
+      # Search for a generic that handles this function
+      # (essentially, a generic named the same way). Create
+      # one if haven't found.
+      generic = @context.fetch(q.name)
+
+      unless generic.is_a?(MGenericFunction)
         generic = @context.define(q.name, MGenericFunction.new(q.name))
       end
 
-      unless generic.add(concrete)
-        die("could not add #{concrete} to #{generic}: such implementation " \
-            "already exists")
-      end
-
-      generic
+      generic.add(concrete)
     end
 
     def visit!(q : QEnsure)
@@ -189,7 +198,11 @@ module Ven
     end
 
     def visit!(q : QCall)
-      call(visit(q.callee), visit(q.args))
+      callee, args = visit(q.callee), visit(q.args)
+
+      @context.tracing({q.tag, "<call to #{callee}>"}) do
+        call(callee, args)
+      end
     end
 
     ### Helpers
@@ -235,7 +248,7 @@ module Ven
 
     # Accesses *head*'s field.
     def field(head : Model, field : String)
-      unless result = field!(head, field)
+      unless result = head.field(field)
         die("field '#{field}' not found for this value: #{head}")
       end
 
@@ -262,10 +275,6 @@ module Ven
       end
     end
 
-    def field!(head, field)
-      false
-    end
-
     ### Calls
 
     private def typecheck(params : Array(TypedParameter), args : Array(Model))
@@ -286,9 +295,13 @@ module Ven
         die("typecheck failed")
       end
 
-      @context.local({callee.params, args}, {callee.tag, callee.to_s}) do
+      @context.local({callee.params, args}) do
+        if callee.slurpy
+          @context.define("rest", Vec.new(args[callee.params.size...]))
+        end
+
         @context.with_u(args.reverse) do
-          if @context.trace.amount > MAX_CALL_DEPTH
+          if @context.traces.size > MAX_CALL_DEPTH
             die("too many calls: very deep or infinite recursion")
           elsif (result = visit(callee.body).last).is_a?(MHole)
             die("illegal operation: #{callee} returned a hole")
@@ -302,8 +315,25 @@ module Ven
     # Interprets a call to an `MGenericFunction`.
     def call(callee : MGenericFunction, args)
       callee.concretes.each do |concrete|
-        if concrete.params.size == args.size && typecheck(concrete.constraints, args)
-          return call(concrete, args, typecheck: false)
+        if concrete.slurpy && concrete.params.size <= args.size
+          # It's a slurpy. Stretch the constraints (by repeating
+          # last mentioned constraint) so they fit args and
+          # 'typecheck' can do its work
+          constraints = concrete.constraints
+
+          (constraints.size - args.size).times do
+            constraints << constraints.last
+          end
+
+          if typecheck(constraints, args)
+            return call(concrete, args, typecheck: false)
+          end
+        elsif concrete.params.size == args.size
+          # A non-slurpy concrete. Just typecheck it and,
+          # if the typecheck was successful, run it.
+          if typecheck(concrete.constraints, args)
+            return call(concrete, args, typecheck: false)
+          end
         end
       end
 
@@ -444,9 +474,9 @@ module Ven
 
       case {operator, left, right}
       when {"is", Num, Num}
-        left = MBool.new(left.value == right.value)
+        left = left.value == right.value ? left : MBool.new(false)
       when {"is", Str, Str}
-        left = MBool.new(left.value == right.value)
+        left = left.value == right.value ? left : MBool.new(false)
       when {"is", MBool, MBool}
         left.value = left.value == right.value
       when {"is", _, MType}
@@ -516,7 +546,7 @@ module Ven
 
     ### Interaction with the outside world
 
-    # Evaluates *tree* within the given *context*. Cleans this
+    # Evaluates *tree* within the given *context*. Clears this
     # context beforehand.
     def self.run(tree : Quotes, context : Context)
       new(context.clear).visit(tree)
