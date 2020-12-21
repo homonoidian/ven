@@ -28,21 +28,7 @@ module Ven
       def parse(parser, tag, left, token)
         args = parser.repeat(")", ",")
 
-        if left.is_a?(QAccessField)
-          return ufcs(tag, left, args)
-        end
-
         QCall.new(tag, left, args)
-      end
-
-      private def ufcs(tag, left, args)
-        callee = left.head
-
-        left.path[...-1].each do |field|
-          callee = QCall.new(tag, QSymbol.new(tag, field), [callee])
-        end
-
-        QCall.new(tag, QSymbol.new(tag, left.path.last), [callee] + args)
       end
     end
 

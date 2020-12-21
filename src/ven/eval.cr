@@ -81,8 +81,14 @@ module Ven
     def visit!(q : QAccessField)
       head = visit(q.head)
 
-      q.path.each do |unit|
-        head = field(head, unit)
+      q.path.each do |route|
+        value = field(head, route)
+
+        unless value
+          die("field '#{route}' not found for this value: #{head}")
+        end
+
+        head = value.as(Model)
       end
 
       head
@@ -117,27 +123,31 @@ module Ven
         return operand
       end
 
-      result = [] of Model
       item = operand.value.first
+      result = [] of Model
 
       @context.tracing({q.tag, "<spread>"}) do
         @context.local do
           operand.value.each_with_index do |item, index|
             @context.with_u([Num.new(index), item]) do
               factor = visit(q.lambda)
-              case factor
-              when MHole
-                next
-              when MBool
-                factor = (factor.value ? item : next)
+
+              unless q.iterative
+                case factor
+                when MBool
+                  factor = (factor.value ? item : next)
+                when MHole
+                  next
+                end
+
+                result << factor
               end
-              result << factor
             end
           end
         end
       end
 
-      Vec.new(result)
+      result.empty? ? operand : Vec.new(result)
     end
 
     def visit!(q : QIf)
@@ -198,10 +208,46 @@ module Ven
     end
 
     def visit!(q : QCall)
-      callee, args = visit(q.callee), visit(q.args)
+      head : Model? = nil
+      args = visit(q.args)
 
-      @context.tracing({q.tag, "<call to #{callee}>"}) do
-        call(callee, args)
+      if (access = q.callee).is_a?(QAccessField)
+        head = visit(access.head)
+
+        # Try to `field` until a field is not found
+        access.path.each_with_index do |route, index|
+          unless value = field(head, route)
+            # *route* is not a field. Try making a call to a
+            # variable named *route*, whose value will be the
+            # callee and *head* the only argument.
+            callee = @context.fetch(route)
+
+            unless callee && callee.callable?
+              die(
+                "could neither get the field '#{route}' nor " \
+                "find a callable named '#{route}' for this value: #{head}")
+            end
+
+            if access.path.size == index + 1
+              # We're going for the normies' call!
+              args.unshift(head)
+
+              break head = callee
+            else
+              @context.tracing({q.tag, "<call to #{route}>"}) do
+                value = call(callee, [head])
+              end
+            end
+          end
+
+          head = value.as(Model)
+        end
+      end
+
+      head ||= visit(q.callee)
+
+      @context.tracing({q.tag, "<call to #{head}>"}) do
+        call(head, args)
       end
     end
 
@@ -246,32 +292,17 @@ module Ven
 
     ### Fields
 
-    # Accesses *head*'s field.
+    # Accesses *head*'s *field*. Returns false if such field
+    # was not found.
     def field(head : Model, field : String)
-      unless result = head.field(field)
-        die("field '#{field}' not found for this value: #{head}")
+      if result = head.field(field)
+        return result.as(Model)
       end
 
-      result.as(Model)
-    end
-
-    def field!(head : MConcreteFunction, field : String)
       case field
-      when "name"
-        Str.new(head.name)
-      when "params"
-        Vec.new(head.params.map { |param| Str.new(param).as(Model) })
-      when "body"
-        die("TODO: MQuote")
-      end
-    end
-
-    def field!(head : MGenericFunction, field : String)
-      case field
-      when "name"
-        Str.new(head.name)
-      when "concretes"
-        Vec.new(head.concretes.map(&.as(Model)))
+      when "callable?"
+        # 'callable?' is available anytime, on any model
+        MBool.new(head.callable?)
       end
     end
 

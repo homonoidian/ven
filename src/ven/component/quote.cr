@@ -215,17 +215,20 @@ module Ven::Component
     end
   end
 
-  # A lambda spread, e.g., `|_ + 1| [1, 2, 3]`.
+  # A lambda spread, e.g.:
+  #  `|_ + 1| [1, 2, 3]` - lambda spread
+  #  `|say(_)|: [1, 2, 3]` - iterative spread.
   class QLambdaSpread < Quote
-    getter lambda, operand
+    getter lambda, operand, iterative
 
     def initialize(@tag,
       @lambda : Quote,
-      @operand : Quote)
+      @operand : Quote,
+      @iterative : Bool)
     end
 
     def to_s(io)
-      io << "|" << @lambda << "| " << @operand
+      io << "|" << @lambda << (@iterative ? "|: " : "| ") << @operand
     end
   end
 

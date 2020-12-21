@@ -90,25 +90,49 @@ module Ven
 
     struct Spread < Nud
       def parse(parser, tag, token)
+        lambda = nil
+        iterative = false
+
         binaries(parser).each do |operator|
-          if parser.consume(operator)
-            return QBinarySpread.new(tag, operator.downcase, body(parser))
+          if consumed = parser.consume(operator)
+            if parser.consume("|")
+              return QBinarySpread.new(tag, operator.downcase, parser.infix)
+            end
+
+            # Gather unaries
+            unaries = unaries(parser)
+
+            # Check if it's a unary:
+            unless unaries.has_key?(operator)
+              parser.die("expected '|' or a term")
+            end
+
+            # We've consumed unary by accident
+            break lambda = unaries[operator]
+              .parse(parser, QTag.new(tag.file, consumed[:line]), consumed)
           end
         end
 
-        QLambdaSpread.new(tag, parser.infix, body(parser))
+        lambda ||= parser.infix
+
+        parser.expect("|")
+
+        # It's an iterative spread
+        if parser.consume(":")
+          iterative = true
+        end
+
+        QLambdaSpread.new(tag, lambda, parser.infix, iterative)
+      end
+
+      # Returns the unaries of a parser.
+      private def unaries(parser)
+        parser.@nud
       end
 
       # Collects the token types of Binary LEDs.
       private def binaries(parser)
         parser.@led.reject { |_, led| !led.is_a?(Binary) }.keys
-      end
-
-      # Parses this spread's body.
-      private def body(parser)
-        parser.expect("|")
-
-        parser.infix
       end
     end
 

@@ -47,6 +47,11 @@ module Ven::Component
     def field(name : String) : Model?
       nil
     end
+
+    # Returns whether this model is callable or not.
+    def callable? : Bool
+      false
+    end
   end
 
   # A `Model` that does not embox one particular value.
@@ -136,6 +141,10 @@ module Ven::Component
     def to_vec
       self
     end
+
+    def callable?
+      true
+    end
   end
 
   # Ven hole (`hole`) model. This model is the simplest kind of
@@ -179,7 +188,10 @@ module Ven::Component
   # and whose purpose is to be an umbrella `function` type. It
   # allows a type check like `foo is function` to work without
   # the user having to think of `concrete`, `generic` and so on.
-  class MFunction < AbstractModel
+  abstract class MFunction < AbstractModel
+    def callable?
+      true
+    end
   end
 
   # A particular variant of a generic function, known as
