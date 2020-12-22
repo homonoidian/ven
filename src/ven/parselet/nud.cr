@@ -93,21 +93,24 @@ module Ven
         lambda = nil
         iterative = false
 
-        binaries(parser).each do |operator|
+        parser.led(only: Binary).keys.each do |operator|
+          # XXX: is handling 'is not' so necessary?
+
           if consumed = parser.consume(operator)
             if parser.consume("|")
               return QBinarySpread.new(tag, operator.downcase, parser.infix)
             end
 
-            # Gather unaries
-            unaries = unaries(parser)
+            # Gather the unaries:
+            unaries = parser.nud
 
-            # Check if it's a unary:
+            # Make sure the operator is actually unary:
             unless unaries.has_key?(operator)
               parser.die("expected '|' or a term")
             end
 
-            # We've consumed unary by accident
+            # Here we know we've consumed a unary by accident.
+            # Let the unary parser do the job
             break lambda = unaries[operator]
               .parse(parser, QTag.new(tag.file, consumed[:line]), consumed)
           end
@@ -117,22 +120,12 @@ module Ven
 
         parser.expect("|")
 
-        # It's an iterative spread
+        # Is it an iterative spread?
         if parser.consume(":")
           iterative = true
         end
 
         QLambdaSpread.new(tag, lambda, parser.infix, iterative)
-      end
-
-      # Returns the unaries of a parser.
-      private def unaries(parser)
-        parser.@nud
-      end
-
-      # Collects the token types of Binary LEDs.
-      private def binaries(parser)
-        parser.@led.reject { |_, led| !led.is_a?(Binary) }.keys
       end
     end
 

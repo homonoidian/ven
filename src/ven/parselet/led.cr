@@ -18,9 +18,14 @@ module Ven
 
     struct Binary < Led
       def parse(parser, tag, left, token)
-        right = parser.infix(@precedence)
+        operator = token[:type].downcase
 
-        QBinary.new(tag, token[:type].downcase, left, right)
+        # Is it 'is not'?
+        inverse = parser.consume("NOT") if operator == "is"
+        right = parser.infix(@precedence)
+        this = QBinary.new(tag, operator, left, right)
+
+        inverse.nil? ? this : QUnary.new(tag, "not", this)
       end
     end
 

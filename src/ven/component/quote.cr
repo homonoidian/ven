@@ -95,7 +95,7 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << @operator << @operand
+      io << @operator << (@operator =~ /\w+/ ? " " : "") << @operand
     end
   end
 
@@ -258,8 +258,10 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << @cond << " => " << @suc
+      io << "("
+      io << "if (" << @cond << ") " << @suc
       io << " else " << @alt if @alt
+      io << ")"
     end
   end
 

@@ -28,7 +28,7 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = %w(_ &_ is fun given ensure if else)
+  private KEYWORDS   = %w(_ &_ is not fun given ensure if else)
 
   alias Token = {
     type: String,
@@ -51,6 +51,8 @@ module Ven
 
   class Parser
     include Component
+
+    getter tok
 
     @tok : Token = { type: "START", raw: "start anchor", line: 1 }
 
@@ -194,6 +196,14 @@ module Ven
       repeat("EOF", unit: ->statement)
     end
 
+    def nud(only pick : Parselet::Nud.class ? = nil)
+      @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
+    end
+
+    def led(only pick : Parselet::Led.class ? = nil)
+      @led.reject { |_, led| pick.nil? ? false : led.class != pick }
+    end
+
     private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
         {{storage}}[{{type}}] = {{tail.first}}.new
@@ -204,12 +214,16 @@ module Ven
       {% end %}
     end
 
-    private macro defled(type, *tail, precedence = ZERO)
+    private macro defled(type, *tail, common = nil, precedence = ZERO)
       {% unless tail.first.is_a?(StringLiteral) || !tail.first %}
         @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}}.value)
       {% else %}
         {% for infix in [type] + tail %}
-          @led[{{infix}}] = Parselet::Binary.new(Precedence::{{precedence}}.value)
+          {% unless common %}
+            @led[{{infix}}] = Parselet::Binary.new(Precedence::{{precedence}}.value)
+          {% else %}
+            @led[{{infix}}] = {{common}}.new(Precedence::{{precedence}}.value)
+          {% end %}
         {% end %}
       {% end %}
     end
@@ -220,7 +234,7 @@ module Ven
 
     def register
       # Prefixes (NUDs):
-      defnud("+", "-", "~")
+      defnud("+", "-", "~", "NOT")
       defnud("IF", Parselet::If, precedence: CONDITIONAL)
       defnud("ENSURE", Parselet::Ensure, precedence: ZERO)
       defnud("SYMBOL", Parselet::Symbol)

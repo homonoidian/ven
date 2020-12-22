@@ -151,11 +151,14 @@ module Ven
     end
 
     def visit!(q : QIf)
-      branch = false?(value = visit(q.cond)) ? q.alt : q.suc
+      cond = visit(q.cond)
+
+      # XXX: controversial, e.g., `if (0) 1` yields `1` (1)
+      branch = cond.is_a?(MBool) && !cond.value ? q.alt : q.suc
 
       branch.nil? \
         ? MHole.new
-        : @context.with_u([value]) { visit(branch) }
+        : @context.with_u([cond]) { visit(branch) }
     end
 
     def visit!(q : QBlock)
@@ -303,6 +306,8 @@ module Ven
       when "callable?"
         # 'callable?' is available anytime, on any model
         MBool.new(head.callable?)
+      else
+        false
       end
     end
 
@@ -311,7 +316,7 @@ module Ven
     private def typecheck(params : Array(TypedParameter), args : Array(Model))
       params.zip?(args).each do |param, arg|
         # Ignore missing arguments
-        unless !arg.nil? && of?(arg, param[1])
+        if !arg.nil? && !of?(arg, param[1])
           return false
         end
       end
@@ -376,9 +381,11 @@ module Ven
       callee.block.call(self, args)
     end
 
-    # Interprets a call to an `MVector` (XXX: will be removed soon)
+    # Interprets a call to an `MVector`.
     def call(callee : Vec, args)
-      items = args.map! do |arg|
+      return Vec.new([] of Model) if args.empty?
+
+      args.map! do |arg|
         if !arg.is_a?(MNumber)
           die("vector index must be a num, got: #{arg}")
         elsif !arg.value.denominator == 1
@@ -389,7 +396,7 @@ module Ven
         item
       end
 
-      items.size > 1 ? Vec.new(items) : items.first
+      args.size > 1 ? Vec.new(args) : args.first
     end
 
     def call(callee : Model, args)
@@ -409,6 +416,8 @@ module Ven
         numeric
       when "~"
         operand.to_str
+      when "not"
+        MBool.new(false?(operand))
       else
         die("'#{operator}': could not interpret for this operand: #{operand}")
       end
