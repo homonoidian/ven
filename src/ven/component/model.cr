@@ -102,10 +102,27 @@ module Ven::Component
 
   # Ven string (`str`) model. Emboxes a Crystal String.
   class MString < Model
+    SEQUENCES = {
+      "\\n" => "\n",
+      "\\t" => "\t",
+      "\\r" => "\r",
+      "\\\"" => "\"",
+      "\\\\" => "\\"
+    }
+
     @value : String
 
+    # Evaluates the escape sequences in the *operand* String.
+    def self.rawen!(operand : String)
+      SEQUENCES.each do |escape, raw|
+        operand = operand.gsub(escape, raw)
+      end
+
+      operand
+    end
+
     def to_s(io)
-      io << '"' << @value << '"'
+      @value.dump(io)
     end
 
     # Produces either the length of this string (in case it
@@ -119,6 +136,23 @@ module Ven::Component
 
     def to_str
       self
+    end
+  end
+
+  # Ven regex (`regex`) model. (Rather poorly) emboxes a
+  # Crystal Regex.
+  class MRegex < Model
+    def initialize(
+      @value : Regex,
+      @string : String = @value.to_s)
+    end
+
+    def to_s(io)
+      io << "`" << @string << "`"
+    end
+
+    def to_str
+      Str.new(@string)
     end
   end
 

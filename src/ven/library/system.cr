@@ -1,12 +1,7 @@
 module Ven::Library
   class System < Component::Extension
     fun! "put", str : Str do |machine|
-      # Haven't found a better way:
-
       print str.value
-        .gsub("\\n", "\n")
-        .gsub("\\t", "\t")
-        .gsub("\\r", "\r")
 
       str
     end

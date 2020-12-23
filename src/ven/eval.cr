@@ -47,7 +47,16 @@ module Ven
     end
 
     def visit!(q : QString)
-      Str.new(q.value)
+      Str.new(Str.rawen!(q.value))
+    end
+
+    def visit!(q : QRegex)
+      # Assume we'll be matching from the start of the string:
+      regex = q.value.starts_with?("^") ? q.value : "^#{q.value}"
+
+      MRegex.new(Regex.new(regex), string: q.value)
+    rescue ArgumentError
+      die("regex syntax error: invalid PCRE literal: #{q}")
     end
 
     def visit!(q : QVector)
@@ -432,6 +441,7 @@ module Ven
     def normalize?(operator, left : Model, right : Model)
       case {operator, left, right}
       when {"is", MBool, MBool}
+      when {"is", Str, MRegex}
       when {"is", _, MType}
       when {"is", Num, Num},
            {"<", Num, Num},
@@ -462,6 +472,8 @@ module Ven
       when "is" then case {left, right}
         when {Vec, _}, {_, Vec}
           {left.to_vec, right.to_vec}
+        when {_, MRegex}
+          {left.to_str, right}
         when {Str, _}, {_, Str}
           {left.to_str, right.to_str}
         when {Num, _}, {_, Num}
@@ -519,6 +531,11 @@ module Ven
         left = left.value == right.value ? left : MBool.new(false)
       when {"is", MBool, MBool}
         left.value = left.value == right.value
+      when {"is", Str, MRegex}
+        matches = right.value.match(left.value)
+        left = matches.nil? \
+          ? MBool.new(false)
+          : Vec.new(matches.to_a.map { |piece| Str.new(piece || "").as(Model) })
       when {"is", _, MType}
         left = MBool.new(of?(left, right))
       when {"<", Num, Num}

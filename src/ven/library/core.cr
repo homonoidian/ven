@@ -6,6 +6,7 @@ module Ven::Library
       deftype "str", Str
       deftype "vec", Vec
       deftype "bool", MBool
+      deftype "regex", MRegex
       deftype "type", MType
       deftype "hole", MHole
 

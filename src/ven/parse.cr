@@ -12,6 +12,8 @@ module Ven
       /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_/
     {% elsif name == :STRING %}
       /"([^\n"\\]|\\[ntr\\"])*"/
+    {% elsif name == :REGEX %}
+      /`([^\\`]|\\.)*`/
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9]\d*|0/
     {% elsif name == :SPECIAL %}
@@ -25,6 +27,7 @@ module Ven
 
   private RX_SYMBOL  = /^#{regex_for(:SYMBOL)}/
   private RX_STRING  = /^#{regex_for(:STRING)}/
+  private RX_REGEX  = /^#{regex_for(:REGEX)}/
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
@@ -95,6 +98,8 @@ module Ven
           token("NUMBER")
         when match(RX_STRING)
           token("STRING")
+        when match(RX_REGEX)
+          token("REGEX")
         when @pos == @src.size
           token("EOF")
         else
@@ -240,6 +245,7 @@ module Ven
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
       defnud("STRING", Parselet::String)
+      defnud("REGEX", Parselet::Regex)
       defnud("|", Parselet::Spread)
       defnud("(", Parselet::Group)
       defnud("{", Parselet::Block)

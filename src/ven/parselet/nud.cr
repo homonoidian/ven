@@ -56,6 +56,12 @@ module Ven
       end
     end
 
+    struct Regex < Nud
+      def parse(parser, tag, token)
+        QRegex.new(tag, token[:raw][1...-1])
+      end
+    end
+
     struct Number < Nud
       def parse(parser, tag, token)
         QNumber.new(tag, token[:raw])
@@ -102,7 +108,7 @@ module Ven
             end
 
             # Gather the unaries:
-            unaries = parser.nud
+            unaries = parser.nud(only: Unary)
 
             # Make sure the operator is actually unary:
             unless unaries.has_key?(operator)

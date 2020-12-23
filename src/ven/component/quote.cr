@@ -52,6 +52,13 @@ module Ven::Component
     end
   end
 
+  # A Crystal-compatible regular expression, e.g., `\w+`
+  class QRegex < QAtom
+    def to_s(io)
+      io << "`" << @value << "`"
+    end
+  end
+
   # A number, e.g.: `12.34`, `1234`.
   class QNumber < QAtom
   end
