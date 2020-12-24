@@ -22,9 +22,40 @@ module Ven::Component
       @scopes.last
     end
 
-    # Makes an entry in the localmost (rightmost) scope.
+    # Walks through the scopes from the localmost to the
+    # globalmost, returning true if found *$QUEUE* variable.
+    def has_queue?
+      @scopes.reverse_each do |scope|
+        unless scope["$QUEUE"]?.nil?
+          return true
+        end
+      end
+    end
+
+    # Appends a *value* to the queue. NOTE: does not check
+    # whether a queue exists!
+    def queue(value : Model)
+      @scopes.reverse_each do |scope|
+        if queue = scope["$QUEUE"]?
+          break queue.as(Vec).value << value
+        end
+      end
+
+      value
+    end
+
+    # Walks from the globalmost down to the localmost scope,
+    # checking if *name* exists there and redefining it if
+    # it does. Otherwise makes *name* be *value* in the
+    # localmost scope.
     def define(name : String, value : Model)
-      @scopes.last[name] = value
+      @scopes.each do |this|
+        if this.has_key?(name)
+          return this[name] = value
+        end
+      end
+
+      scope[name] = value
     end
 
     # Tries searching for an entry right-to-left, that is, from

@@ -209,9 +209,33 @@ module Ven
       end
     end
 
+    struct Queue < Nud
+      def parse(parser, tag, token)
+        QQueue.new(tag, parser.infix)
+      end
+    end
+
     struct Ensure < Nud
       def parse(parser, tag, token)
         QEnsure.new(tag, parser.infix)
+      end
+    end
+
+    struct While < Nud
+      def parse(parser, tag, token)
+        condition = parser.infix
+        block = parser.infix
+
+        QWhile.new(tag, condition, block)
+      end
+    end
+
+    struct Until < Nud
+      def parse(parser, tag, token)
+        condition = parser.infix
+        block = parser.infix
+
+        QUntil.new(tag, condition, block)
       end
     end
   end

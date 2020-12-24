@@ -17,7 +17,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9]\d*|0/
     {% elsif name == :SPECIAL %}
-      /--|\+\+|=>|<=|>=|[-<>~+*\/()[\]{},:;=?.|]/
+      /--|\+\+|=>|[-+*\/~<>]=|[-<>~+*\/()[\]{},:;=?.|]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#[^\n]*)/
     {% else %}
@@ -31,7 +31,19 @@ module Ven
   private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
-  private KEYWORDS   = %w(_ &_ is not fun given ensure if else)
+  private KEYWORDS   = %w(
+    _ &_
+    is
+    if
+    not
+    fun
+    else
+    until
+    while
+    queue
+    given
+    ensure
+  )
 
   alias Token = {
     type: String,
@@ -241,6 +253,9 @@ module Ven
       # Prefixes (NUDs):
       defnud("+", "-", "~", "NOT")
       defnud("IF", Parselet::If, precedence: CONDITIONAL)
+      defnud("QUEUE", Parselet::Queue, precedence: ZERO)
+      defnud("WHILE", Parselet::While, precedence: CONDITIONAL)
+      defnud("UNTIL", Parselet::Until, precedence: CONDITIONAL)
       defnud("ENSURE", Parselet::Ensure, precedence: ZERO)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
@@ -252,8 +267,12 @@ module Ven
       defnud("[", Parselet::Vector)
       defnud("_", Parselet::UPop)
       defnud("&_", Parselet::URef)
+
       # Infixes (LEDs):
       defled("=", Parselet::Assign, precedence: ASSIGNMENT)
+      defled("+=", "-=", "*=", "/=", "~=",
+        common: Parselet::BinaryAssign,
+        precedence: ASSIGNMENT)
       defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
       defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", precedence: ADDITION)
@@ -262,8 +281,10 @@ module Ven
       defled("--", Parselet::ReturnDecrement, precedence: POSTFIX)
       defled("(", Parselet::Call, precedence: CALL)
       defled(".", Parselet::AccessField, precedence: FIELD)
+
       # Statements:
       defstmt("FUN", Parselet::Fun)
+
       ###
       self
     end

@@ -1,6 +1,22 @@
 module Ven::Library
   class Core < Component::Extension
+    # XXX: Temporary. Remove!
+    fun! "offset", str : Str, offset : Num do |m|
+      begin
+        Str.new(str.value[offset.value.to_i32...])
+      rescue OverflowError | IndexError
+        m.die("invalid offset #{offset} for this value: #{str}")
+      end
+    end
+
+    fun! "die", cause : Str do |m|
+      m.die("died: #{cause.value}")
+    end
+
     def load
+      defun "die"
+      defun "offset"
+
       deftype "any", Model
       deftype "num", Num
       deftype "str", Str
@@ -8,7 +24,6 @@ module Ven::Library
       deftype "bool", MBool
       deftype "regex", MRegex
       deftype "type", MType
-      deftype "hole", MHole
 
       deftype "function", MFunction
       deftype "generic", MGenericFunction

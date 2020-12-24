@@ -142,11 +142,8 @@ module Ven
               factor = visit(q.lambda)
 
               unless q.iterative
-                case factor
-                when MBool
+                if factor.is_a?(MBool)
                   factor = (factor.value ? item : next)
-                when MHole
-                  next
                 end
 
                 result << factor
@@ -166,7 +163,7 @@ module Ven
       branch = cond.is_a?(MBool) && !cond.value ? q.alt : q.suc
 
       branch.nil? \
-        ? MHole.new
+        ? MBool.new(false)
         : @context.with_u([cond]) { visit(branch) }
     end
 
@@ -176,6 +173,31 @@ module Ven
 
     def visit!(q : QAssign)
       @context.define(q.target, visit(q.value))
+    end
+
+    def visit!(q : QBinaryAssign)
+      unless previous = @context.fetch(q.target)
+        die("this assignment is illegal: '#{q.target}' was never declared")
+      end
+
+      # We need two copies of the given value: one we'll work
+      # with, and one the user expects to be returned.
+      given = visit(q.value)
+      value = given
+
+      # If we're `~=`, the semantics is a little different than
+      # with <left> = <left> ~ <value>.
+      if q.operator == "~"
+        # We *wrap* anything given into a vector, not convert.
+        value = Vec.new([value])
+      end
+
+      result = binary(q.operator, previous, value)
+
+      @context.define(q.target, result)
+
+      # XXX: is this what users expect?
+      given
     end
 
     def visit!(q : QFun)
@@ -263,6 +285,36 @@ module Ven
       end
     end
 
+    def visit!(q : QQueue)
+      die("use of 'queue' when no queue available") unless @context.has_queue?
+
+      @context.queue(visit(q.value))
+    end
+
+    def visit!(q : QWhile)
+      last = nil
+
+      while true?(condition = visit(q.condition))
+        @context.with_u([condition]) do
+          last = visit(q.body)
+        end
+      end
+
+      last.not_nil!
+    end
+
+    def visit!(q : QUntil)
+      last = nil
+
+      while false?(condition = visit(q.condition))
+        @context.with_u([condition]) do
+          last = visit(q.body)
+        end
+      end
+
+      last.not_nil!
+    end
+
     ### Helpers
 
     # Checks if *model* is false (according to Ven).
@@ -341,6 +393,10 @@ module Ven
       end
 
       @context.local({callee.params, args}) do
+        # $QUEUE is an internal variable; those are variables
+        # that could only be used/created by the interpreter
+        @context.scope["$QUEUE"] = Vec.new([] of Model)
+
         if callee.slurpy
           @context.define("rest", Vec.new(args[callee.params.size...]))
         end
@@ -348,11 +404,12 @@ module Ven
         @context.with_u(args.reverse) do
           if @context.traces.size > MAX_CALL_DEPTH
             die("too many calls: very deep or infinite recursion")
-          elsif (result = visit(callee.body).last).is_a?(MHole)
-            die("illegal operation: #{callee} returned a hole")
-          else
-            result
           end
+
+          result = visit(callee.body)
+          queue = @context.scope["$QUEUE"].as(Vec)
+
+          queue.value.empty? ? result.last : queue
         end
       end
     end
@@ -418,9 +475,14 @@ module Ven
     def unary(operator, operand : Model)
       case operator
       when "+"
-        operand.to_num
+        operand.is_a?(Str) \
+          ? operand.parse_num
+          : operand.to_num
       when "-"
-        numeric = operand.to_num
+        numeric = operand.is_a?(Str) \
+          ? operand.parse_num
+          : operand.to_num
+
         numeric.value = -numeric.value
         numeric
       when "~"
@@ -474,10 +536,10 @@ module Ven
           {left.to_vec, right.to_vec}
         when {_, MRegex}
           {left.to_str, right}
-        when {Str, _}, {_, Str}
-          {left.to_str, right.to_str}
-        when {Num, _}, {_, Num}
-          {left.to_num, right.to_num}
+        when {Str, _}
+          {left, right.to_str}
+        when {Num, _}
+          {left, right.to_num}
         when {MBool, _}, {_, MBool}
           {to_bool(left), to_bool(right)}
         end

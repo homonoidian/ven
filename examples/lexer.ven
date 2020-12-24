@@ -1,0 +1,34 @@
+fun lex(source) given str {
+  cursor = 0;
+
+  fun match(pattern) given regex =
+    if source.offset(cursor) is pattern
+      cursor += _(0);
+
+  fun consume =
+    if match(`[1-9]\d*`)
+      ["NUMBER", _]
+    else if match(`[a-z]\w*`)
+      ["SYMBOL", _]
+    else if match(`[ ]+`)
+      consume()
+    else
+      die("invalid lexeme");
+
+  until cursor is source
+    queue consume()
+}
+
+fun say(*) =
+  |put(~_ ~ "\n")|: rest;
+
+fun ask(*) =
+  if +(ans = |{ put(~_ ~ " "); get() }| rest) is 1
+    ans(0)
+  else
+    ans;
+
+while true
+  ask(">")
+    .lex()
+    .say();

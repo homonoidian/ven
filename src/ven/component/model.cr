@@ -2,8 +2,8 @@ require "big"
 
 module Ven::Component
   # A pseudo-exception, in the same way the currently absent
-  # `ReturnException` and `QueueException` are. The 'pseudo-'
-  # part means they do not always cause death (`Machine.die`).
+  # `ReturnException` is. The 'pseudo-' part means such exceptions
+  # do not always cause death (`Machine.die`).
   class ModelCastException < Exception
   end
 
@@ -125,13 +125,16 @@ module Ven::Component
       @value.dump(io)
     end
 
-    # Produces either the length of this string (in case it
-    # could not be parsed into a number), or the number that
-    # this string was parsed into.
-    def to_num
-      MNumber.new(@value.to_big_d)
+    # Parses this string into a number.
+    def parse_num
+      Num.new(@value.to_big_d)
     rescue InvalidBigDecimalException
-      MNumber.new(@value.size)
+      raise ModelCastException.new("#{self} is not a base-10 number")
+    end
+
+    # Returns the length of this string
+    def to_num
+      Num.new(@value.size)
     end
 
     def to_str
@@ -178,20 +181,6 @@ module Ven::Component
 
     def callable?
       true
-    end
-  end
-
-  # Ven hole (`hole`) model. This model is the simplest kind of
-  # AbstractModel; that is, it's a valueless model. It is produced
-  # by several operations, but mainly by a condition that has no
-  # truthy branch, e.g., `if (false) 0`, which yields a `hole`
-  # ('else' branch is truthy but absent). Holes are actually
-  # interpreted only in lambda spreads, where they mean 'do not
-  # add this item to the resulting list'; when used anywhere else
-  # they cause a death.
-  class MHole < AbstractModel
-    def to_s(io)
-      io << "hole"
     end
   end
 

@@ -44,8 +44,10 @@ module Ven
     def manager?(file : String)
       manager = Manager.new(file)
 
-      manager.load(Library::Core)
-      manager.load(Library::System)
+      manager.load(
+        Library::Core,
+        Library::System
+      )
 
       manager
     end

@@ -45,6 +45,19 @@ module Ven
       end
     end
 
+    struct BinaryAssign < Led
+      def parse(parser, tag, left, token)
+        unless left.is_a?(QSymbol)
+          parser.die("left-hand side of '#{token[:type]}' is not a symbol")
+        end
+
+        operand = parser.infix
+        operator = token[:type].chars.first.to_s
+
+        QBinaryAssign.new(tag, operator, left.value, operand)
+      end
+    end
+
     struct IntoBool < Led
       def parse(parser, tag, left, token)
         QIntoBool.new(tag, left)

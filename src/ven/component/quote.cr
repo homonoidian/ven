@@ -149,6 +149,21 @@ module Ven::Component
     end
   end
 
+  # A binary operator assignment, e.g., `x += 2`.
+  class QBinaryAssign < Quote
+    getter operator, target, value
+
+    def initialize(@tag,
+      @operator : String,
+      @target : String,
+      @value : Quote)
+    end
+
+    def to_s(io)
+      io << @target << " " << @operator << "= " << @value
+    end
+  end
+
   # The name (into boolean) describes the semantic action.
   # Syntactically an expression (precedence > assignment)
   # ending with a `?`: `1 + 2?`, `[1, 2, 3] is 2?`, but
@@ -315,4 +330,44 @@ module Ven::Component
       io << "ensure " << @expression
     end
   end
+
+  # A queue expression, e.g., `queue 12.34`.
+  class QQueue < Quote
+    getter value
+
+    def initialize(@tag,
+      @value : Quote)
+    end
+
+    def to_s(io)
+      io << "queue " << @value
+    end
+  end
+
+  # A loop, e.g.:
+  #  `while (true) say("Hi!")`.
+  #  `until (false) say("Bye!")`.
+  abstract class QLoop < Quote
+    getter condition, body
+
+    def initialize(@tag,
+      @condition : Quote,
+      @body : Quote)
+    end
+
+    abstract def to_s(io)
+  end
+
+  class QWhile < QLoop
+    def to_s(io)
+      io << "while (" << @condition << ") " << @body
+    end
+  end
+
+  class QUntil < QLoop
+    def to_s(io)
+      io << "until (" << @condition << ") " << @body
+    end
+  end
+
 end
