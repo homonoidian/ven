@@ -22,7 +22,7 @@ module Ven
 
         # Is it 'is not'?
         inverse = parser.consume("NOT") if operator == "is"
-        right = parser.infix(@precedence)
+        right = parser.infix(@precedence - 1)
         this = QBinary.new(tag, operator, left, right)
 
         inverse.nil? ? this : QUnary.new(tag, "not", this)

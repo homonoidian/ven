@@ -292,7 +292,7 @@ module Ven
     end
 
     def visit!(q : QWhile)
-      last = nil
+      last = MBool.new(false)
 
       while true?(condition = visit(q.condition))
         @context.with_u([condition]) do
@@ -300,11 +300,11 @@ module Ven
         end
       end
 
-      last.not_nil!
+      last
     end
 
     def visit!(q : QUntil)
-      last = nil
+      last = MBool.new(false)
 
       while false?(condition = visit(q.condition))
         @context.with_u([condition]) do
@@ -312,7 +312,7 @@ module Ven
         end
       end
 
-      last.not_nil!
+      last
     end
 
     ### Helpers
@@ -398,7 +398,7 @@ module Ven
         @context.scope["$QUEUE"] = Vec.new([] of Model)
 
         if callee.slurpy
-          @context.define("rest", Vec.new(args[callee.params.size...]))
+          @context.scope["rest"] = Vec.new(args[callee.params.size...])
         end
 
         @context.with_u(args.reverse) do
@@ -451,7 +451,7 @@ module Ven
     def call(callee : Vec, args)
       return Vec.new([] of Model) if args.empty?
 
-      args.map! do |arg|
+      result = args.map do |arg|
         if !arg.is_a?(MNumber)
           die("vector index must be a num, got: #{arg}")
         elsif !arg.value.denominator == 1
@@ -462,7 +462,7 @@ module Ven
         item
       end
 
-      args.size > 1 ? Vec.new(args) : args.first
+      args.size > 1 ? Vec.new(result) : result.first
     end
 
     def call(callee : Model, args)
@@ -505,6 +505,7 @@ module Ven
       when {"is", MBool, MBool}
       when {"is", Str, MRegex}
       when {"is", _, MType}
+      when {"in", _, Vec}
       when {"is", Num, Num},
            {"<", Num, Num},
            {">", Num, Num},
@@ -600,6 +601,11 @@ module Ven
           : Vec.new(matches.to_a.map { |piece| Str.new(piece || "").as(Model) })
       when {"is", _, MType}
         left = MBool.new(of?(left, right))
+      when {"in", _, Vec}
+        comparee = left
+        right.value.each do |item|
+          break if true?(left = binary("is", comparee, item))
+        end
       when {"<", Num, Num}
         left = MBool.new(left.value < right.value)
       when {">", Num, Num}

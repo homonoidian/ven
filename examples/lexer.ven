@@ -1,4 +1,5 @@
-fun lex(source) given str {
+fun parse(source) given str {
+  token = [];
   cursor = 0;
 
   fun match(pattern) given regex =
@@ -6,18 +7,67 @@ fun lex(source) given str {
       cursor += _(0);
 
   fun consume =
-    if match(`[1-9]\d*`)
-      ["NUMBER", _]
-    else if match(`[a-z]\w*`)
-      ["SYMBOL", _]
-    else if match(`[ ]+`)
-      consume()
-    else
-      die("invalid lexeme");
+    token =
+      if match(`[1-9]\d*`)
+        ["NUMBER", _]
+      else if match(`[-+*/]`)
+        [&_, _]
+      else if match(`[ ]+`)
+        consume()
+      else if match(`$`)
+        ["EOF", "end-of-input"]
+      else
+        die("invalid lexeme");
 
-  until cursor is source
-    queue consume()
+  fun prefix =
+    if consume()(0) is "NUMBER"
+      ["number", token(1)]
+    else if token(0) in ["+", "-"]
+      ["unary", _, prefix()]
+    else
+      die("invalid syntax: " ~ token(0));
+
+  fun precedence? =
+    if token(0) in ["+", "-"]
+      1
+    else if token(0) in ["*", "/"]
+      2
+    else
+      0;
+
+  fun infix(precedence) {
+    left = prefix();
+    operator = consume();
+
+    while precedence < (level = precedence?())
+      left = ["binary", operator(0), left, infix(level - 1)];
+
+    left
+  }
+
+  infix(0);
 }
+
+fun eval(node) given vec =
+  if node(0) is "number" {
+    +node(1)
+  } else if node(0) is "unary" {
+    operand = eval(node(2));
+    if (node(1) is "-")
+      operand = -operand;
+    operand
+  } else if node(0) is "binary" {
+    lhs = eval(node(2));
+    rhs = eval(node(3));
+    if node(1) is "+"
+      lhs + rhs
+    else if node(1) is "-"
+      lhs - rhs
+    else if node(1) is "*"
+      lhs * rhs
+    else if node(1) is "/"
+      lhs / rhs;
+  };
 
 fun say(*) =
   |put(~_ ~ "\n")|: rest;
@@ -28,7 +78,17 @@ fun ask(*) =
   else
     ans;
 
-while true
-  ask(">")
-    .lex()
-    .say();
+while true {
+  source = ask(">");
+
+  before-parse = time();
+  node = parse(source);
+  before-eval = time();
+  result = eval(node);
+  after-eval = time();
+
+  say("parse() took: " ~ ((before-eval - before-parse) / 1000) ~ "qs");
+  say("eval() took: " ~ ((after-eval - before-eval) / 1000) ~ "qs");
+
+  say("= " ~ result);
+}

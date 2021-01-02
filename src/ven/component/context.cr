@@ -77,7 +77,7 @@ module Ven::Component
 
       if initial
         initial.first.zip(initial.last) do |name, value|
-          define(name, value)
+          scope[name] = value
         end
       end
 

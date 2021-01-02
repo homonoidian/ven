@@ -34,6 +34,7 @@ module Ven
   private KEYWORDS   = %w(
     _ &_
     is
+    in
     if
     not
     fun
@@ -274,7 +275,7 @@ module Ven
         common: Parselet::BinaryAssign,
         precedence: ASSIGNMENT)
       defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
-      defled("IS", ">", "<", ">=", "<=", precedence: IDENTITY)
+      defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
       defled("++", Parselet::ReturnIncrement, precedence: POSTFIX)
