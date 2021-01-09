@@ -59,7 +59,7 @@ module Ven::Component
       # Check that `takes` is a bunch of TypeDeclarations
       {% for take in takes %}
         {% unless take.is_a?(TypeDeclaration) %}
-          {% raise "expected type declaration" %}
+          {% raise "[critical]: expected type declaration" %}
         {% end %}
 
         {% types << take.type %}

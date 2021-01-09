@@ -117,7 +117,7 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << @left << " " << @operator << " " << @right
+      io << "(" << @left << " " << @operator << " " << @right << ")"
     end
   end
 

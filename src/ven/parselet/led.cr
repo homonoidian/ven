@@ -21,8 +21,8 @@ module Ven
         operator = token[:type].downcase
 
         # Is it 'is not'?
-        inverse = parser.consume("NOT") if operator == "is"
-        right = parser.infix(@precedence - 1)
+        inverse = parser.word("NOT") if operator == "is"
+        right = parser.led(@precedence - 1)
         this = QBinary.new(tag, operator, left, right)
 
         inverse.nil? ? this : QUnary.new(tag, "not", this)
@@ -41,7 +41,7 @@ module Ven
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("left-hand side of '=' is not a symbol")
-          : QAssign.new(tag, left.value, parser.infix)
+          : QAssign.new(tag, left.value, parser.led)
       end
     end
 
@@ -51,7 +51,7 @@ module Ven
           parser.die("left-hand side of '#{token[:type]}' is not a symbol")
         end
 
-        operand = parser.infix
+        operand = parser.led
         operator = token[:type].chars.first.to_s
 
         QBinaryAssign.new(tag, operator, left.value, operand)
@@ -86,7 +86,7 @@ module Ven
 
         while token && token[:type] == "."
           path << parser.expect("SYMBOL")[:raw]
-          token = parser.consume(".")
+          token = parser.word(".")
         end
 
         QAccessField.new(tag, left, path)

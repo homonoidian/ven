@@ -38,7 +38,7 @@ module Ven
       end
 
       def parse(parser, tag, token)
-        operand = parser.infix(@precedence)
+        operand = parser.led(@precedence)
 
         QUnary.new(tag, token[:type].downcase, operand)
       end
@@ -99,16 +99,16 @@ module Ven
         lambda = nil
         iterative = false
 
-        parser.led(only: Binary).keys.each do |operator|
+        parser.led?(only: Binary).keys.each do |operator|
           # XXX: is handling 'is not' so necessary?
 
-          if consumed = parser.consume(operator)
-            if parser.consume("|")
-              return QBinarySpread.new(tag, operator.downcase, parser.infix)
+          if consumed = parser.word(operator)
+            if parser.word("|")
+              return QBinarySpread.new(tag, operator.downcase, parser.led)
             end
 
             # Gather the unaries:
-            unaries = parser.nud(only: Unary)
+            unaries = parser.nud?(only: Unary)
 
             # Make sure the operator is actually unary:
             unless unaries.has_key?(operator)
@@ -122,16 +122,16 @@ module Ven
           end
         end
 
-        lambda ||= parser.infix
+        lambda ||= parser.led
 
         parser.expect("|")
 
         # Is it an iterative spread?
-        if parser.consume(":")
+        if parser.word(":")
           iterative = true
         end
 
-        QLambdaSpread.new(tag, lambda, parser.infix, iterative)
+        QLambdaSpread.new(tag, lambda, parser.led, iterative)
       end
     end
 
@@ -145,9 +145,9 @@ module Ven
 
     struct If < Nud
       def parse(parser, tag, tok)
-        cond = parser.infix
-        succ = parser.infix
-        fail = parser.consume("ELSE") ? parser.infix : nil
+        cond = parser.led
+        succ = parser.led
+        fail = parser.word("ELSE") ? parser.led : nil
 
         QIf.new(tag, cond, succ, fail)
       end
@@ -156,9 +156,39 @@ module Ven
     struct Fun < Nud
       def parse(parser, tag, token)
         name = parser.expect("SYMBOL")[:raw]
-        params, slurpy = parameters(parser)
-        given = given(parser)
-        body = body(parser)
+
+        # Parse the parameters and slurpiness.
+        params, slurpy = [] of ::String, false
+
+        if parser.word("(")
+          slurpy = false
+
+          parameter = -> do
+            if parser.word("*")
+              unless slurpy = !slurpy
+                parser.die("having several '*' in function parameters is forbidden")
+              end
+            else
+              parser.expect("SYMBOL")[:raw]
+            end
+          end
+
+          params = parser
+            .repeat(")", ",", unit: parameter)
+            .compact
+        end
+
+        # Parse the given appendix.
+        given = [] of Quote
+
+        if parser.word("GIVEN")
+          parser.repeat(sep: ",", unit: -> { parser.led(Precedence::ASSIGNMENT.value) })
+        end
+
+        # Parse the body.
+        body = parser.word("=") \
+          ? semicolon(parser) { [parser.led] }
+          : block(parser)
 
         if params.empty? && !given.empty?
           parser.die("could not use 'given' for a zero-arity function")
@@ -166,65 +196,24 @@ module Ven
 
         QFun.new(tag, name, params, body, given, slurpy)
       end
-
-      # Parses this function's parameters. Returns a Tuple
-      # that consists of (an Array of parameters) and slurpiness
-      # (i.e., whether or not this function is slurpy).
-      private def parameters(parser) : {Array(::String), Bool}
-        return {[] of ::String, false} unless parser.consume("(")
-
-        slurpy = false
-
-        parameter = -> do
-          if parser.consume("*")
-            unless slurpy = !slurpy
-              parser.die("having several '*' in function parameters is forbidden")
-            end
-          else
-            parser.expect("SYMBOL")[:raw]
-          end
-        end
-
-        {parser.repeat(")", ",", unit: parameter).compact, slurpy}
-      end
-
-      # Parses this function's 'given' appendix.
-      private def given(parser) : Array(Quote)
-        return [] of Quote unless parser.consume("GIVEN")
-
-        type = -> do
-          parser.infix(Precedence::ASSIGNMENT.value)
-        end
-
-        parser.repeat(sep: ",", unit: type)
-      end
-
-      # Parses this function's body.
-      private def body(parser) : Array(Quote)
-        if parser.consume("=")
-          semicolon(parser) { [parser.infix] }
-        else
-          block(parser)
-        end
-      end
     end
 
     struct Queue < Nud
       def parse(parser, tag, token)
-        QQueue.new(tag, parser.infix)
+        QQueue.new(tag, parser.led)
       end
     end
 
     struct Ensure < Nud
       def parse(parser, tag, token)
-        QEnsure.new(tag, parser.infix)
+        QEnsure.new(tag, parser.led)
       end
     end
 
     struct While < Nud
       def parse(parser, tag, token)
-        condition = parser.infix
-        block = parser.infix
+        condition = parser.led
+        block = parser.led
 
         QWhile.new(tag, condition, block)
       end
@@ -232,8 +221,8 @@ module Ven
 
     struct Until < Nud
       def parse(parser, tag, token)
-        condition = parser.infix
-        block = parser.infix
+        condition = parser.led
+        block = parser.led
 
         QUntil.new(tag, condition, block)
       end
