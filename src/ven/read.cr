@@ -39,7 +39,7 @@ module Ven
   private KEYWORDS = %w(_ &_ not is in if else fun given until while queue ensure)
 
   # A token is the smallest meaningful unit of source code.
-  alias Token = {type: String, raw: String, line: Int32}
+  alias Token = {type: String, raw: String, line: UInt32}
 
   # All available levels of precedence.
   # NOTE: order matters; ascends (lowest precedence to highest precedence).
@@ -60,11 +60,11 @@ module Ven
   class Reader
     include Component
 
-    getter token = {type: "START", raw: "<start>", line: 1}
+    getter token = {type: "START", raw: "<start>", line: 1_u32}
 
     def initialize(@file : String, @src : String)
       @pos = 0
-      @line = 1
+      @line = 1_u32
 
       @led = {} of String => Parselet::Led
       @nud = {} of String => Parselet::Nud
@@ -97,7 +97,7 @@ module Ven
         loop do
           break case
           when match(RX_IGNORE)
-            next @line += $0.count("\n")
+            next @line += $0.count("\n").to_u32
           when match(RX_SPECIAL)
             token($0.upcase, $0)
           when match(RX_SYMBOL)
