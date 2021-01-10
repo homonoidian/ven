@@ -4,7 +4,7 @@ require "option_parser"
 require "./ven/**"
 
 module Ven
-  VERSION = "0.1.0"
+  VERSION = "0.1.1-rev01"
 
   module CLI
     extend self
