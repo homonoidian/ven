@@ -39,7 +39,7 @@ module Ven
     # to the *quote* as an argument; and *unroll* is the
     # number of characters to remove from the beginning
     # and the end of the nud token's raw.
-    private macro atom(name, quote, value = true, unroll = 0)
+    private macro defatom(name, quote, value = true, unroll = 0)
       class {{name.id}} < Nud
         def parse(parser, tag, token)
           {{quote}}.new(tag,
@@ -53,7 +53,7 @@ module Ven
     end
 
     # Parse a symbol into QSymbol: `quux`, `foo-bar_baz-123`.
-    atom(PSymbol, QSymbol)
+    defatom(PSymbol, QSymbol)
 
     # Parse a number into QNumber: 1.23, 1234, 1_000.
     class PNumber < Nud
@@ -63,16 +63,16 @@ module Ven
     end
 
     # Parse a string into QString: `"foo bar baz\n"`.
-    atom(PString, QString, unroll: 1)
+    defatom(PString, QString, unroll: 1)
 
     # Parse a regex into a QRegex.
-    atom(PRegex, QRegex, unroll: 1)
+    defatom(PRegex, QRegex, unroll: 1)
 
     # Parse a underscores reference into a QURef: `&_`.
-    atom(PURef, QURef, value: false)
+    defatom(PURef, QURef, value: false)
 
     # Parse a underscores pop into a QUPop: `_`.
-    atom(PUPop, QUPop, value: false)
+    defatom(PUPop, QUPop, value: false)
 
     # Parse a unary operation into a QUnary. Examples of unary
     # operations are: `+12.34`, `~[1, 2, 3]`, `-true`, etc.
