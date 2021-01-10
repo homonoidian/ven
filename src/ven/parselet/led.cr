@@ -3,7 +3,7 @@ module Ven
     include Component
 
     abstract struct Led
-      getter precedence : Int32
+      getter precedence : UInt8
 
       def initialize(
         @precedence)

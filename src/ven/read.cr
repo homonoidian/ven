@@ -15,7 +15,7 @@ module Ven
     {% elsif name == :REGEX %}
       /`([^\\`]|\\.)*`/
     {% elsif name == :NUMBER %}
-      /\d*\.\d+|[1-9]\d*|0/
+      /\d*\.\d+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
       /--|\+\+|=>|[-+*\/~<>]=|[-<>~+*\/()[\]{},:;=?.|]/
     {% elsif name == :IGNORE %}
@@ -43,7 +43,7 @@ module Ven
 
   # All available levels of precedence. NOTE: order matters;
   # ascends (lowest precedence to highest precedence).
-  enum Precedence
+  enum Precedence : UInt8
     ZERO
     ASSIGNMENT
     CONDITIONAL
@@ -87,7 +87,7 @@ module Ven
     # Match the offset [adverb] source against the *pattern*.
     # Increment the offset if successful.
     private macro match(pattern)
-      @src[@pos..] =~ {{pattern}} && (@pos += $0.size)
+      @pos += $0.size if @src[@pos..] =~ {{pattern}}
     end
 
     # Read a fresh word and return the former word. Store the
@@ -134,7 +134,7 @@ module Ven
     end
 
     # Expect *type* after a call to *unit*.
-    def before(type : String, unit : -> Quote = ->led)
+    def before(type : String, unit : -> T = ->led) forall T
       value = unit.call; expect(type); value
     end
 
@@ -157,7 +157,7 @@ module Ven
 
         if stop && sep
           word(sep) ? next : break expect(stop, sep)
-        elsif (sep && !word(sep)) || (stop && word(stop))
+        elsif sep && !word(sep)
           break
         end
       end
@@ -274,8 +274,6 @@ module Ven
       defnud("+", "-", "~", "NOT")
       defnud("IF", Parselet::If, precedence: CONDITIONAL)
       defnud("QUEUE", Parselet::Queue, precedence: ZERO)
-      defnud("WHILE", Parselet::While, precedence: CONDITIONAL)
-      defnud("UNTIL", Parselet::Until, precedence: CONDITIONAL)
       defnud("ENSURE", Parselet::Ensure, precedence: ZERO)
       defnud("SYMBOL", Parselet::Symbol)
       defnud("NUMBER", Parselet::Number)
@@ -304,6 +302,8 @@ module Ven
 
       # Statements:
       defstmt("FUN", Parselet::Fun)
+      defstmt("WHILE", Parselet::While)
+      defstmt("UNTIL", Parselet::Until)
 
       self
     end
