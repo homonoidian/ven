@@ -5,9 +5,6 @@ targets:
   ven:
     main: src/ven.cr
 
-  sandbox:
-    main: src/sandbox.cr
-
 dependencies:
   fancyline:
     github: papierkorb/fancyline
