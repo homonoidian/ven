@@ -26,8 +26,8 @@ module Ven
       end
 
       abstract def parse(
-        parser : Parser,
-        tag : NodeTag,
+        parser : Reader,
+        tag : QTag,
         token : Token)
     end
 
