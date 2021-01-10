@@ -52,17 +52,19 @@ module Ven
       end
     end
 
-    # Parse a symbol into QSymbol: `quux`, `foo-bar_baz-123`.
+    # Parse a symbol into a QSymbol: `quux`, `foo-bar_baz-123`.
     defatom(PSymbol, QSymbol)
 
-    # Parse a number into QNumber: 1.23, 1234, 1_000.
+    # Parse a number into a QNumber: 1.23, 1234, 1_000.
     class PNumber < Nud
       def parse(parser, tag, token)
+        parser.die("trailing '_' in number") if token[:raw].ends_with?("_")
+
         QNumber.new(tag, token[:raw].delete('_'))
       end
     end
 
-    # Parse a string into QString: `"foo bar baz\n"`.
+    # Parse a string into a QString: `"foo bar baz\n"`.
     defatom(PString, QString, unroll: 1)
 
     # Parse a regex into a QRegex.
