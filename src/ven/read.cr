@@ -312,7 +312,8 @@ module Ven
   # Initialize a Reader and read the *source*.
   #
   # ```
-  # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s # ==> "ensure ((2 + 2) is 4)"
+  # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s
+  # # ==> "(QEnsure (QBinary is (QBinary + (QNumber 2) (QNumber 2)) (QNumber 4)))"
   # ```
   def self.read(filename : String, source : String)
     Reader.new(filename, source).prepare.module

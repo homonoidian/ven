@@ -23,11 +23,18 @@ module Ven::Component
           \{% end %})
         end
 
+        # Fallback pretty-printing.
         def to_s(io)
-          io << "(" << {{@type.name}}
+          io << "(" << {{@type.name.split("::").last}}
 
-          \{% for field in fields %}
-            io << " " << \{{field}}
+          \{% if !fields.empty? %}
+            \{% for field in fields %}
+              field = \{{field.var}}
+
+              field.is_a?(Array) \
+                ? io << " " << "[" << field.join(" ") << "]"
+                : io << " " << field
+            \{% end %}
           \{% end %}
 
           io << ")"
