@@ -96,24 +96,24 @@ module Ven
       fresh =
         loop do
           break case
-            when match(RX_IGNORE)
-              next @line += $0.count("\n")
-            when match(RX_SPECIAL)
-              token($0.upcase, $0)
-            when match(RX_SYMBOL)
-              token(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
-            when match(RX_NUMBER)
-              token("NUMBER", $0)
-            when match(RX_STRING)
-              token("STRING", $0)
-            when match(RX_REGEX)
-              token("REGEX", $0)
-            when @pos == @src.size
-              token("EOF", "end-of-input")
-            else
-              raise ParseError.new(@src[@pos].to_s, @line, @file, "malformed input")
-            end
-      end
+          when match(RX_IGNORE)
+            next @line += $0.count("\n")
+          when match(RX_SPECIAL)
+            token($0.upcase, $0)
+          when match(RX_SYMBOL)
+            token(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
+          when match(RX_NUMBER)
+            token("NUMBER", $0)
+          when match(RX_STRING)
+            token("STRING", $0)
+          when match(RX_REGEX)
+            token("REGEX", $0)
+          when @pos == @src.size
+            token("EOF", "end-of-input")
+          else
+            raise ParseError.new(@src[@pos].to_s, @line, @file, "malformed input")
+          end
+        end
 
       @token, _ = fresh, @token
     end
@@ -121,9 +121,7 @@ module Ven
     # Compare the `@token`'s type with *restrict*. Do not
     # read the word if this comparison yields false.
     def word(restrict : String)
-      if @token[:type] == restrict
-        word
-      end
+      word if @token[:type] == restrict
     end
 
     # Compare the `@token`'s type with given *restrictions*;
@@ -203,8 +201,8 @@ module Ven
 
     # Parse a statament. *trailer* is the word that allows no
     # semicolon before it. *detrail* determines whether or not
-    # to consume this trailer, if found one. NOTE: only leds
-    # can be separated by semicolon.
+    # to consume this trailer, if found one.
+    # NOTE: only leds can be separated by semicolon.
     def statement(trailer = "EOF", detrail = true) : Quote
       if it = @stmt[@token[:type]]?
         return it.parse(self, tag?, word)
@@ -229,16 +227,20 @@ module Ven
 
     # Return an array of nuds that are of `.class` *only*. If
     # given no *only*, return all nuds.
-    def nud?(only pick : Parselet::Nud.class ? = nil)
+    def nud?(only pick : (Parselet::Nud.class)? = nil)
       @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
     end
 
     # Return an array of leds that are of `.class` *only*. If
     # given no *only*, return all leds.
-    def led?(only pick : Parselet::Led.class ? = nil)
+    def led?(only pick : (Parselet::Led.class)? = nil)
       @led.reject { |_, led| pick.nil? ? false : led.class != pick }
     end
 
+    # Store a nud in *storage* under the key *type*. The nud
+    # with precedence *precedence* may be provided in *tail*;
+    # alternatively, multiple String literals can be given
+    # to generate Unary parselets under the same *precedence*.
     private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
         {{storage}}[{{type}}] = {{tail.first}}.new
@@ -249,16 +251,16 @@ module Ven
       {% end %}
     end
 
-    private macro defled(type, *tail, common = nil, precedence = ZERO)
-      {% unless tail.first.is_a?(StringLiteral) || !tail.first %}
+    # Store a led in `@leds` under the key *type*. The led
+    # with precedence *precedence* may be provided in *tail*;
+    # alternatively, multiple String literals can be given
+    # to generate *common* parselets under the same *precedence*.
+    private macro defled(type, *tail, common = Parselet::Binary, precedence = ZERO)
+      {% if !tail.first.is_a?(StringLiteral) && tail.first %}
         @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}}.value)
       {% else %}
         {% for infix in [type] + tail %}
-          {% unless common %}
-            @led[{{infix}}] = Parselet::Binary.new(Precedence::{{precedence}}.value)
-          {% else %}
-            @led[{{infix}}] = {{common}}.new(Precedence::{{precedence}}.value)
-          {% end %}
+          @led[{{infix}}] = {{common}}.new(Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
@@ -310,7 +312,7 @@ module Ven
   # Initialize a Reader and read the *source*.
   #
   # ```
-  #   Ven.read("<sample>", "ensure 2 + 2 is 4") # ==> ["ensure (2 + 2) is 4"]
+  # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s # ==> "ensure ((2 + 2) is 4)"
   # ```
   def self.read(filename : String, source : String)
     Reader.new(filename, source).prepare.module
