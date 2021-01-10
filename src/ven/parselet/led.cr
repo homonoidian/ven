@@ -1,70 +1,79 @@
 module Ven
-  private module Parselet
+  module Parselet
     include Component
 
-    abstract struct Led
-      getter precedence : Int32
+    # Left-denotated token parser works with a *token*, to the
+    # *left* of which a semantically meaningful construct exists.
+    abstract class Led
+      getter precedence : UInt8
 
       def initialize(
         @precedence)
       end
 
+      # Perform the parsing.
       abstract def parse(
-        parser : Parser,
-        tag : NodeTag,
-        left : Node,
+        parser : Reader,
+        tag : QTag,
+        left : Quote,
         token : Token)
     end
 
-    struct Binary < Led
+    # Parse a binary operation into a QBinary; `2 + 2`, `2 is "2"`,
+    # `1 ~ 2` are all examples of a binary operation.
+    class PBinary < Led
       def parse(parser, tag, left, token)
-        operator = token[:type].downcase
+        not_ = token[:raw] == "is" && parser.word("NOT")
+        this = QBinary.new(tag, token[:raw], left, parser.led(@precedence - 1))
 
-        # Is it 'is not'?
-        inverse = parser.consume("NOT") if operator == "is"
-        right = parser.infix(@precedence - 1)
-        this = QBinary.new(tag, operator, left, right)
-
-        inverse.nil? ? this : QUnary.new(tag, "not", this)
+        not_ ? QUnary.new(tag, "not", this) : this
       end
     end
 
-    struct Call < Led
+    # Parse a call into a QCall: `x(1)`, `[1, 2, 3](1, 2)`,
+    # for example.
+    class PCall < Led
       def parse(parser, tag, left, token)
-        args = parser.repeat(")", ",")
-
-        QCall.new(tag, left, args)
+        QCall.new(tag, left, parser.repeat(")", ","))
       end
     end
 
-    struct Assign < Led
+    # Parse an assignment into a QAssign; `x = 2` is an example
+    # of an assignment.
+    class PAssign < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
-          ? parser.die("left-hand side of '=' is not a symbol")
-          : QAssign.new(tag, left.value, parser.infix)
+          ? parser.die("left-hand side of '=' must be a symbol")
+          : QAssign.new(tag, left.value, parser.led)
       end
     end
 
-    struct BinaryAssign < Led
+    # Parse a binary operator assignment into a QBinaryAssign.
+    # E.g., `x += 2`, `foo ~= 3`.
+    class PBinaryAssign < Led
       def parse(parser, tag, left, token)
         unless left.is_a?(QSymbol)
-          parser.die("left-hand side of '#{token[:type]}' is not a symbol")
+          parser.die("left-hand side of '#{token[:type]}' must be a symbol")
         end
 
-        operand = parser.infix
-        operator = token[:type].chars.first.to_s
-
-        QBinaryAssign.new(tag, operator, left.value, operand)
+        QBinaryAssign.new(tag,
+          token[:type][0].to_s,
+          left.value,
+          parser.led)
       end
     end
 
-    struct IntoBool < Led
+    # Parse an into-bool expression into a QIntoBool. For example,
+    # `x is 4?`.
+    class PIntoBool < Led
       def parse(parser, tag, left, token)
         QIntoBool.new(tag, left)
       end
     end
 
-    struct ReturnIncrement < Led
+    # Parse a return-increment expression into a QReturnIncrement.
+    # E.g., `x++`, `foo_bar++`.
+    class PReturnIncrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '++' expects a symbol")
@@ -72,7 +81,9 @@ module Ven
       end
     end
 
-    struct ReturnDecrement < Led
+    # Parse a return-decrement expression into a QReturnDecrement.
+    # E.g., `x--`, `foo_bar--`.
+    class PReturnDecrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '--' expects a symbol")
@@ -80,13 +91,16 @@ module Ven
       end
     end
 
-    struct AccessField < Led
+    # Parse a field access expression into a QAccessField.
+    # `a.b.c`, `1.bar`, `"quux".strip!` are all examples
+    # of a field access expression.
+    class PAccessField < Led
       def parse(parser, tag, left, token)
-        path = [] of ::String
+        path = [] of String
 
         while token && token[:type] == "."
           path << parser.expect("SYMBOL")[:raw]
-          token = parser.consume(".")
+          token = parser.word(".")
         end
 
         QAccessField.new(tag, left, path)

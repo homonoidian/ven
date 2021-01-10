@@ -18,7 +18,7 @@ module Ven::Component
     # Initializes a lexical error.
     def initialize(
       @char : String,
-      @line : Int32,
+      @line : UInt32,
       @file : String,
       @message : String)
     end
@@ -31,7 +31,7 @@ module Ven::Component
     getter file, line, message
 
     @file : String
-    @line : Int32
+    @line : UInt32
 
     def initialize(tag : QTag, @message : String)
       @file = tag.file

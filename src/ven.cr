@@ -1,8 +1,7 @@
 require "fancyline"
 require "option_parser"
 
-require "./ven/*"
-require "./ven/library/*"
+require "./ven/**"
 
 module Ven
   VERSION = "0.1.0"
