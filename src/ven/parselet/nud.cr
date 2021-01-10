@@ -1,9 +1,9 @@
 module Ven
-  private module Parselet
+  module Parselet
     include Component
 
-    # Null-denotated tokens: tokens that are not preceded
-    # by a meaningful (important to this semantic construct)
+    # Null-denotated token parser works with tokens that are
+    # not preceded by a meaningful (important to this parser)
     # token.
     abstract class Nud
       # Parses a block (requiring opening '{' if *opening* is true).
@@ -25,6 +25,7 @@ module Ven
         (result = begin {{yield}} end; {{parser}}.expect(";", "EOF"); result)
       end
 
+      # Perform the parsing.
       abstract def parse(
         parser : Reader,
         tag : QTag,
@@ -52,30 +53,30 @@ module Ven
     end
 
     # Parse a symbol into QSymbol: `quux`, `foo-bar_baz-123`.
-    atom(Symbol, QSymbol)
+    atom(PSymbol, QSymbol)
 
     # Parse a number into QNumber: 1.23, 1234, 1_000.
-    class Number < Nud
+    class PNumber < Nud
       def parse(parser, tag, token)
         QNumber.new(tag, token[:raw].delete('_'))
       end
     end
 
     # Parse a string into QString: `"foo bar baz\n"`.
-    atom(String, QString, unroll: 1)
+    atom(PString, QString, unroll: 1)
 
-    # Parse a regex into a QRegex: `\`[a-z]+\d?\``.
-    atom(Regex, QRegex, unroll: 1)
+    # Parse a regex into a QRegex.
+    atom(PRegex, QRegex, unroll: 1)
 
     # Parse a underscores reference into a QURef: `&_`.
-    atom(URef, QURef, value: false)
+    atom(PURef, QURef, value: false)
 
     # Parse a underscores pop into a QUPop: `_`.
-    atom(UPop, QUPop, value: false)
+    atom(PUPop, QUPop, value: false)
 
     # Parse a unary operation into a QUnary. Examples of unary
     # operations are: `+12.34`, `~[1, 2, 3]`, `-true`, etc.
-    class Unary < Nud
+    class PUnary < Nud
       def initialize(
         @precedence : UInt8)
       end
@@ -88,14 +89,14 @@ module Ven
     end
 
     # Parse a grouping, as example, `(2 + 2)`.
-    class Group < Nud
+    class PGroup < Nud
       def parse(parser, tag, token)
         parser.before(")")
       end
     end
 
     # Parse a vector into a QVector, e.g., `[]`, `[1]`, `[4, 5, 6,]`.
-    class Vector < Nud
+    class PVector < Nud
       def parse(parser, tag, token)
         QVector.new(tag, parser.repeat("]", ","))
       end
@@ -104,12 +105,12 @@ module Ven
     # Parse a spread, e.g.: `|+| [1, 2, 3]` (reduce spread),
     # `|_ is 5| [1, 2, 3]` (map spread), `|say(_)|: [1, 2, 3]`
     # (iterative spread) into a QSpread.
-    class Spread < Nud
+    class PSpread < Nud
       def parse(parser, tag, token)
         lambda = nil
         iterative = false
 
-        parser.led?(only: Binary).keys.each do |operator|
+        parser.led?(only: PBinary).keys.each do |operator|
           # XXX: is handling 'is not' so necessary?
 
           if consumed = parser.word(operator)
@@ -118,7 +119,7 @@ module Ven
             end
 
             # Gather the unaries:
-            unaries = parser.nud?(only: Unary)
+            unaries = parser.nud?(only: PUnary)
 
             # Make sure the operator is actually unary:
             unless unaries.has_key?(operator)
@@ -146,7 +147,7 @@ module Ven
     end
 
     # Parse a block into a QBlock, e.g., `{ 5 + 5; x = say(3); x }`.
-    class Block < Nud
+    class PBlock < Nud
       def parse(parser, tag, token)
         QBlock.new(tag, block(parser, opening: false))
       end
@@ -154,7 +155,7 @@ module Ven
 
     # Parse an 'if' expression into a QIf, as example, `if true say("Yay!")`,
     # `if false say("Nay!") else say("Boo!")`.
-    class If < Nud
+    class PIf < Nud
       def parse(parser, tag, tok)
         cond = parser.led
         succ = parser.led
@@ -165,12 +166,12 @@ module Ven
     end
 
     # Parse a 'fun' statement into a QFun.
-    class Fun < Nud
+    class PFun < Nud
       def parse(parser, tag, token)
         name = parser.expect("SYMBOL")[:raw]
 
         # Parse the parameters and slurpiness.
-        params, slurpy = [] of ::String, false
+        params, slurpy = [] of String, false
 
         if parser.word("(")
           slurpy = false
@@ -211,21 +212,21 @@ module Ven
     end
 
     # Parse a 'queue' expression into a QQueue: `queue 1 + 2`.
-    class Queue < Nud
+    class PQueue < Nud
       def parse(parser, tag, token)
         QQueue.new(tag, parser.led)
       end
     end
 
     # Parse an 'ensure' expression into a QEnsure: `ensure 2 + 2 is 4`.
-    class Ensure < Nud
+    class PEnsure < Nud
       def parse(parser, tag, token)
         QEnsure.new(tag, parser.led)
       end
     end
 
     # Parse a 'while' statement into a QWhile.
-    class While < Nud
+    class PWhile < Nud
       def parse(parser, tag, token)
         condition = parser.led
 
@@ -240,7 +241,7 @@ module Ven
     end
 
     # Parse an 'until' statement into a QUntil.
-    class Until < Nud
+    class PUntil < Nud
       def parse(parser, tag, token)
         condition = parser.led
         block = parser.led

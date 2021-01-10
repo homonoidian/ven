@@ -1,9 +1,9 @@
 module Ven
-  private module Parselet
+  module Parselet
     include Component
 
-    # Left-denotated token: token, to the *left* of which a
-    # semantically meaningful construct exists.
+    # Left-denotated token parser works with a *token*, to the
+    # *left* of which a semantically meaningful construct exists.
     abstract class Led
       getter precedence : UInt8
 
@@ -11,6 +11,7 @@ module Ven
         @precedence)
       end
 
+      # Perform the parsing.
       abstract def parse(
         parser : Reader,
         tag : QTag,
@@ -20,7 +21,7 @@ module Ven
 
     # Parse a binary operation into a QBinary; `2 + 2`, `2 is "2"`,
     # `1 ~ 2` are all examples of a binary operation.
-    class Binary < Led
+    class PBinary < Led
       def parse(parser, tag, left, token)
         not_ = token[:raw] == "is" && parser.word("NOT")
         this = QBinary.new(tag, token[:raw], left, parser.led(@precedence - 1))
@@ -31,7 +32,7 @@ module Ven
 
     # Parse a call into a QCall: `x(1)`, `[1, 2, 3](1, 2)`,
     # for example.
-    class Call < Led
+    class PCall < Led
       def parse(parser, tag, left, token)
         QCall.new(tag, left, parser.repeat(")", ","))
       end
@@ -39,7 +40,7 @@ module Ven
 
     # Parse an assignment into a QAssign; `x = 2` is an example
     # of an assignment.
-    class Assign < Led
+    class PAssign < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("left-hand side of '=' must be a symbol")
@@ -49,7 +50,7 @@ module Ven
 
     # Parse a binary operator assignment into a QBinaryAssign.
     # E.g., `x += 2`, `foo ~= 3`.
-    class BinaryAssign < Led
+    class PBinaryAssign < Led
       def parse(parser, tag, left, token)
         unless left.is_a?(QSymbol)
           parser.die("left-hand side of '#{token[:type]}' must be a symbol")
@@ -64,7 +65,7 @@ module Ven
 
     # Parse an into-bool expression into a QIntoBool. For example,
     # `x is 4?`.
-    class IntoBool < Led
+    class PIntoBool < Led
       def parse(parser, tag, left, token)
         QIntoBool.new(tag, left)
       end
@@ -72,7 +73,7 @@ module Ven
 
     # Parse a return-increment expression into a QReturnIncrement.
     # E.g., `x++`, `foo_bar++`.
-    class ReturnIncrement < Led
+    class PReturnIncrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '++' expects a symbol")
@@ -82,7 +83,7 @@ module Ven
 
     # Parse a return-decrement expression into a QReturnDecrement.
     # E.g., `x--`, `foo_bar--`.
-    class ReturnDecrement < Led
+    class PReturnDecrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '--' expects a symbol")
@@ -93,9 +94,9 @@ module Ven
     # Parse a field access expression into a QAccessField.
     # `a.b.c`, `1.bar`, `"quux".strip!` are all examples
     # of a field access expression.
-    class AccessField < Led
+    class PAccessField < Led
       def parse(parser, tag, left, token)
-        path = [] of ::String
+        path = [] of String
 
         while token && token[:type] == "."
           path << parser.expect("SYMBOL")[:raw]

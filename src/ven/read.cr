@@ -41,8 +41,8 @@ module Ven
   # A token is the smallest meaningful unit of source code.
   alias Token = {type: String, raw: String, line: Int32}
 
-  # All available levels of precedence. NOTE: order matters;
-  # ascends (lowest precedence to highest precedence).
+  # All available levels of precedence.
+  # NOTE: order matters; ascends (lowest precedence to highest precedence).
   enum Precedence : UInt8
     ZERO
     ASSIGNMENT
@@ -246,7 +246,7 @@ module Ven
         {{storage}}[{{type}}] = {{tail.first}}.new
       {% else %}
         {% for prefix in [type] + tail %}
-          {{storage}}[{{prefix}}] = Parselet::Unary.new(Precedence::{{precedence}}.value)
+          {{storage}}[{{prefix}}] = Parselet::PUnary.new(Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
@@ -255,7 +255,7 @@ module Ven
     # with precedence *precedence* may be provided in *tail*;
     # alternatively, multiple String literals can be given
     # to generate *common* parselets under the same *precedence*.
-    private macro defled(type, *tail, common = Parselet::Binary, precedence = ZERO)
+    private macro defled(type, *tail, common = Parselet::PBinary, precedence = ZERO)
       {% if !tail.first.is_a?(StringLiteral) && tail.first %}
         @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}}.value)
       {% else %}
@@ -272,38 +272,38 @@ module Ven
     def prepare
       # Prefixes (NUDs):
       defnud("+", "-", "~", "NOT")
-      defnud("IF", Parselet::If, precedence: CONDITIONAL)
-      defnud("QUEUE", Parselet::Queue, precedence: ZERO)
-      defnud("ENSURE", Parselet::Ensure, precedence: ZERO)
-      defnud("SYMBOL", Parselet::Symbol)
-      defnud("NUMBER", Parselet::Number)
-      defnud("STRING", Parselet::String)
-      defnud("REGEX", Parselet::Regex)
-      defnud("|", Parselet::Spread)
-      defnud("(", Parselet::Group)
-      defnud("{", Parselet::Block)
-      defnud("[", Parselet::Vector)
-      defnud("_", Parselet::UPop)
-      defnud("&_", Parselet::URef)
+      defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
+      defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
+      defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
+      defnud("SYMBOL", Parselet::PSymbol)
+      defnud("NUMBER", Parselet::PNumber)
+      defnud("STRING", Parselet::PString)
+      defnud("REGEX", Parselet::PRegex)
+      defnud("|", Parselet::PSpread)
+      defnud("(", Parselet::PGroup)
+      defnud("{", Parselet::PBlock)
+      defnud("[", Parselet::PVector)
+      defnud("_", Parselet::PUPop)
+      defnud("&_", Parselet::PURef)
 
       # Infixes (LEDs):
-      defled("=", Parselet::Assign, precedence: ASSIGNMENT)
+      defled("=", Parselet::PAssign, precedence: ASSIGNMENT)
       defled("+=", "-=", "*=", "/=", "~=",
-        common: Parselet::BinaryAssign,
+        common: Parselet::PBinaryAssign,
         precedence: ASSIGNMENT)
-      defled("?", Parselet::IntoBool, precedence: ASSIGNMENT)
+      defled("?", Parselet::PIntoBool, precedence: ASSIGNMENT)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
-      defled("++", Parselet::ReturnIncrement, precedence: POSTFIX)
-      defled("--", Parselet::ReturnDecrement, precedence: POSTFIX)
-      defled("(", Parselet::Call, precedence: CALL)
-      defled(".", Parselet::AccessField, precedence: FIELD)
+      defled("++", Parselet::PReturnIncrement, precedence: POSTFIX)
+      defled("--", Parselet::PReturnDecrement, precedence: POSTFIX)
+      defled("(", Parselet::PCall, precedence: CALL)
+      defled(".", Parselet::PAccessField, precedence: FIELD)
 
       # Statements:
-      defstmt("FUN", Parselet::Fun)
-      defstmt("WHILE", Parselet::While)
-      defstmt("UNTIL", Parselet::Until)
+      defstmt("FUN", Parselet::PFun)
+      defstmt("WHILE", Parselet::PWhile)
+      defstmt("UNTIL", Parselet::PUntil)
 
       self
     end
