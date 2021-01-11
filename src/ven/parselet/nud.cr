@@ -197,7 +197,7 @@ module Ven
         given = [] of Quote
 
         if parser.word("GIVEN")
-          parser.repeat(sep: ",", unit: -> { parser.led(Precedence::ASSIGNMENT.value) })
+          given = parser.repeat(sep: ",", unit: -> { parser.led(Precedence::ASSIGNMENT.value) })
         end
 
         # Parse the body.
