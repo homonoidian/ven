@@ -204,7 +204,7 @@ module Ven
       # Evaluate the 'given' expressions, making sure that
       # each returns a type (TODO: or a model). If the type
       # for a parameter is missing, let it be 'any'.
-      last = MType.new("any", Model)
+      last = MType.new("any", MAny)
 
       params = q.params.zip?(q.given).map do |param, type|
         if !type.nil? && !(last = visit(type)).is_a?(MType)
@@ -341,7 +341,11 @@ module Ven
 
     # Checks if *left* is of the type *right*.
     def of?(left : Model, right : MType) : Bool
-      right.type == Model ? true : left.class <= right.type
+      return true if right.type == MAny
+
+      right.type.is_a?(MClass.class) \
+        ? left.class <= right.type.as(MClass.class)
+        : left.class <= right.type.as(MStruct.class)
     end
 
     # Returns an inverse of `false?`.
@@ -387,9 +391,12 @@ module Ven
 
     # Interprets a call to an `MConcreteFunction`.
     def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
+      if !callee.slurpy && callee.arity != args.size
+        die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
+      end
+
       if typecheck && !typecheck(callee.constraints, args)
-        # TODO: better error
-        die("typecheck failed")
+        die("typecheck failed for #{callee}: #{args.join(", ")}")
       end
 
       @context.local({callee.params, args}) do
@@ -416,25 +423,25 @@ module Ven
 
     # Interprets a call to an `MGenericFunction`.
     def call(callee : MGenericFunction, args)
-      callee.concretes.each do |concrete|
-        if concrete.slurpy && concrete.params.size <= args.size
+      callee.variants.each do |variant|
+        if variant.slurpy && variant.params.size <= args.size
           # It's a slurpy. Stretch the constraints (by repeating
           # last mentioned constraint) so they fit args and
           # 'typecheck' can do its work
-          constraints = concrete.constraints
+          constraints = variant.constraints
 
           (constraints.size - args.size).times do
             constraints << constraints.last
           end
 
           if typecheck(constraints, args)
-            return call(concrete, args, typecheck: false)
+            return call(variant, args, typecheck: false)
           end
-        elsif concrete.params.size == args.size
-          # A non-slurpy concrete. Just typecheck it and,
+        elsif variant.params.size == args.size
+          # A non-slurpy variant. Just typecheck it and,
           # if the typecheck was successful, run it.
-          if typecheck(concrete.constraints, args)
-            return call(concrete, args, typecheck: false)
+          if typecheck(variant.constraints, args)
+            return call(variant, args, typecheck: false)
           end
         end
       end

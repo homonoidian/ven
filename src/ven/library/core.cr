@@ -17,7 +17,7 @@ module Ven::Library
       defun "die"
       defun "offset"
 
-      deftype "any", Model
+      deftype "any", MAny
       deftype "num", Num
       deftype "str", Str
       deftype "vec", Vec
