@@ -1,32 +1,18 @@
 require "big"
 
 module Ven::Component
-  # A pseudo-exception, in the same way the currently absent
-  # `ReturnException` is. The 'pseudo-' part means such exceptions
-  # do not always cause death (`Machine.die`).
+  # An exception raised when a conversion (cast) error occurs
+  # (e.g., failed converting (casting) string to number.)
   class ModelCastException < Exception
   end
 
-  # :nodoc:
-  alias Num = MNumber
-  # :nodoc:
-  alias Str = MString
-  # :nodoc:
-  alias Vec = MVector
-  # :nodoc:
-  alias TypedParameter = {String, MType}
+  # # The base type of Ven's value system and, therefore, the
+  # root of Ven's type system. Unifies `MClass` and `MStruct`.
+  alias Model = MClass | MStruct
 
-  # The base class of Ven's value system and, therefore, the
-  # root type of Ven's type system. Anything Ven can work with
-  # is, and must be, a subclass of Model. In Ven, Model is known
-  # as `any`. And curiously, since types are Models too (see
-  # `MType`), `num is any` yields true, as well as `any is any`.
-  abstract class Model
-    property value
-
-    def initialize(
-      @value)
-    end
+  # :nodoc:
+  macro model_template?
+    FIELDS = {} of String => Model
 
     # Converts (casts) this model into an `MNumber`.
     def to_num : MNumber
@@ -40,12 +26,12 @@ module Ven::Component
 
     # Converts (casts) this model into an `MVector`.
     def to_vec : MVector
-      MVector.new([self])
+      MVector.new([self.as(Model)])
     end
 
     # Returns a field's value for this model.
     def field(name : String) : Model?
-      nil
+      FIELDS[name]?
     end
 
     # Returns whether this model is callable or not.
@@ -54,35 +40,42 @@ module Ven::Component
     end
   end
 
-  # A `Model` that does not embox one particular value.
-  abstract class AbstractModel < Model
-    @value : Nil
-
-    def initialize
-      @value = nil
-    end
+  # A kind of `Model` for value objects (represented by Crystal `struct`).
+  abstract struct MStruct
+    Component.model_template?
   end
 
-  # Ven boolean (`bool`) model. Emboxes a Bool.
-  class MBool < Model
-    @value : Bool
+  abstract struct MValue(T) < MStruct
+    property value
+
+    def initialize(
+      @value : T)
+    end
 
     def to_s(io)
       io << @value
     end
+  end
 
-    # Yields 1 if the boolean is true, 0 otherwise.
+  # :nodoc:
+  alias Num = MNumber
+
+  # :nodoc:
+  alias Str = MString
+
+  # :nodoc:
+  alias Vec = MVector
+
+  # Ven boolean. Emboxes a `Bool`.
+  struct MBool < MValue(Bool)
     def to_num
-      MNumber.new(@value ? 1 : 0)
+      Num.new(@value ? 1 : 0)
     end
   end
 
-  # Ven number (`num`) model. Emboxes a BigRational, implementing
-  # a trade-off: speed is exchanged for accuracy and high-levelness.
-  # Accepts either a BigDecimal or an Int32, converting it into
-  # a BigRational.
-  class MNumber < Model
-    @value : BigRational
+  # Ven number. Emboxes a `BigRational`.
+  struct MNumber < MStruct
+    property value : BigRational
 
     def initialize(value : BigDecimal | Int32)
       @value = value.to_big_r
@@ -100,8 +93,8 @@ module Ven::Component
     end
   end
 
-  # Ven string (`str`) model. Emboxes a Crystal String.
-  class MString < Model
+  # Ven string. Emboxes a `String`.
+  struct MString < MValue(String)
     SEQUENCES = {
       "\\n" => "\n",
       "\\t" => "\t",
@@ -110,9 +103,7 @@ module Ven::Component
       "\\\\" => "\\"
     }
 
-    @value : String
-
-    # Evaluates the escape sequences in the *operand* String.
+    # Evaluate the escape sequences in the *operand* String.
     def self.rawen!(operand : String)
       SEQUENCES.each do |escape, raw|
         operand = operand.gsub(escape, raw)
@@ -121,18 +112,14 @@ module Ven::Component
       operand
     end
 
-    def to_s(io)
-      @value.dump(io)
-    end
-
-    # Parses this string into a number.
+    # Parse this string into a number.
     def parse_num
       Num.new(@value.to_big_d)
     rescue InvalidBigDecimalException
       raise ModelCastException.new("#{self} is not a base-10 number")
     end
 
-    # Returns the length of this string
+    # Return the length of this string.
     def to_num
       Num.new(@value.size)
     end
@@ -140,11 +127,16 @@ module Ven::Component
     def to_str
       self
     end
+
+    def to_s(io)
+      @value.dump(io)
+    end
   end
 
-  # Ven regex (`regex`) model. (Rather poorly) emboxes a
-  # Crystal Regex.
-  class MRegex < Model
+  # Ven regex. Emboxes a `Regex`.
+  struct MRegex < MStruct
+    property value
+
     def initialize(
       @value : Regex,
       @string : String = @value.to_s)
@@ -159,20 +151,23 @@ module Ven::Component
     end
   end
 
-  # Ven vector (`vec`) model. In Ven's particular case, 'vector'
-  # is just a fancy (and memorable) name for a list. It emboxes
-  # an Array of Models. The elements of a vector in Ven realm
-  # are called 'items'.
-  class MVector < Model
-    @value : Array(Model)
+  # A kind of `Model` for reference entities and entities
+  # without a value (represented by Crystal `class`).
+  abstract class MClass
+    Component.model_template?
+  end
 
-    def to_s(io)
-      io << "[" << @value.join(", ") << "]"
+  # Ven vector. Emboxes an Array of Models.
+  class MVector < MClass
+    property value
+
+    def initialize(
+      @value : Array(Model))
     end
 
-    # Returns the length of this array.
+    # Returns the length of this vector.
     def to_num
-      MNumber.new(@value.size)
+      Num.new(@value.size)
     end
 
     def to_vec
@@ -182,24 +177,26 @@ module Ven::Component
     def callable?
       true
     end
+
+    def to_s(io)
+      io << "[" << @value.join(", ") << "]"
+    end
   end
 
-  # Ven type (`type`) model. Emboxes a type's name and the
-  # `Model.class` this type represents. The latter will be used
-  # by the interpreter in an `is_a?`-like call to check whether
-  # a value is of this type or not. This also allows to use
-  # Crystal's inheritance as the foundation for Ven's types
-  # hierarchy.
-  class MType < AbstractModel
+  # Ven type. Emboxes a typename and the model class this
+  # type represents.
+  class MType < MClass
     getter name, type
 
     def initialize(
       @name : String,
-      @type : Model.class)
+      @type : MClass.class | MStruct.class)
     end
 
-    def ==(right : MType)
-      name == right.name && type == right.type
+    # Returns whether this type's name and type are equal to
+    # the *other*'s name and type.
+    def ==(other : MType)
+      name == other.name && type == other.type
     end
 
     def to_s(io)
@@ -207,129 +204,111 @@ module Ven::Component
     end
   end
 
-  # A dummy model whose subclasses are various function models,
-  # and whose purpose is to be an umbrella `function` type. It
-  # allows a type check like `foo is function` to work without
-  # the user having to think of `concrete`, `generic` and so on.
-  abstract class MFunction < AbstractModel
+  # A type that matches anything. Has no value and cannot be
+  # instantiated from Crystal (nor can it be from Ven).
+  abstract class MAny < MClass
+  end
+
+  alias TypedParameter = {String, MType}
+
+  # An umbrella `function` type.
+  abstract class MFunction < MClass
     def callable?
       true
     end
   end
 
-  # A particular variant of a generic function, known as
-  # `concrete` in Ven. Emboxes this variation's name, body
-  # and `QTag`, as well as its *given* constraints. This
-  # means that any function is constrained; it's just that
-  # the default restrictions are weak (`any`), as opposed
-  # to strong restrictions (`num`, `vec`, etc.)
+  # A variant of a generic function. Emboxes this variation's
+  # *name*, *body*, *tag* and constraints. All functions are
+  # constrained, but `any` restriction is used by default
+  # (it matches everything).
   class MConcreteFunction < MFunction
-    getter tag, name, params, constraints, body, slurpy
+    getter tag : QTag,
+      name : String,
+      body : Quotes,
+      slurpy : Bool,
+      params : Array(String),
+      constraints : Array(TypedParameter),
+      general : Bool,
+      arity : UInt8
 
-    @params : Array(String)
-
-    def initialize(
-        @tag : QTag,
-        @name : String,
-        @constraints : Array(TypedParameter),
-        @body : Quotes,
-        @slurpy : Bool)
-
+    def initialize(@tag, @name, @constraints, @body, @slurpy)
+      @arity = @constraints.size.to_u8
       @params = @constraints.map(&.first)
+      @general = @slurpy || @params.empty? || @constraints.any? { |c| c[1].is_a?(MAny)  }
+
+      FIELDS["name"] = Str.new(@name)
+      FIELDS["arity"] = Num.new(@arity.to_i32)
+      FIELDS["params"] = Vec.new(@params.map { |p| Str.new(p).as(Model) })
+      FIELDS["slurpy?"] = MBool.new(@slurpy)
+      FIELDS["general?"] = MBool.new(@general)
     end
 
-    # Returns true if any of this concrete's parameters is
-    # constrained by `any`, or this concrete has no parameters,
-    # or this concrete is slurpy.
-    def general?
-      @slurpy ||
-      @params.empty? ||
-      @constraints.any? { |given| given[1].type == Model }
-    end
-
-    def <=>(right : MConcreteFunction)
-      params.size <=> right.params.size
-    end
-
-    def field(name)
-      case name
-      when "name"
-        Str.new(@name)
-      when "params"
-        Vec.new(@params.map { |param| Str.new(param).as(Model) })
-      when "slurpy?"
-        MBool.new(@slurpy)
-      when "general?"
-        MBool.new(general?)
-      end
+    # Compares this function to *other* based on arity.
+    def <=>(other : MConcreteFunction)
+      params.size <=> other.params.size
     end
 
     def to_s(io)
-      io << "concrete fun " << @name << "(" << @constraints.map(&.join(": ")).join(", ") << ")"
+      io << @name << "(" << @constraints.map(&.join(": ")).join(", ") << ")"
     end
   end
 
-  # An abstract, callable entity that is a collection of concretes
-  # (`MConcreteFunction`). In Ven, it is known as `generic`.
-  # Emboxes the name of this generic and the collection itself,
-  # an Array of concretes.
+  # An abstract callable entity that manages a list of variants
+  # (see `MConcreteFunction`). The model Emboxes the name of
+  # this generic and the list of variants.
   class MGenericFunction < MFunction
     getter name
 
     def initialize(@name : String)
+      @strict = [] of MConcreteFunction
       @general = [] of MConcreteFunction
-      @constrained = [] of MConcreteFunction
+
+      FIELDS["name"] = Str.new(@name)
     end
 
-    # Add a *concrete* variant of this generic function.
-    # Overwrite if an identical concrete exists.
-    def add(concrete : MConcreteFunction)
-      if concrete.general?
-        @general.each_with_index do |existing, index|
-          if existing.params.size == concrete.params.size
-            return @general[index] = concrete
-          end
-        end
+    # Adds a *variant*. Replaces identical variants, if found any.
+    def add(variant : MConcreteFunction)
+      target = variant.general ? @general : @strict
 
-        @general << concrete
-        @general.sort! { |a, b| b <=> a }
-      else
-        @constrained.each_with_index do |existing, index|
-          if existing.constraints == concrete.constraints
-            return @constrained[index] = concrete
-          end
+      target.each_with_index do |existing, index|
+        if existing.constraints == variant.constraints
+          # Overwrite & return if found an identical variant:
+          return target[index] = variant
         end
-
-        @constrained << concrete
-        @constrained.sort! { |a, b| b <=> a }
       end
 
-      concrete
+      (target << variant).sort! { |a, b| b <=> a }
+
+      variant
     end
 
-    def concretes
-      @constrained + @general
+    # Returns the strict and general variants this generic has
+    # under one Array.
+    def variants
+      @strict + @general
     end
 
     def field(name)
       case name
-      when "name"
-        Str.new(@name)
-      when "concretes"
-        Vec.new(concretes.map(&.as(Model)))
+      when "variants"
+        Vec.new(variants.map { |c| c.as(Model) })
+      when "variety"
+        Num.new(@general.size + @strict.size)
+      else
+        FIELDS[name]?
       end
     end
 
     def to_s(io)
-      io << "generic fun " << @name << " with " << concretes.size << " concrete(s)"
+      io << "generic " << @name << " with " << variants.size << " variant(s)"
     end
   end
 
-  # Ven builtin function (`builtin`) type. The bridge from Crystal
-  # to Ven. Emboxes the name of this builtin and a Crystal Proc,
-  # which takes two arguments: the first for `Machine`, the other
-  # for an Array of arguments (them being `Model`s), and returns
-  # a Model.
+  # One of the bridges from Crystal to Ven. The model emboxes
+  # the name of this builtin and a Crystal Proc. This Proc
+  # takes two arguments: the first for an instance of `Machine`,
+  # the other for an Array of arguments; and returns a Model.
   class MBuiltinFunction < MFunction
     getter name, block
 
