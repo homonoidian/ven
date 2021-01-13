@@ -43,7 +43,7 @@ module Ven
     end
 
     def visit!(q : QNumber)
-      Num.new(q.value.to_big_d)
+      Num.new(q.value)
     end
 
     def visit!(q : QString)
@@ -204,7 +204,7 @@ module Ven
       # Evaluate the 'given' expressions, making sure that
       # each returns a type (TODO: or a model). If the type
       # for a parameter is missing, let it be 'any'.
-      last = MType.new("any", MAny)
+      last = MType::ANY
 
       params = q.params.zip?(q.given).map do |param, type|
         if !type.nil? && !(last = visit(type)).is_a?(MType)
@@ -381,7 +381,7 @@ module Ven
     private def typecheck(params : Array(TypedParameter), args : Array(Model))
       params.zip?(args).each do |param, arg|
         # Ignore missing arguments
-        if !arg.nil? && !of?(arg, param[1])
+        unless arg.nil? || of?(arg, param[1])
           return false
         end
       end
@@ -391,12 +391,14 @@ module Ven
 
     # Interprets a call to an `MConcreteFunction`.
     def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
-      if !callee.slurpy && callee.arity != args.size
-        die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
-      end
+      if typecheck
+        unless callee.slurpy || callee.arity == args.size
+          die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
+        end
 
-      if typecheck && !typecheck(callee.constraints, args)
-        die("typecheck failed for #{callee}: #{args.join(", ")}")
+        unless typecheck(callee.constraints, args)
+          die("typecheck failed for #{callee}: #{args.join(", ")}")
+        end
       end
 
       @context.local({callee.params, args}) do
@@ -424,13 +426,13 @@ module Ven
     # Interprets a call to an `MGenericFunction`.
     def call(callee : MGenericFunction, args)
       callee.variants.each do |variant|
-        if variant.slurpy && variant.params.size <= args.size
+        if variant.slurpy && variant.arity <= args.size
           # It's a slurpy. Stretch the constraints (by repeating
           # last mentioned constraint) so they fit args and
           # 'typecheck' can do its work
           constraints = variant.constraints
 
-          (constraints.size - args.size).times do
+          (args.size - constraints.size).times do
             constraints << constraints.last
           end
 
@@ -590,9 +592,10 @@ module Ven
             "('#{operator}') causes an infinite loop")
       end
 
-      # `left` is going to be changed soon. Copy so we're
-      # not modifying its original value
-      left = left.dup
+      # MStruct is a struct and so is dupped on use anyways (?)
+      if left.is_a?(MClass)
+        left = left.dup
+      end
 
       case {operator, left, right}
       when {"is", Num, Num}
@@ -659,7 +662,6 @@ module Ven
       passes = 0
 
       # Normalize until satisfied
-
       while normalize?(operator, left, right)
         if (passes += 1) > MAX_NORMALIZE_PASSES
           die("too many normalization passes; you've probably " \

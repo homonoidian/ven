@@ -12,7 +12,7 @@ module Ven::Component
 
   # :nodoc:
   macro model_template?
-    FIELDS = {} of String => Model
+    @@FIELDS = {} of String => Model
 
     # Converts (casts) this model into an `MNumber`.
     def to_num : MNumber
@@ -31,7 +31,7 @@ module Ven::Component
 
     # Returns a field's value for this model.
     def field(name : String) : Model?
-      FIELDS[name]?
+      @@FIELDS[name]?
     end
 
     # Returns whether this model is callable or not.
@@ -77,8 +77,14 @@ module Ven::Component
   struct MNumber < MStruct
     property value : BigRational
 
-    def initialize(value : BigDecimal | Int32)
-      @value = value.to_big_r
+    CACHE = {} of String => BigRational
+
+    def initialize(value : String)
+      @value = CACHE[value]? || (CACHE[value] = value.to_big_d.to_big_r)
+    end
+
+    def initialize(value : Int32)
+      @value = BigRational.new(value, 1)
     end
 
     def to_s(io)
@@ -114,7 +120,7 @@ module Ven::Component
 
     # Parse this string into a number.
     def parse_num
-      Num.new(@value.to_big_d)
+      Num.new(@value)
     rescue InvalidBigDecimalException
       raise ModelCastException.new("#{self} is not a base-10 number")
     end
@@ -188,6 +194,8 @@ module Ven::Component
   class MType < MClass
     getter name, type
 
+    ANY = MType.new("any", MAny)
+
     def initialize(
       @name : String,
       @type : MClass.class | MStruct.class)
@@ -235,13 +243,18 @@ module Ven::Component
     def initialize(@tag, @name, @constraints, @body, @slurpy)
       @arity = @constraints.size.to_u8
       @params = @constraints.map(&.first)
+
+      if @slurpy
+        @constraints << {"*", @constraints.last?.try(&.[1]) || MType::ANY}
+      end
+
       @general = @slurpy || @params.empty? || @constraints.any? { |c| c[1].is_a?(MAny)  }
 
-      FIELDS["name"] = Str.new(@name)
-      FIELDS["arity"] = Num.new(@arity.to_i32)
-      FIELDS["params"] = Vec.new(@params.map { |p| Str.new(p).as(Model) })
-      FIELDS["slurpy?"] = MBool.new(@slurpy)
-      FIELDS["general?"] = MBool.new(@general)
+      @@FIELDS["name"] = Str.new(@name)
+      @@FIELDS["arity"] = Num.new(@arity.to_i32)
+      @@FIELDS["params"] = Vec.new(@params.map { |p| Str.new(p).as(Model) })
+      @@FIELDS["slurpy?"] = MBool.new(@slurpy)
+      @@FIELDS["general?"] = MBool.new(@general)
     end
 
     # Compares this function to *other* based on arity.
@@ -250,7 +263,7 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << @name << "(" << @constraints.map(&.join(": ")).join(", ") << ")"
+      io << @name << "(" << constraints.map(&.join(": ")).join(", ") << ")"
     end
   end
 
@@ -264,7 +277,7 @@ module Ven::Component
       @strict = [] of MConcreteFunction
       @general = [] of MConcreteFunction
 
-      FIELDS["name"] = Str.new(@name)
+      @@FIELDS["name"] = Str.new(@name)
     end
 
     # Adds a *variant*. Replaces identical variants, if found any.
@@ -296,7 +309,7 @@ module Ven::Component
       when "variety"
         Num.new(@general.size + @strict.size)
       else
-        FIELDS[name]?
+        @@FIELDS[name]?
       end
     end
 
