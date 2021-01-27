@@ -1,5 +1,5 @@
 module Ven
-  # Return the regex pattern for token *name*. *name* can be:
+  # Returns the regex pattern for token *name*, which can be:
   #   * `:SYMBOL`
   #   * `:STRING`
   #   * `:NUMBER`
@@ -25,8 +25,8 @@ module Ven
     {% end %}
   end
 
-  # Compile these so there is no compilation overhead each
-  # lexical pass.
+  # Compile these so there is no regex compilation performance
+  # loss each lexical pass.
   private RX_SYMBOL  = /^#{regex_for(:SYMBOL)}/
   private RX_STRING  = /^#{regex_for(:STRING)}/
   private RX_REGEX   = /^#{regex_for(:REGEX)}/
@@ -34,15 +34,13 @@ module Ven
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
 
-  # A hard-coded list of keywords. It cannot be overridden
-  # nor accessed in any way ouside this Parser.
-  private KEYWORDS = %w(_ &_ not is in if else fun given until while queue ensure)
-
-  # A token is the smallest meaningful unit of source code.
+  # A token is a tagged lexeme. A lexeme is an excerpt from
+  # the source code. The patterns above explain how to extract
+  # these excerpts.
   alias Token = {type: String, lexeme: String, line: UInt32}
 
-  # All available levels of precedence.
-  # NOTE: order matters; ascends (lowest precedence to highest precedence).
+  # The levels of LED precedence in ascending order (lowest
+  # to highest.)
   enum Precedence : UInt8
     ZERO
     ASSIGNMENT
@@ -60,6 +58,10 @@ module Ven
   class Reader
     include Component
 
+    # A hard-coded list of keywords. It cannot be overridden
+    # nor accessed in any way ouside this Reader.
+    private KEYWORDS = %w(_ &_ not is in if else fun given until while queue ensure)
+
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
 
     def initialize(@file : String, @src : String)
@@ -73,25 +75,23 @@ module Ven
       word
     end
 
-    # Given the explanation *message*, die of ParseError.
+    # Given the explanation *message*, dies of ParseError.
     def die(message : String)
       raise ParseError.new(@token, @file, message)
     end
 
-    # Make a token out of *type* and *lexeme*, them being correspondingly
-    # Token's `type` and `lexeme` fields.
+    # Makes a Token tuple given a *type* and a *lexeme*.
     private macro token(type, lexeme)
       { type: {{type}}, lexeme: {{lexeme}}, line: @line }
     end
 
-    # Match the offset [adverb] source against the *pattern*.
-    # Increment the offset if successful.
+    # Matches the offsEt source against the *pattern*. Increments
+    # the offset by the match's length if successful.
     private macro match(pattern)
       @pos += $0.size if @src[@pos..] =~ {{pattern}}
     end
 
-    # Read a fresh word and return the former word. Store the
-    # fresh word in `@token`.
+    # Consumes a fresh word and returns the former word.
     def word
       fresh =
         loop do
@@ -118,33 +118,29 @@ module Ven
       @token, _ = fresh, @token
     end
 
-    # Compare the `@token`'s type with *restrict*. Do not
-    # read the word if this comparison yields false.
-    def word(restrict : String)
-      word if @token[:type] == restrict
+    # Reads a word if the type of the current word is *restriction*.
+    def word(restriction : String)
+      word if @token[:type] == restriction
     end
 
-    # Compare the `@token`'s type with given *restrictions*;
-    # If the comparison is true, read a word. Die of expectation
-    # error otherwise.
+    # Reads a word if one of the *restrictions* matches the
+    # current word's type. Dies of parse error otherwise.
     def expect(*restrictions : String)
       return word if restrictions.includes?(@token[:type])
 
       die("expected #{restrictions.map(&.dump).join(", ")}")
     end
 
-    # Expect *type* after a call to *unit*.
+    # Expects *type* after calling *unit*.
     def before(type : String, unit : -> T = ->led) forall T
       value = unit.call; expect(type); value
     end
 
-    # Repeatedly call *unit* and return an array of results
-    # of each of these calls. Expect one *sep* to follow each
-    # *unit* call. If found anything else, expect it to be *stop*
-    # and terminate (or, if given no *stop*, just terminate).
-    # NOTE: *stop* or *sep*, and *unit* may be omitted; *unit*
-    # defaults to a `led`. What comes of omitting *stop* or
-    # *sep* is pretty obvious.
+    # Calls *unit* repeatedly, remembering what each call
+    # results in, and returns an Array of the results. Expects
+    # a *sep* after each unit. Terminates at *stop*.
+    # NOTE: either *stop* or *sep*, and *unit* may be omitted;
+    # *unit* defaults to a `led`.
     def repeat(stop : String? = nil, sep : String? = nil, unit : -> T = ->led) forall T
       unless stop || sep
         raise "[critical]: stop or sep or stop and sep; none given"
@@ -165,20 +161,18 @@ module Ven
       result
     end
 
-    # Generate a new QTag.
+    # Generates a new QTag.
     private macro tag?
       QTag.new(@file, @line)
     end
 
-    # Get the precedence of the `@token`. Return 0 if it has
-    # no precedence,
+    # Returns the precedence of the current word. Returns 0
+    # if it has no precedence.
     private macro precedence?
       @led[@token[:type]]?.try(&.precedence) || 0
     end
 
-    # Parse a led expression with precedence *level*. This
-    # method is, no doubt, the most important, and also the
-    # most elegant (hopefully), in the reader.
+    # Parses a led expression with precedence *level*.
     def led(level = Precedence::ZERO.value) : Quote
       left = @nud
         .fetch(token[:type]) { die("not a nud: '#{token[:type]}'") }
@@ -199,9 +193,9 @@ module Ven
       left
     end
 
-    # Parse a statament. *trailer* is the word that allows no
-    # semicolon before it. *detrail* determines whether or not
-    # to consume this trailer, if found one.
+    # Parses a statament. *trailer* is a word that, in certain
+    # cases, functions like a semicolon (e.g., EOF, '}').
+    # *detrail* determines whether or not to consume the trailer.
     # NOTE: only leds can be separated by semicolon.
     def statement(trailer = "EOF", detrail = true) : Quote
       if it = @stmt[@token[:type]]?
@@ -219,28 +213,28 @@ module Ven
       this
     end
 
-    # Perform a module-level parse (zero or more statements
+    # Performs a module-level parse (zero or more statements
     # followed by EOF).
     def module : Quotes
       repeat("EOF", unit: ->statement)
     end
 
-    # Return an array of nuds that are of `.class` *only*. If
-    # given no *only*, return all nuds.
+    # Returns an array of nuds that are of `.class` *only*.
+    # If given no *only*, or *only* is nil, returns all nuds.
     def nud?(only pick : (Parselet::Nud.class)? = nil)
       @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
     end
 
-    # Return an array of leds that are of `.class` *only*. If
-    # given no *only*, return all leds.
+    # Returns an array of leds that are of `.class` *only*.
+    # If given no *only*, or *only* is nil, returns all leds.
     def led?(only pick : (Parselet::Led.class)? = nil)
       @led.reject { |_, led| pick.nil? ? false : led.class != pick }
     end
 
-    # Store a nud in *storage* under the key *type*. The nud
-    # with precedence *precedence* may be provided in *tail*;
-    # alternatively, multiple String literals can be given
-    # to generate Unary parselets under the same *precedence*.
+    # Stores a nud in a hash *storage*, under the key *type*.
+    # A nud with precedence *precedence* may be provided in
+    # *tail*; alternatively, multiple String literals can be given
+    # to generate Unary parselets with the same *precedence*.
     private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
         {{storage}}[{{type}}] = {{tail.first}}.new
@@ -251,10 +245,10 @@ module Ven
       {% end %}
     end
 
-    # Store a led in `@leds` under the key *type*. The led
+    # Stores a led in `@leds`, under the key *type*. A led
     # with precedence *precedence* may be provided in *tail*;
     # alternatively, multiple String literals can be given
-    # to generate *common* parselets under the same *precedence*.
+    # to generate *common* parselets with the same *precedence*.
     private macro defled(type, *tail, common = Parselet::PBinary, precedence = ZERO)
       {% if !tail.first.is_a?(StringLiteral) && tail.first %}
         @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}}.value)
@@ -265,10 +259,14 @@ module Ven
       {% end %}
     end
 
+    # Stores a statement in `@stmt`, under the key *type*.
+    # *tail* is interpreted by `defnud`.
     private macro defstmt(type, *tail)
       defnud({{type}}, {{*tail}}, storage: @stmt)
     end
 
+    # Initializes this reader so it is capable of reading
+    # base Ven.
     def prepare
       # Prefixes (NUDs):
       defnud("+", "-", "~", "NOT")
@@ -309,7 +307,7 @@ module Ven
     end
   end
 
-  # Initialize a Reader and read the *source*.
+  # Initializes a Reader and reads the *source*.
   #
   # ```
   # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s

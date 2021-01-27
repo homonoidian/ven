@@ -11,7 +11,7 @@ module Ven
         @precedence)
       end
 
-      # Perform the parsing.
+      # Performs the parsing.
       abstract def parse(
         parser : Reader,
         tag : QTag,
@@ -19,18 +19,21 @@ module Ven
         token : Token)
     end
 
-    # Parse a binary operation into a QBinary; `2 + 2`, `2 is "2"`,
+    # Parses a binary operation into a QBinary; `2 + 2`, `2 is "2"`,
     # `1 ~ 2` are all examples of a binary operation.
     class PBinary < Led
       def parse(parser, tag, left, token)
+        # Check whether this is an `is` expression with a `not`
+        # following.
         not_ = token[:lexeme] == "is" && parser.word("NOT")
+
         this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence - 1))
 
         not_ ? QUnary.new(tag, "not", this) : this
       end
     end
 
-    # Parse a call into a QCall: `x(1)`, `[1, 2, 3](1, 2)`,
+    # Parses a call into a QCall: `x(1)`, `[1, 2, 3](1, 2)`,
     # for example.
     class PCall < Led
       def parse(parser, tag, left, token)
@@ -38,7 +41,7 @@ module Ven
       end
     end
 
-    # Parse an assignment into a QAssign; `x = 2` is an example
+    # Parses an assignment into a QAssign; `x = 2` is an example
     # of an assignment.
     class PAssign < Led
       def parse(parser, tag, left, token)
@@ -48,7 +51,7 @@ module Ven
       end
     end
 
-    # Parse a binary operator assignment into a QBinaryAssign.
+    # Parses a binary operator assignment into a QBinaryAssign.
     # E.g., `x += 2`, `foo ~= 3`.
     class PBinaryAssign < Led
       def parse(parser, tag, left, token)
@@ -63,7 +66,7 @@ module Ven
       end
     end
 
-    # Parse an into-bool expression into a QIntoBool. For example,
+    # Parses an into-bool expression into a QIntoBool. For example,
     # `x is 4?`.
     class PIntoBool < Led
       def parse(parser, tag, left, token)
@@ -71,7 +74,7 @@ module Ven
       end
     end
 
-    # Parse a return-increment expression into a QReturnIncrement.
+    # Parses a return-increment expression into a QReturnIncrement.
     # E.g., `x++`, `foo_bar++`.
     class PReturnIncrement < Led
       def parse(parser, tag, left, token)
@@ -81,7 +84,7 @@ module Ven
       end
     end
 
-    # Parse a return-decrement expression into a QReturnDecrement.
+    # Parses a return-decrement expression into a QReturnDecrement.
     # E.g., `x--`, `foo_bar--`.
     class PReturnDecrement < Led
       def parse(parser, tag, left, token)
@@ -91,7 +94,7 @@ module Ven
       end
     end
 
-    # Parse a field access expression into a QAccessField.
+    # Parses a field access expression into a QAccessField.
     # `a.b.c`, `1.bar`, `"quux".strip!` are all examples
     # of a field access expression.
     class PAccessField < Led

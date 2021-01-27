@@ -9,8 +9,8 @@ module Ven::Component
     end
   end
 
-  # The base class of all Ven AST nodes, which are called *quotes*
-  # in Ven. It is also a type accessible from Ven.
+  # The base class of all Ven AST nodes, which are called
+  # **quotes** in Ven. It is also a type accessible from Ven.
   abstract class Quote < MClass
     macro inherited
       macro defquote!(*fields)
@@ -46,14 +46,14 @@ module Ven::Component
   # :nodoc:
   alias Quotes = Array(Quote)
 
-  # Define a *quote* with *fields*. *fields* are `TypeDeclaration`s.
+  # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
   private macro defquote(quote, *fields)
     class {{quote}} < Quote
       defquote!({{*fields}})
     end
   end
 
-  # Pass `defquote` a *quote* and a field `value : String`.
+  # Passes `defquote` a *quote* and a field `value : String`.
   private macro defvalue(quote)
     defquote({{quote}}, value : String)
   end

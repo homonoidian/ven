@@ -34,28 +34,28 @@ module Ven
 
     # Atoms are self-evaluating semantic constructs. *name*
     # is the name of the Nud class that will be generated;
-    # *quote* is the quote that this Nud yields; *value*
+    # *quote* is the quote this Nud produces; *argument*
     # determines whether to give the lexeme of the nud token
-    # to the *quote* as an argument; and *unroll* is the
-    # number of characters to remove from the beginning
-    # and the end of the nud token's lexeme.
-    private macro defatom(name, quote, value = true, unroll = 0)
+    # to the *quote* as an argument; *unroll* is the number
+    # of characters to remove from the beginning and the end
+    # of the nud token's lexeme.
+    private macro defatom(name, quote, argument = true, unroll = 0)
       class {{name.id}} < Nud
         def parse(parser, tag, token)
           {{quote}}.new(tag,
-            {% if value && unroll != 0 %}
+            {% if argument && unroll != 0 %}
               token[:lexeme][{{unroll}}...-{{unroll}}]
-            {% elsif value %}
+            {% elsif argument %}
               token[:lexeme]
             {% end %})
         end
       end
     end
 
-    # Parse a symbol into a QSymbol: `quux`, `foo-bar_baz-123`.
+    # Parses a symbol into a QSymbol: `quux`, `foo-bar_baz-123`.
     defatom(PSymbol, QSymbol)
 
-    # Parse a number into a QNumber: 1.23, 1234, 1_000.
+    # Parses a number into a QNumber: 1.23, 1234, 1_000.
     class PNumber < Nud
       def parse(parser, tag, token)
         parser.die("trailing '_' in number") if token[:lexeme].ends_with?("_")
@@ -64,7 +64,7 @@ module Ven
       end
     end
 
-    # Parse a string into a QString: `"foo bar baz\n"`.
+    # Parses a string into a QString: `"foo bar baz\n"`.
     class PString < Nud
       # A hash of escaped escape sequences and what they should
       # evaluate to.
@@ -85,7 +85,6 @@ module Ven
         operand
       end
 
-
       def parse(parser, tag, token)
         value = unescape(token[:lexeme][1...-1])
 
@@ -93,16 +92,16 @@ module Ven
       end
     end
 
-    # Parse a regex into a QRegex.
+    # Parses a regex into a QRegex.
     defatom(PRegex, QRegex, unroll: 1)
 
-    # Parse a underscores reference into a QURef: `&_`.
-    defatom(PURef, QURef, value: false)
+    # Parses a underscores reference into a QURef: `&_`.
+    defatom(PURef, QURef, argument: false)
 
-    # Parse a underscores pop into a QUPop: `_`.
-    defatom(PUPop, QUPop, value: false)
+    # Parses a underscores pop into a QUPop: `_`.
+    defatom(PUPop, QUPop, argument: false)
 
-    # Parse a unary operation into a QUnary. Examples of unary
+    # Parses a unary operation into a QUnary. Examples of unary
     # operations are: `+12.34`, `~[1, 2, 3]`, `-true`, etc.
     class PUnary < Nud
       def initialize(
@@ -116,21 +115,21 @@ module Ven
       end
     end
 
-    # Parse a grouping, as example, `(2 + 2)`.
+    # Parses a grouping, as example, `(2 + 2)`.
     class PGroup < Nud
       def parse(parser, tag, token)
         parser.before(")")
       end
     end
 
-    # Parse a vector into a QVector, e.g., `[]`, `[1]`, `[4, 5, 6,]`.
+    # Parses a vector into a QVector, e.g., `[]`, `[1]`, `[4, 5, 6,]`.
     class PVector < Nud
       def parse(parser, tag, token)
         QVector.new(tag, parser.repeat("]", ","))
       end
     end
 
-    # Parse a spread, e.g.: `|+| [1, 2, 3]` (reduce spread),
+    # Parses a spread, e.g.: `|+| [1, 2, 3]` (reduce spread),
     # `|_ is 5| [1, 2, 3]` (map spread), `|say(_)|: [1, 2, 3]`
     # (iterative spread) into a QSpread.
     class PSpread < Nud
@@ -139,23 +138,23 @@ module Ven
         iterative = false
 
         parser.led?(only: PBinary).keys.each do |operator|
-          # XXX: is handling 'is not' so necessary?
-
           if consumed = parser.word(operator)
             if parser.word("|")
               return QBinarySpread.new(tag, operator.downcase, parser.led)
             end
 
-            # Gather the unaries:
+            # As there is no backtracking, we have to manually
+            # check if this is a unary (e.g., `|+<--HERE-->_| [1, 2, 3]`).
             unaries = parser.nud?(only: PUnary)
 
-            # Make sure the operator is actually unary:
+            # Make sure the operator is really a unary:
             unless unaries.has_key?(operator)
               parser.die("expected '|' or a term")
             end
 
-            # Here we know we've consumed a unary by accident.
-            # Let the unary parser do the job
+            # We've accidentally consumed a unary. Let the unary
+            # parser do the job instead, and consider this spread
+            # a lambda spread from now on.
             break lambda = unaries[operator]
               .parse(parser, QTag.new(tag.file, consumed[:line]), consumed)
           end
@@ -165,23 +164,21 @@ module Ven
 
         parser.expect("|")
 
-        # Is it an iterative spread?
-        if parser.word(":")
-          iterative = true
-        end
+        # Is this spread an iterative spread?
+        iterative = true if parser.word(":")
 
         QLambdaSpread.new(tag, lambda, parser.led, iterative)
       end
     end
 
-    # Parse a block into a QBlock, e.g., `{ 5 + 5; x = say(3); x }`.
+    # Parses a block into a QBlock, e.g., `{ 5 + 5; x = say(3); x }`.
     class PBlock < Nud
       def parse(parser, tag, token)
         QBlock.new(tag, block(parser, opening: false))
       end
     end
 
-    # Parse an 'if' expression into a QIf, as example, `if true say("Yay!")`,
+    # Parses an 'if' expression into a QIf, as example, `if true say("Yay!")`,
     # `if false say("Nay!") else say("Boo!")`.
     class PIf < Nud
       def parse(parser, tag, tok)
@@ -193,7 +190,7 @@ module Ven
       end
     end
 
-    # Parse a 'fun' statement into a QFun.
+    # Parses a 'fun' statement into a QFun.
     class PFun < Nud
       def parse(parser, tag, token)
         name = parser.expect("SYMBOL")[:lexeme]
@@ -219,7 +216,7 @@ module Ven
             .compact
         end
 
-        # Parse the given appendix.
+        # Parse the 'given' appendix.
         given = [] of Quote
 
         if parser.word("GIVEN")
@@ -232,34 +229,35 @@ module Ven
           : block(parser)
 
         if params.empty? && !given.empty?
-          parser.die("could not use 'given' for a zero-arity function")
+          parser.die("zero-arity functions cannot have a 'given'")
         end
 
         QFun.new(tag, name, params, body, given, slurpy)
       end
     end
 
-    # Parse a 'queue' expression into a QQueue: `queue 1 + 2`.
+    # Parses a 'queue' expression into a QQueue: `queue 1 + 2`.
     class PQueue < Nud
       def parse(parser, tag, token)
         QQueue.new(tag, parser.led)
       end
     end
 
-    # Parse an 'ensure' expression into a QEnsure: `ensure 2 + 2 is 4`.
+    # Parses an 'ensure' expression into a QEnsure: `ensure 2 + 2 is 4`.
     class PEnsure < Nud
       def parse(parser, tag, token)
         QEnsure.new(tag, parser.led)
       end
     end
 
-    # Parse a 'while' statement into a QWhile.
+    # Parses a 'while' statement into a QWhile.
     class PWhile < Nud
       def parse(parser, tag, token)
         condition = parser.led
 
         # Receive a block. It can be either a QBlock or anything
-        # else. If it is this anything else, expect a semicolon.
+        # else. If it is anything else, expect a semicolon to
+        # follow.
         block = parser.led
 
         parser.expect(";") unless block.is_a?(QBlock)
@@ -268,7 +266,7 @@ module Ven
       end
     end
 
-    # Parse an 'until' statement into a QUntil.
+    # Parses an 'until' statement into a QUntil.
     class PUntil < Nud
       def parse(parser, tag, token)
         condition = parser.led
