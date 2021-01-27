@@ -82,25 +82,6 @@ module Ven::Component
 
   # A Ven string.
   struct MString < MValue(String)
-    # A hash of escaped escape sequences and what they should
-    # evaluate to.
-    SEQUENCES = {
-      "\\n" => "\n",
-      "\\t" => "\t",
-      "\\r" => "\r",
-      "\\\"" => "\"",
-      "\\\\" => "\\"
-    }
-
-    # Evaluates the escape sequences in the *operand* String.
-    def self.unescape(operand : String)
-      SEQUENCES.each do |escape, raw|
-        operand = operand.gsub(escape, raw)
-      end
-
-      operand
-    end
-
     # Returns the length of this string if *parse* is false,
     # which it is by default; otherwise, if it is true, returns
     # this string parsed into an `MNumber`.

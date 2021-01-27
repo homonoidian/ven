@@ -65,7 +65,33 @@ module Ven
     end
 
     # Parse a string into a QString: `"foo bar baz\n"`.
-    defatom(PString, QString, unroll: 1)
+    class PString < Nud
+      # A hash of escaped escape sequences and what they should
+      # evaluate to.
+      SEQUENCES = {
+        "\\n" => "\n",
+        "\\t" => "\t",
+        "\\r" => "\r",
+        "\\\"" => "\"",
+        "\\\\" => "\\"
+      }
+
+      # Evaluates the escape sequences in the *operand* String.
+      def unescape(operand : String)
+        SEQUENCES.each do |escape, raw|
+          operand = operand.gsub(escape, raw)
+        end
+
+        operand
+      end
+
+
+      def parse(parser, tag, token)
+        value = unescape(token[:raw][1...-1])
+
+        QString.new(tag, value)
+      end
+    end
 
     # Parse a regex into a QRegex.
     defatom(PRegex, QRegex, unroll: 1)

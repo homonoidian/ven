@@ -47,7 +47,7 @@ module Ven
     end
 
     def visit!(q : QString)
-      Str.new(Str.unescape(q.value))
+      Str.new(q.value)
     end
 
     def visit!(q : QRegex)
