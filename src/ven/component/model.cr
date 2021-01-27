@@ -255,6 +255,7 @@ module Ven::Component
       @@FIELDS["params"] = Vec.new(@params.map { |p| Str.new(p).as(Model) })
       @@FIELDS["slurpy?"] = MBool.new(@slurpy)
       @@FIELDS["general?"] = MBool.new(@general)
+      @@FIELDS["body"] = Vec.new(@body.map { |n| n.as(Model) })
     end
 
     # Compares this function to *other* based on arity.

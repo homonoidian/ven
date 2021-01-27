@@ -10,8 +10,8 @@ module Ven::Component
   end
 
   # The base class of all Ven AST nodes, which are called *quotes*
-  # in Ven.
-  abstract class Quote
+  # in Ven. It is also a type accessible from Ven.
+  abstract class Quote < MClass
     macro inherited
       macro defquote!(*fields)
         getter tag : QTag
