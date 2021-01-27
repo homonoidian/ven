@@ -15,6 +15,11 @@ module Ven
     # Maximum amount of compute cycles (see `compute`).
     MAX_COMPUTE_CYCLES = 1000
 
+    # Ven booleans are structs (copy on use) and need no
+    # explicit `.new`.
+    B_TRUE = MBool.new(true)
+    B_FALSE = MBool.new(false)
+
     def initialize(@context = Context.new)
       @computes = 0
     end
@@ -84,7 +89,7 @@ module Ven
     end
 
     def visit!(q : QIntoBool)
-      MBool.new(!false?(visit(q.value)))
+      false?(visit(q.value)) ? B_FALSE : B_TRUE
     end
 
     def visit!(q : QAccessField)
@@ -163,7 +168,7 @@ module Ven
       branch = cond.is_a?(MBool) && !cond.value ? q.alt : q.suc
 
       branch.nil? \
-        ? MBool.new(false)
+        ? B_FALSE
         : @context.with_u([cond]) { visit(branch) }
     end
 
@@ -292,7 +297,7 @@ module Ven
     end
 
     def visit!(q : QWhile)
-      last = MBool.new(false)
+      last = B_FALSE
 
       while true?(condition = visit(q.condition))
         @context.with_u([condition]) do
@@ -304,7 +309,7 @@ module Ven
     end
 
     def visit!(q : QUntil)
-      last = MBool.new(false)
+      last = B_FALSE
 
       while false?(condition = visit(q.condition))
         @context.with_u([condition]) do
@@ -317,7 +322,7 @@ module Ven
 
     ### Helpers
 
-    # Checks if *model* is false (according to Ven).
+    # Checks whether, according to Ven, the *model* is false.
     def false?(model : Model) : Bool
       case model
       when Vec
@@ -353,16 +358,21 @@ module Ven
       !false?({{model}})
     end
 
-    # Calls `true?(model)` and makes the result an `MBool`.
-    private macro to_bool(model)
-      MBool.new(true?({{model}}))
+    # Converts a Crystal boolean into a Ven boolean.
+    private macro to_bool(bool)
+      {{bool}} ? B_TRUE : B_FALSE
+    end
+
+    # Converts a Model into a Ven boolean.
+    private macro as_bool(model)
+      true?({{model}}) ? B_TRUE : B_FALSE
     end
 
     ### Fields
 
-    # Accesses *head*'s *field*. Returns false if such field
+    # Accesses *head*'s *field*. Returns nil if such field
     # was not found.
-    def field(head : Model, field : String)
+    def field(head : Model, field : String) : Model?
       if result = head.field(field)
         return result.as(Model)
       end
@@ -370,15 +380,13 @@ module Ven
       case field
       when "callable?"
         # 'callable?' is available anytime, on any model
-        MBool.new(head.callable?)
-      else
-        false
+        to_bool(head.callable?)
       end
     end
 
     ### Calls
 
-    private def typecheck(params : Array(TypedParameter), args : Models)
+    private def typecheck(params : Array(TypedParameter), args : Models) : Bool
       params.zip?(args).each do |param, arg|
         # Ignore missing arguments
         unless arg.nil? || of?(arg, param[1])
@@ -390,7 +398,7 @@ module Ven
     end
 
     # Interprets a call to an `MConcreteFunction`.
-    def call(callee : MConcreteFunction, args : Models, typecheck = true)
+    def call(callee : MConcreteFunction, args : Models, typecheck = true) : Model
       if typecheck
         unless callee.slurpy || callee.arity == args.size
           die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
@@ -424,7 +432,7 @@ module Ven
     end
 
     # Interprets a call to an `MGenericFunction`.
-    def call(callee : MGenericFunction, args)
+    def call(callee : MGenericFunction, args) : Model
       callee.variants.each do |variant|
         if variant.slurpy && variant.arity <= args.size
           # It's a slurpy. Stretch the constraints (by repeating
@@ -452,12 +460,12 @@ module Ven
     end
 
     # Interprets a call to an `MBuiltinFunction`.
-    def call(callee : MBuiltinFunction, args)
+    def call(callee : MBuiltinFunction, args) : Model
       callee.block.call(self, args)
     end
 
     # Interprets a call to an `MVector`.
-    def call(callee : Vec, args)
+    def call(callee : Vec, args) : Model
       return Vec.new([] of Model) if args.empty?
 
       result = args.map do |arg|
@@ -481,7 +489,7 @@ module Ven
     ### Unary (prefix) operations
 
     # Interprets a unary operation.
-    def unary(operator, operand : Model)
+    def unary(operator, operand : Model) : Model
       case operator
       when "+"
         operand.is_a?(Str) \
@@ -497,7 +505,7 @@ module Ven
       when "~"
         operand.to_str
       when "not"
-        MBool.new(false?(operand))
+        false?(operand) ? B_FALSE : B_TRUE
       else
         die("'#{operator}': could not interpret for this operand: #{operand}")
       end
@@ -507,9 +515,9 @@ module Ven
 
     ### Binary operations
 
-    # Returns true if *left* and *right* need a `normalize!`
+    # Returns whether *left* and *right* need a normalization
     # pass to be used with *operator*.
-    def normalize?(operator, left : Model, right : Model)
+    def normalize?(operator, left : Model, right : Model) : Bool
       case {operator, left, right}
       when {"is", MBool, MBool}
       when {"is", Str, MRegex}
@@ -533,13 +541,15 @@ module Ven
         # Other vector operations are distributed on vector items;
         # so there is no need nor support for their normalization
       else
-        true
+        return true
       end
+
+      false
     end
 
     # Returns a tuple `{left, right}` where left, right are
     # **normalized** *left*, *right*.
-    def normalize!(operator, left : Model, right : Model)
+    def normalize!(operator, left : Model, right : Model) : {Model, Model}
       case operator
       when "is" then case {left, right}
         when {Vec, _}, {_, Vec}
@@ -551,7 +561,7 @@ module Ven
         when {Num, _}
           {left, right.to_num}
         when {MBool, _}, {_, MBool}
-          {to_bool(left), to_bool(right)}
+          {as_bool(left), as_bool(right)}
         end
       when "<", ">", "<=", ">=" then case {left, right}
         when {Vec, _}
@@ -585,70 +595,76 @@ module Ven
     end
 
     # Computes a binary operation.
-    def compute(operator, left : Model, right : Model)
+    def compute(operator, left : Model, right : Model) : Model
       if (@computes += 1) > MAX_COMPUTE_CYCLES
         die("too many compute cycles; you've probably found " \
             "an implementation bug: normalizing this operator " \
             "('#{operator}') causes an infinite loop")
       end
 
-      # MStruct is a struct and so is dupped on use anyways (?)
-      if left.is_a?(MClass)
-        left = left.dup
-      end
+      left =
+        case {operator, left, right}
+        when {"is", Num, Num}
+          left.value == right.value ? left : B_FALSE
+        when {"is", Str, Str}
+          left.value == right.value ? left : B_FALSE
+        when {"is", MBool, MBool}
+          left.value == right.value ? left : B_FALSE
+        when {"is", Str, MRegex}
+          if match = right.value.match(left.value)
+            Vec.new(match.to_a.map { |c| Str.new(c || "").as(Model) })
+          else
+            B_FALSE
+          end
+        when {"is", _, MType}
+          to_bool(of?(left, right))
+        when {"in", _, Vec}
+          right.value.each do |item|
+            if true?(result = binary("is", left, item))
+              break result
+            end
+          end || B_FALSE
+        when {"<", Num, Num}
+          to_bool(left.value < right.value)
+        when {">", Num, Num}
+          to_bool(left.value > right.value)
+        when {"<=", Num, Num}
+          to_bool(left.value <= right.value)
+        when {">=", Num, Num}
+          to_bool(left.value >= right.value)
+        when {"+", Num, Num}
+          Num.new(left.value + right.value)
+        when {"-", Num, Num}
+          Num.new(left.value - right.value)
+        when {"*", Num, Num}
+          Num.new(left.value * right.value)
+        when {"/", Num, Num}
+          Num.new(left.value / right.value)
+        when {"~", Str, Str}
+          Str.new(left.value + right.value)
+        when {"x", Str, Num}
+          Str.new(left.value * right.value.to_big_i)
+        when {"~", Vec, Vec}
+          Vec.new(left.value + right.value)
+        when {"x", Vec, Num}
+          Vec.new(left.value * right.value.to_big_i)
+        when {_, Vec, Vec}
+          if right.value.empty?
+           right
+          else
+            result =
+              # NOTE: if there are not enough items in *right* to
+              # cover *left*, the last item of *right* will be
+              # used for this.
+              left.value.zip?(right.value).map do |a, b|
+                binary(operator, a, b || right.value.last).as(Model)
+              end
 
-      case {operator, left, right}
-      when {"is", Num, Num}
-        left = left.value == right.value ? left : MBool.new(false)
-      when {"is", Str, Str}
-        left = left.value == right.value ? left : MBool.new(false)
-      when {"is", MBool, MBool}
-        left.value = left.value == right.value
-      when {"is", Str, MRegex}
-        matches = right.value.match(left.value)
-        left = matches.nil? \
-          ? MBool.new(false)
-          : Vec.new(matches.to_a.map { |piece| Str.new(piece || "").as(Model) })
-      when {"is", _, MType}
-        left = MBool.new(of?(left, right))
-      when {"in", _, Vec}
-        comparee = left
-        right.value.each do |item|
-          break if true?(left = binary("is", comparee, item))
+            Vec.new(result)
+          end
+        else
+          die("'#{operator}': could not interpret these arguments: #{left}, #{right}")
         end
-      when {"<", Num, Num}
-        left = MBool.new(left.value < right.value)
-      when {">", Num, Num}
-        left = MBool.new(left.value > right.value)
-      when {"<=", Num, Num}
-        left = MBool.new(left.value <= right.value)
-      when {">=", Num, Num}
-        left = MBool.new(left.value >= right.value)
-      when {"+", Num, Num}
-        left.value += right.value
-      when {"-", Num, Num}
-        left.value -= right.value
-      when {"*", Num, Num}
-        left.value *= right.value
-      when {"/", Num, Num}
-        left.value /= right.value
-      when {"~", Str, Str}
-        left.value += right.value
-      when {"x", Str, Num}
-        left.value *= right.value.to_big_i
-      when {"~", Vec, Vec}
-        left.value += right.value
-      when {"x", Vec, Num}
-        left.value *= right.value.to_big_i
-      when {_, Vec, Vec}
-        return right if right.value.empty?
-
-        left.value = left.value.zip?(right.value).map do |a, b|
-          binary(operator, a, b || right.value.last).as(Model)
-        end
-      else
-        die("'#{operator}': could not interpret these arguments: #{left}, #{right}")
-      end
 
       @computes -= 1
 
@@ -658,7 +674,7 @@ module Ven
     end
 
     # Interprets a binary operation.
-    def binary(operator, left : Model, right : Model)
+    def binary(operator, left : Model, right : Model) : Model
       passes = 0
 
       # Normalize until satisfied

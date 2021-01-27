@@ -139,6 +139,10 @@ module Ven::Component
       @value = BigRational.new(value, 1)
     end
 
+    def initialize(
+      @value : BigRational)
+    end
+
     def to_s(io)
       io <<
         (@value.denominator == 1 \
