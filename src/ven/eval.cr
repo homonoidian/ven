@@ -207,8 +207,8 @@ module Ven
 
     def visit!(q : QFun)
       # Evaluate the 'given' expressions, making sure that
-      # each returns a type (TODO: or a model). If the type
-      # for a parameter is missing, let it be 'any'.
+      # each returns a type. If the type was not specified
+      # for a parameter, make it MType::ANY.
       last = MType::ANY
 
       params = q.params.zip?(q.given).map do |param, type|
@@ -219,23 +219,34 @@ module Ven
         {param, last.as(MType)}
       end
 
-      concrete = MConcreteFunction.new(
+      this = MConcreteFunction.new(
         q.tag,
         q.name,
         params,
         q.body,
         q.slurpy)
 
-      # Search for a generic that handles this function
-      # (essentially, a generic named the same way). Create
-      # one if haven't found.
-      generic = @context.fetch(q.name)
+      # Try to find an existing function, generic or concrete.
+      # If found a generic function, add this function as one
+      # of its implementations. If found a concrete function,
+      # create a generic that can hold both the found function
+      # and this one. If found nothing, store this concrete
+      # function under the name it has.
+      existing = @context.fetch(q.name)
 
-      unless generic.is_a?(MGenericFunction)
-        generic = @context.define(q.name, MGenericFunction.new(q.name))
+      case existing
+      when MGenericFunction
+        existing.add(this)
+      when MConcreteFunction
+        generic = MGenericFunction.new(q.name)
+
+        generic.add(existing)
+        generic.add(this)
+
+        @context.define(q.name, generic)
+      else
+        @context.define(q.name, this)
       end
-
-      generic.add(concrete)
     end
 
     def visit!(q : QEnsure)
