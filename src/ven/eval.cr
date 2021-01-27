@@ -602,7 +602,9 @@ module Ven
         else
           {left.to_vec, right.to_num}
         end
-      end || die("'#{operator}': could not normalize these operands: #{left}, #{right}")
+      end || die(
+        "'#{operator}': could not normalize these operands: " \
+        "#{left}, #{right} (try changing the order)")
     end
 
     # Computes a binary operation.
