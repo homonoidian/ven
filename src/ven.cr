@@ -21,7 +21,7 @@ module Ven
 
       case e
       when Component::ParseError
-        error("parse error", "#{message} (in #{e.file}:#{e.line}, near '#{e.char}')")
+        error("parse error", "#{message} (in #{e.file}:#{e.line}, near '#{e.lexeme}')")
       when Component::RuntimeError
         error("runtime error", message)
       when Component::InternalError

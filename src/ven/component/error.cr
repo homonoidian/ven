@@ -7,17 +7,17 @@ module Ven::Component
   # malformed or illegal input, and also when the lexical
   # analyzer receives invalid input.
   class ParseError < VenError
-    getter char, line, file, message
+    getter lexeme, line, file, message
 
     # Initializes a parser error.
     def initialize(token : Token, @file : String, @message : String)
-      @char = token[:raw]
       @line = token[:line]
+      @lexeme = token[:lexeme]
     end
 
     # Initializes a lexical error.
     def initialize(
-      @char : String,
+      @lexeme : String,
       @line : UInt32,
       @file : String,
       @message : String)

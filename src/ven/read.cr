@@ -39,7 +39,7 @@ module Ven
   private KEYWORDS = %w(_ &_ not is in if else fun given until while queue ensure)
 
   # A token is the smallest meaningful unit of source code.
-  alias Token = {type: String, raw: String, line: UInt32}
+  alias Token = {type: String, lexeme: String, line: UInt32}
 
   # All available levels of precedence.
   # NOTE: order matters; ascends (lowest precedence to highest precedence).
@@ -60,7 +60,7 @@ module Ven
   class Reader
     include Component
 
-    getter token = {type: "START", raw: "<start>", line: 1_u32}
+    getter token = {type: "START", lexeme: "<start>", line: 1_u32}
 
     def initialize(@file : String, @src : String)
       @pos = 0
@@ -78,10 +78,10 @@ module Ven
       raise ParseError.new(@token, @file, message)
     end
 
-    # Make a token out of *type* and *raw*, them being correspondingly
-    # Token's `type` and `raw` fields.
-    private macro token(type, raw)
-      { type: {{type}}, raw: {{raw}}, line: @line }
+    # Make a token out of *type* and *lexeme*, them being correspondingly
+    # Token's `type` and `lexeme` fields.
+    private macro token(type, lexeme)
+      { type: {{type}}, lexeme: {{lexeme}}, line: @line }
     end
 
     # Match the offset [adverb] source against the *pattern*.
@@ -190,7 +190,7 @@ module Ven
       #   ^     left
       #     ^   <operator>
       #       ^ <right>
-      @token = token("X", "x") if @token[:raw] == "x"
+      @token = token("X", "x") if @token[:lexeme] == "x"
 
       while level < precedence?
         left = @led[(@token[:type])].parse(self, tag?, left, word)

@@ -23,8 +23,8 @@ module Ven
     # `1 ~ 2` are all examples of a binary operation.
     class PBinary < Led
       def parse(parser, tag, left, token)
-        not_ = token[:raw] == "is" && parser.word("NOT")
-        this = QBinary.new(tag, token[:raw], left, parser.led(@precedence - 1))
+        not_ = token[:lexeme] == "is" && parser.word("NOT")
+        this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence - 1))
 
         not_ ? QUnary.new(tag, "not", this) : this
       end
@@ -99,7 +99,7 @@ module Ven
         path = [] of String
 
         while token && token[:type] == "."
-          path << parser.expect("SYMBOL")[:raw]
+          path << parser.expect("SYMBOL")[:lexeme]
           token = parser.word(".")
         end
 

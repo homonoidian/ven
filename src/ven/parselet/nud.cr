@@ -35,18 +35,18 @@ module Ven
     # Atoms are self-evaluating semantic constructs. *name*
     # is the name of the Nud class that will be generated;
     # *quote* is the quote that this Nud yields; *value*
-    # determines whether to give the raw of the nud token
+    # determines whether to give the lexeme of the nud token
     # to the *quote* as an argument; and *unroll* is the
     # number of characters to remove from the beginning
-    # and the end of the nud token's raw.
+    # and the end of the nud token's lexeme.
     private macro defatom(name, quote, value = true, unroll = 0)
       class {{name.id}} < Nud
         def parse(parser, tag, token)
           {{quote}}.new(tag,
             {% if value && unroll != 0 %}
-              token[:raw][{{unroll}}...-{{unroll}}]
+              token[:lexeme][{{unroll}}...-{{unroll}}]
             {% elsif value %}
-              token[:raw]
+              token[:lexeme]
             {% end %})
         end
       end
@@ -58,9 +58,9 @@ module Ven
     # Parse a number into a QNumber: 1.23, 1234, 1_000.
     class PNumber < Nud
       def parse(parser, tag, token)
-        parser.die("trailing '_' in number") if token[:raw].ends_with?("_")
+        parser.die("trailing '_' in number") if token[:lexeme].ends_with?("_")
 
-        QNumber.new(tag, token[:raw].delete('_'))
+        QNumber.new(tag, token[:lexeme].delete('_'))
       end
     end
 
@@ -87,7 +87,7 @@ module Ven
 
 
       def parse(parser, tag, token)
-        value = unescape(token[:raw][1...-1])
+        value = unescape(token[:lexeme][1...-1])
 
         QString.new(tag, value)
       end
@@ -196,7 +196,7 @@ module Ven
     # Parse a 'fun' statement into a QFun.
     class PFun < Nud
       def parse(parser, tag, token)
-        name = parser.expect("SYMBOL")[:raw]
+        name = parser.expect("SYMBOL")[:lexeme]
 
         # Parse the parameters and slurpiness.
         params, slurpy = [] of String, false
@@ -210,7 +210,7 @@ module Ven
                 parser.die("having several '*' in function parameters is forbidden")
               end
             else
-              parser.expect("SYMBOL")[:raw]
+              parser.expect("SYMBOL")[:lexeme]
             end
           end
 
