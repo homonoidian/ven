@@ -47,7 +47,7 @@ module Ven
     end
 
     def visit!(q : QString)
-      Str.new(Str.rawen!(q.value))
+      Str.new(Str.unescape(q.value))
     end
 
     def visit!(q : QRegex)
@@ -485,11 +485,11 @@ module Ven
       case operator
       when "+"
         operand.is_a?(Str) \
-          ? operand.parse_num
+          ? operand.to_num(parse: true)
           : operand.to_num
       when "-"
         numeric = operand.is_a?(Str) \
-          ? operand.parse_num
+          ? operand.to_num(parse: true)
           : operand.to_num
 
         numeric.value = -numeric.value
