@@ -72,7 +72,7 @@ module Ven::Component
     # is a tuple of keys (variable names) and values (variable values)
     # the scope will be initialized with. It may be `nil` if such
     # initialization is unwanted.
-    def local(initial : {Array(String), Array(Model)}? = nil, &)
+    def local(initial : {Array(String), Models}? = nil, &)
       @scopes << {} of String => Model
 
       if initial
@@ -116,7 +116,7 @@ module Ven::Component
     # Pushes given *values* onto the underscores stack,
     # evaluates the *block* and cleans the underscores stack
     # by removing unused *values*, if any.
-    def with_u(values : Array(Model), &)
+    def with_u(values : Models, &)
       size, _ = @underscores.size, values.each { |value| u!(value) }
       result = yield
       if @underscores.size > size

@@ -8,3 +8,4 @@ targets:
 dependencies:
   fancyline:
     github: papierkorb/fancyline
+    version: ~> 0.3.3

@@ -67,7 +67,7 @@ module Ven::Component
       {% end %}
 
       def {{name.id}}
-        ->({{machine = block.args.first}} : Machine, args : Array(Model)) do
+        ->({{machine = block.args.first}} : Machine, args : Models) do
           # Check if got enough arguments
           if args.size < {{arity = params.size}}
             {{machine}}.die(

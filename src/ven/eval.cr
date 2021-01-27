@@ -378,7 +378,7 @@ module Ven
 
     ### Calls
 
-    private def typecheck(params : Array(TypedParameter), args : Array(Model))
+    private def typecheck(params : Array(TypedParameter), args : Models)
       params.zip?(args).each do |param, arg|
         # Ignore missing arguments
         unless arg.nil? || of?(arg, param[1])
@@ -390,7 +390,7 @@ module Ven
     end
 
     # Interprets a call to an `MConcreteFunction`.
-    def call(callee : MConcreteFunction, args : Array(Model), typecheck = true)
+    def call(callee : MConcreteFunction, args : Models, typecheck = true)
       if typecheck
         unless callee.slurpy || callee.arity == args.size
           die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")

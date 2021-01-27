@@ -11,6 +11,9 @@ module Ven::Component
   alias Model = MClass | MStruct
 
   # :nodoc:
+  alias Models = Array(Model)
+
+  # :nodoc:
   macro model_template?
     # The fields this model gives access to.
     @@FIELDS = {} of String => Model
@@ -172,7 +175,7 @@ module Ven::Component
     property value
 
     def initialize(
-      @value : Array(Model))
+      @value : Models)
     end
 
     # Returns the length of this vector.
@@ -338,7 +341,7 @@ module Ven::Component
 
     def initialize(
       @name : String,
-      @block : Proc(Machine, Array(Model), Model))
+      @block : Proc(Machine, Models, Model))
     end
 
     def to_s(io)
