@@ -173,7 +173,7 @@ module Ven
     end
 
     def visit!(q : QBlock)
-      visit(q.body).last
+      visit(q.body).last? || B_FALSE
     end
 
     def visit!(q : QAssign)
@@ -622,7 +622,7 @@ module Ven
         when {"is", Str, Str}
           left.value == right.value ? left : B_FALSE
         when {"is", MBool, MBool}
-          left.value == right.value ? left : B_FALSE
+          to_bool(left.value == right.value)
         when {"is", Str, MRegex}
           if match = right.value.match(left.value)
             Vec.new(match.to_a.map { |c| Str.new(c || "").as(Model) })
