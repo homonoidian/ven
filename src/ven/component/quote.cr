@@ -96,6 +96,8 @@ module Ven::Component
   defquote(QEnsure, expression : Quote)
   defquote(QQueue, value : Quote)
 
-  defquote(QWhile, condition : Quote, body : Quote)
-  defquote(QUntil, condition : Quote, body : Quote)
+  defquote(QInfiniteLoop, body : Quotes)
+  defquote(QBaseLoop, base : Quote, body : Quotes)
+  defquote(QStepLoop, base : Quote, step : Quote, body : Quotes)
+  defquote(QComplexLoop, start : Quote, base : Quote, step : Quote, body : Quotes)
 end

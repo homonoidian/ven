@@ -6,26 +6,27 @@ module Ven
     # not preceded by a meaningful (important to this parser)
     # token.
     abstract class Nud
+      @semicolon = true
+
       # Parses a block (requiring opening '{' if *opening* is true).
       private macro block(parser, opening = true)
         begin
+          @semicolon = false
+
           {% if opening %}
             {{parser}}.expect("{")
           {% end %}
 
-          {{parser}}.repeat("}", unit: -> {
-            {{parser}}.statement("}", detrail: false)
-          })
+          {{parser}}.repeat("}", unit: -> { {{parser}}.statement("}") })
         end
       end
 
-      # Ensures that what the given *block* parses is followed
-      # by a semicolon (or EOF).
-      private macro semicolon(parser, &)
-        (result = begin {{yield}} end; {{parser}}.expect(";", "EOF"); result)
+      # Returns whether this Nud requires a semicolon.
+      def semicolon?
+        @semicolon
       end
 
-      # Perform the parsing.
+      # Performs the parsing.
       abstract def parse(
         parser : Reader,
         tag : QTag,
@@ -224,9 +225,7 @@ module Ven
         end
 
         # Parse the body.
-        body = parser.word("=") \
-          ? semicolon(parser) { [parser.led] }
-          : block(parser)
+        body = parser.word("=") ? [parser.led] : block(parser)
 
         if params.empty? && !given.empty?
           parser.die("zero-arity functions cannot have a 'given'")
@@ -250,29 +249,48 @@ module Ven
       end
     end
 
-    # Parses a 'while' statement into a QWhile.
-    class PWhile < Nud
+    # Parses a 'loop' statement into a QInfiniteLoop, QBaseLoop,
+    # QStepLoop or QComplexLoop: `loop (x = 0 -> x < 10 -> x += 1) say(x)`
+    class PLoop < Nud
       def parse(parser, tag, token)
-        condition = parser.led
+        base : Quote?
+        step : Quote?
+        start : Quote?
+        body : Quotes
 
-        # Receive a block. It can be either a QBlock or anything
-        # else. If it is anything else, expect a semicolon to
-        # follow.
-        block = parser.led
+        if parser.word("(")
+          head = parser.repeat(")", sep: "->")
 
-        parser.expect(";") unless block.is_a?(QBlock)
+          case head.size
+          when 0
+            # (pass)
+          when 1
+            base = head.first
+          when 2
+            base, step = head[0], head[1]
+          when 3
+            start, base, step = head[0], head[1], head[2]
+          else
+            parser.die("ill-formed 'loop' with head of more than three expressions")
+          end
+        end
 
-        QWhile.new(tag, condition, block)
-      end
-    end
+        body =
+          if parser.word("{")
+            block(parser, opening: false)
+          else
+            @semicolon, _ = true, [parser.led]
+          end
 
-    # Parses an 'until' statement into a QUntil.
-    class PUntil < Nud
-      def parse(parser, tag, token)
-        condition = parser.led
-        block = parser.led
-
-        QUntil.new(tag, condition, block)
+        if start && base && step
+          QComplexLoop.new(tag, start, base, step, body)
+        elsif base && step
+          QStepLoop.new(tag, base, step, body)
+        elsif base
+          QBaseLoop.new(tag, base, body)
+        else
+          QInfiniteLoop.new(tag, body)
+        end
       end
     end
   end

@@ -307,30 +307,6 @@ module Ven
       @context.queue(visit(q.value))
     end
 
-    def visit!(q : QWhile)
-      last = B_FALSE
-
-      while true?(condition = visit(q.condition))
-        @context.with_u([condition]) do
-          last = visit(q.body)
-        end
-      end
-
-      last
-    end
-
-    def visit!(q : QUntil)
-      last = B_FALSE
-
-      while false?(condition = visit(q.condition))
-        @context.with_u([condition]) do
-          last = visit(q.body)
-        end
-      end
-
-      last
-    end
-
     ### Helpers
 
     # Checks whether, according to Ven, the *model* is false.

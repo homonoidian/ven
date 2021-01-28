@@ -17,7 +17,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /--|\+\+|=>|[-+*\/~<>]=|[-<>~+*\/()[\]{},:;=?.|]/
+      /-[->]|\+\+|=>|[-+*\/~<>]=|[-<>~+*\/()[\]{},:;=?.|]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#[^\n]*)/
     {% else %}
@@ -60,7 +60,7 @@ module Ven
 
     # A hard-coded list of keywords. It cannot be overridden
     # nor accessed in any way ouside this Reader.
-    private KEYWORDS = %w(_ &_ not is in if else fun given until while queue ensure)
+    private KEYWORDS = %w(_ &_ not is in if else fun given loop queue ensure)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -197,17 +197,19 @@ module Ven
     # cases, functions like a semicolon (e.g., EOF, '}').
     # *detrail* determines whether or not to consume the trailer.
     # NOTE: only leds can be separated by semicolon.
-    def statement(trailer = "EOF", detrail = true) : Quote
-      if it = @stmt[@token[:type]]?
-        return it.parse(self, tag?, word)
+    def statement(trail = "EOF") : Quote
+      semi = true
+
+      if stmt = @stmt[@token[:type]]?
+        this = stmt.parse(self, tag?, word)
+        # Check whether this statement wants a semicolon
+        semi = stmt.semicolon?
+      else
+        this = led
       end
 
-      this = led
-
-      # Unless followed by a semicolon, or *detrail* is enabled
-      # and *trailer* is consumed, or *trailer* is found
-      unless word(";") || detrail && word(trailer) || @token[:type] == trailer
-        expect(";", trailer)
+      if !word(";") && semi && token[:type] != trail
+        die("neither ';' nor #{trail} weren't found to end the statement")
       end
 
       this
@@ -216,7 +218,7 @@ module Ven
     # Performs a module-level parse (zero or more statements
     # followed by EOF).
     def module : Quotes
-      repeat("EOF", unit: ->statement)
+      repeat("EOF", unit: -> { statement })
     end
 
     # Returns an array of nuds that are of `.class` *only*.
@@ -300,8 +302,7 @@ module Ven
 
       # Statements:
       defstmt("FUN", Parselet::PFun)
-      defstmt("WHILE", Parselet::PWhile)
-      defstmt("UNTIL", Parselet::PUntil)
+      defstmt("LOOP", Parselet::PLoop)
 
       self
     end
