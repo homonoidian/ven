@@ -516,7 +516,7 @@ module Ven
       when "~"
         operand.to_str
       when "not"
-        false?(operand) ? B_FALSE : B_TRUE
+        false?(operand) ? B_TRUE : B_FALSE
       else
         die("'#{operator}': could not interpret for this operand: #{operand}")
       end
