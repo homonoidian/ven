@@ -307,6 +307,52 @@ module Ven
       @context.queue(visit(q.value))
     end
 
+    def visit!(q : QInfiniteLoop)
+      loop do
+        visit(q.body)
+      end
+    end
+
+    def visit!(q : QBaseLoop)
+      if q.base.is_a?(QNumber)
+        amount = visit(q.base).as(Num).value
+
+        unless amount.denominator == 1
+          die("cannot iterate non-whole amount of times: #{amount}")
+        end
+
+        amount.numerator.times do
+          last = visit(q.body)
+        end
+      else
+        while true? visit(q.base)
+          last = visit(q.body).last?
+        end
+      end
+
+      last ||= B_FALSE
+    end
+
+    def visit!(q : QStepLoop)
+      while true? visit(q.base)
+        visit(q.step)
+        last = visit(q.body).last?
+      end
+
+      last ||= B_FALSE
+    end
+
+    def visit!(q : QComplexLoop)
+      visit(q.start)
+
+      while true? visit(q.base)
+        visit(q.step)
+        last = visit(q.body).last?
+      end
+
+      last ||= B_FALSE
+    end
+
     ### Helpers
 
     # Checks whether, according to Ven, the *model* is false.

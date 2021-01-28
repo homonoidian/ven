@@ -39,7 +39,7 @@ fun parse(source) given str {
     left = prefix();
     operator = consume();
 
-    while precedence < (level = precedence?())
+    loop (precedence < (level = precedence?()))
       left = ["binary", operator(0), left, infix(level - 1)];
 
     left
@@ -78,7 +78,7 @@ fun ask(*) =
   else
     ans;
 
-while true {
+loop {
   source = ask(">");
 
   before-parse = time();
