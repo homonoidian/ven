@@ -446,24 +446,15 @@ module Ven
       end
 
       @context.local({callee.params, args}) do
-        # $QUEUE is an internal variable; those are variables
-        # that could only be used/created by the interpreter
-        @context.scope["$QUEUE"] = Vec.new([] of Model)
+        if @context.traces.size > MAX_CALL_DEPTH
+          die("too many calls: very deep or infinite recursion")
+        end
 
         if callee.slurpy
           @context.scope["rest"] = Vec.new(args[callee.params.size...])
         end
 
-        # @context.with_u(args.reverse) do
-          if @context.traces.size > MAX_CALL_DEPTH
-            die("too many calls: very deep or infinite recursion")
-          end
-
-          result = visit(callee.body)
-          queue = @context.scope["$QUEUE"].as(Vec)
-
-          queue.value.empty? ? result.last : queue
-        # end
+        visit(callee.body).last? || B_FALSE
       end
     end
 
