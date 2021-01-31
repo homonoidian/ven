@@ -200,12 +200,10 @@ module Ven
         params, slurpy = [] of String, false
 
         if parser.word("(")
-          slurpy = false
-
           parameter = -> do
             if parser.word("*")
               unless slurpy = !slurpy
-                parser.die("having several '*' in function parameters is forbidden")
+                parser.die("multiple '*' not allowed here")
               end
             else
               parser.expect("SYMBOL")[:lexeme]

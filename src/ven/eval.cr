@@ -335,8 +335,8 @@ module Ven
 
     def visit!(q : QStepLoop)
       while true? visit(q.base)
-        visit(q.step)
         last = visit(q.body).last?
+        visit(q.step)
       end
 
       last ||= B_FALSE
@@ -346,8 +346,8 @@ module Ven
       visit(q.start)
 
       while true? visit(q.base)
-        visit(q.step)
         last = visit(q.body).last?
+        visit(q.step)
       end
 
       last ||= B_FALSE
@@ -451,7 +451,7 @@ module Ven
           @context.scope["rest"] = Vec.new(args[callee.params.size...])
         end
 
-        @context.with_u(args.reverse) do
+        # @context.with_u(args.reverse) do
           if @context.traces.size > MAX_CALL_DEPTH
             die("too many calls: very deep or infinite recursion")
           end
@@ -460,7 +460,7 @@ module Ven
           queue = @context.scope["$QUEUE"].as(Vec)
 
           queue.value.empty? ? result.last : queue
-        end
+        # end
       end
     end
 

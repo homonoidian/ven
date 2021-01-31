@@ -20,7 +20,7 @@ module Ven::Component
 
     # Defines a Ven type. *name* is a String, and *model* is
     # the `Model.class` the type 'matches' on, in other words,
-    # the type represents.
+    # the type to-be-defined represents.
     # ```
     #   deftype("num", Num)
     # ```
