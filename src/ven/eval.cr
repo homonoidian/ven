@@ -296,6 +296,10 @@ module Ven
 
       head ||= visit(q.callee)
 
+      unless head.callable?
+        die("this callee is not callable: #{head}")
+      end
+
       @context.tracing({q.tag, "<call to #{head}>"}) do
         call(head, args)
       end
@@ -452,9 +456,13 @@ module Ven
 
         if callee.slurpy
           @context.scope["rest"] = Vec.new(args[callee.params.size...])
+
+          @context.with_u(args.reverse) do
+            return visit(callee.body).last
+          end
         end
 
-        visit(callee.body).last? || B_FALSE
+        visit(callee.body).last
       end
     end
 
@@ -493,24 +501,43 @@ module Ven
 
     # Interprets a call to an `MVector`.
     def call(callee : Vec, args) : Model
-      return Vec.new([] of Model) if args.empty?
+      return Vec.new if args.empty?
 
       result = args.map do |arg|
         if !arg.is_a?(MNumber)
           die("vector index must be a num, got: #{arg}")
         elsif !arg.value.denominator == 1
-          die("vector index must be a whole num, got rational: #{arg}")
+          die("vector index must be whole, got: #{arg}")
         elsif (item = callee.value[arg.value.numerator]?).nil?
           die("vector has no item with index #{arg}")
         end
+
         item
       end
 
       args.size > 1 ? Vec.new(result) : result.first
     end
 
+    def call(callee : Str, args) : Str | Vec
+      return Str.new("") if args.empty?
+
+      result = args.map do |arg|
+        if !arg.is_a?(MNumber)
+          die("string index must be a num, got: #{arg}")
+        elsif !arg.value.denominator == 1
+          die("string index must be whole, got: #{arg}")
+        elsif (item = callee.value[arg.value.numerator]?).nil?
+          die("string too small to cover this index: #{arg}")
+        end
+
+        Str.new(item.to_s).as(Model)
+      end
+
+      args.size > 1 ? Vec.new(result) : result.first.as(Str)
+    end
+
     def call(callee : Model, args)
-      die("could not call this callee: #{callee}")
+      die("this callee is not callable: #{callee}")
     end
 
     ### Unary (prefix) operations

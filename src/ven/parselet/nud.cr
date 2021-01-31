@@ -225,6 +225,10 @@ module Ven
         # Parse the body.
         body = parser.word("=") ? [parser.led] : block(parser)
 
+        if body.empty?
+          parser.die("empty function body illegal")
+        end
+
         if params.empty? && !given.empty?
           parser.die("zero-arity functions cannot have a 'given'")
         end

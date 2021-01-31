@@ -95,6 +95,10 @@ module Ven::Component
       self
     end
 
+    def callable?
+      true
+    end
+
     def to_s(io)
       @value.dump(io)
     end
@@ -160,7 +164,7 @@ module Ven::Component
     property value
 
     def initialize(
-      @value : Models)
+      @value : Models = [] of Model)
     end
 
     # Returns the length of this vector.
