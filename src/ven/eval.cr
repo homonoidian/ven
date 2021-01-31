@@ -346,7 +346,10 @@ module Ven
       visit(q.start)
 
       while true? visit(q.base)
+        visit(q.pres)
+
         last = visit(q.body).last?
+
         visit(q.step)
       end
 

@@ -99,5 +99,10 @@ module Ven::Component
   defquote(QInfiniteLoop, body : Quotes)
   defquote(QBaseLoop, base : Quote, body : Quotes)
   defquote(QStepLoop, base : Quote, step : Quote, body : Quotes)
-  defquote(QComplexLoop, start : Quote, base : Quote, step : Quote, body : Quotes)
+  defquote(QComplexLoop,
+    start : Quote,
+    base : Quote,
+    pres : Quotes,
+    step : Quote,
+    body : Quotes)
 end

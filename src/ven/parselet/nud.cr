@@ -251,13 +251,15 @@ module Ven
     # QStepLoop or QComplexLoop: `loop (x = 0 -> x < 10 -> x += 1) say(x)`
     class PLoop < Nud
       def parse(parser, tag, token)
+        start : Quote?
         base : Quote?
         step : Quote?
-        start : Quote?
         body : Quotes
 
+        pres = Quotes.new
+
         if parser.word("(")
-          head = parser.repeat(")", sep: "->")
+          head = parser.repeat(")", sep: ";")
 
           case head.size
           when 0
@@ -269,7 +271,7 @@ module Ven
           when 3
             start, base, step = head[0], head[1], head[2]
           else
-            parser.die("ill-formed 'loop' with head of more than three expressions")
+            start, base, pres, step = head.first, head[1], head[2..-2], head.last
           end
         end
 
@@ -281,7 +283,7 @@ module Ven
           end
 
         if start && base && step
-          QComplexLoop.new(tag, start, base, step, body)
+          QComplexLoop.new(tag, start, base, pres, step, body)
         elsif base && step
           QStepLoop.new(tag, base, step, body)
         elsif base
