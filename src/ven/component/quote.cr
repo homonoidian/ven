@@ -58,6 +58,14 @@ module Ven::Component
     defquote({{quote}}, value : String)
   end
 
+  class QVoid < Quote
+    getter tag
+
+    def initialize
+      @tag = QTag.new("<dummy>", 1)
+    end
+  end
+
   defvalue(QSymbol)
   defvalue(QString)
   defvalue(QNumber)

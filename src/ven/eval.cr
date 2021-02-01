@@ -20,6 +20,8 @@ module Ven
     B_TRUE = MBool.new(true)
     B_FALSE = MBool.new(false)
 
+    getter world
+
     def initialize
       @world = uninitialized World
       @context = uninitialized Context

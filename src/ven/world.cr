@@ -11,6 +11,14 @@ module Ven
       @machine.world = self
     end
 
+    def read(*args)
+      @reader.read(*args)
+    end
+
+    def visit(*args)
+      @machine.visit(*args)
+    end
+
     # Load given *extensions*, a bunch of Component::Extension
     # subclasses.
     def load(*extensions : Component::Extension.class)
@@ -19,16 +27,10 @@ module Ven
       end
     end
 
-    private macro read(filename, source)
-      @reader.reset({{filename}}, {{source}}).module
-    end
-
-    private macro eval(tree)
-      @machine.visit({{tree}})
-    end
-
     def feed(filename : String, source : String)
-      eval(read(filename, source)).last?
+      tree = read(filename, source)
+
+      visit(tree).last?
     end
   end
 end

@@ -63,7 +63,7 @@ module Ven
     private KEYWORDS = %w(_ &_ not is in if else fun given loop queue ensure)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
-    setter world
+    property world
 
     def initialize
       @led = {} of String => Parselet::Led
@@ -322,15 +322,14 @@ module Ven
 
       self
     end
-  end
 
-  # Initializes a Reader and reads the *source*.
-  #
-  # ```
-  # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s
-  # # ==> "(QEnsure (QBinary is (QBinary + (QNumber 2) (QNumber 2)) (QNumber 4)))"
-  # ```
-  # def self.read(filename : String, source : String)
-  #   Reader.new(filename, source).prepare.module
-  # end
+    # Reads the *source* under the *filename*.
+    # ```
+    #   Reader.new.read("<sample>", "ensure 2 + 2 is 4").first.to_s
+    #   # => "(QEnsure (QBinary is (QBinary + (QNumber 2) (QNumber 2)) (QNumber 4)))"
+    # ```
+    def read(filename : String, source : String)
+      reset(filename, source).module
+    end
+  end
 end
