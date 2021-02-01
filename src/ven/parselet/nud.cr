@@ -322,6 +322,10 @@ module Ven
           parser.keywords << unwrapped
         end
 
+        # Generate an actual parselet that will call this function
+        # on a successful parse,
+        parser.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
+
         body = parser.word("=") \
           ? [parser.led]
           : block(parser)
@@ -332,10 +336,6 @@ module Ven
 
         # Visit this definition so the Machine knows about it.
         repr_model = parser.world.visit(repr)
-
-        # Generate an actual parselet that will call this function
-        # on a successful parse,
-        parser.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
 
         QModelCarrier.new(repr_model)
       end
@@ -350,7 +350,9 @@ module Ven
         trigger = parser.world.context.fetch(@trigger)
 
         unless trigger
-          parser.die("world error: trigger evaporated")
+          parser.die(
+            "trigger '#{@trigger}' is not in scope " \
+            "(note: explicit read-time recursion not supported)")
         end
 
         model = parser

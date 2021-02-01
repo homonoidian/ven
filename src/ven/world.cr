@@ -11,15 +11,11 @@ module Ven
       @machine.world = self
     end
 
-    def read(*args)
-      @reader.read(*args)
-    end
-
     def visit(*args)
       @machine.visit(*args)
     end
 
-    # Load given *extensions*, a bunch of Component::Extension
+    # Loads given *extensions*, a bunch of Component::Extension
     # subclasses.
     def load(*extensions : Component::Extension.class)
       extensions.each do |extension|
@@ -27,10 +23,12 @@ module Ven
       end
     end
 
+    # Reads and evaluates a String of *source* under the
+    # filename *filename*.
     def feed(filename : String, source : String)
-      tree = read(filename, source)
-
-      visit(tree).last?
+      @reader.read(filename, source) do |quote|
+        visit(quote)
+      end
     end
   end
 end

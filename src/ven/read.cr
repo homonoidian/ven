@@ -233,8 +233,12 @@ module Ven
 
     # Performs a module-level parse (zero or more statements
     # followed by EOF).
-    def module : Quotes
-      repeat("EOF", unit: -> { statement })
+    def module(&block : Quote -> _)
+      until word("EOF")
+        last = yield statement
+      end
+
+      last
     end
 
     # Returns an array of nuds that are of `.class` *only*.
@@ -290,7 +294,6 @@ module Ven
       defnud("+", "-", "~", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
-      defnud("NUD", Parselet::PNud, precedence: ZERO)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
       defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
       defnud("SYMBOL", Parselet::PSymbol)
@@ -319,6 +322,7 @@ module Ven
       defled(".", Parselet::PAccessField, precedence: FIELD)
 
       # Statements:
+      defstmt("NUD", Parselet::PNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("LOOP", Parselet::PLoop)
 
@@ -326,12 +330,8 @@ module Ven
     end
 
     # Reads the *source* under the *filename*.
-    # ```
-    #   Reader.new.read("<sample>", "ensure 2 + 2 is 4").first.to_s
-    #   # => "(QEnsure (QBinary is (QBinary + (QNumber 2) (QNumber 2)) (QNumber 4)))"
-    # ```
-    def read(filename : String, source : String)
-      reset(filename, source).module
+    def read(filename : String, source : String, &block : Quote -> _)
+      reset(filename, source).module(&block)
     end
   end
 end
