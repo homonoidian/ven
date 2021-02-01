@@ -58,14 +58,15 @@ module Ven
   class Reader
     include Component
 
-    # A hard-coded list of keywords. It cannot be overridden
-    # nor accessed in any way ouside this Reader.
-    private KEYWORDS = %w(_ &_ not is in if else fun given loop queue ensure)
+    # A list of keywords protected by the reader.
+    KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
-    property world
+    property keywords, world
 
     def initialize
+      @keywords = KEYWORDS
+
       @led = {} of String => Parselet::Led
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
@@ -289,6 +290,7 @@ module Ven
       defnud("+", "-", "~", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
+      defnud("NUD", Parselet::PNud, precedence: ZERO)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
       defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
       defnud("SYMBOL", Parselet::PSymbol)

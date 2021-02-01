@@ -249,7 +249,7 @@ module Ven::Component
         @constraints << {"*", @constraints.last?.try(&.[1]) || MType::ANY}
       end
 
-      @general = @slurpy || @params.empty? || @constraints.any? { |c| c[1].is_a?(MAny)  }
+      @general = @slurpy || @params.empty? || @constraints.any? { |c| c[1].is_a?(MType::ANY)  }
 
       @@FIELDS["name"] = Str.new(@name)
       @@FIELDS["arity"] = Num.new(@arity.to_i32)
@@ -287,7 +287,9 @@ module Ven::Component
       target = variant.general ? @general : @strict
 
       target.each_with_index do |existing, index|
-        if existing.constraints == variant.constraints
+        # Each constraint is a `TypedParameter`. With &[1] we
+        # can compare just the types.
+        if existing.constraints.map(&.[1]) == variant.constraints.map(&.[1])
           # Overwrite & return if found an identical variant:
           return target[index] = variant
         end

@@ -303,5 +303,63 @@ module Ven
         QQuote.new(tag, parser.led(Precedence::PREFIX.value))
       end
     end
+
+    class PNud < Nud
+      def parse(parser, tag, token)
+        trigger = parser.expect("STRING")[:lexeme]
+        unwrapped = trigger[1...-1]
+
+        parser.expect("(")
+
+        params = parser.repeat(")", ",", -> { parser.expect("SYMBOL")[:lexeme] })
+
+        unless params && params.size == 1
+          parser.die("invalid nud parameter list: expected one symbol")
+        end
+
+        # Let the trigger be a keyword.
+        unless parser.keywords.includes?(unwrapped)
+          parser.keywords << unwrapped
+        end
+
+        body = parser.word("=") \
+          ? [parser.led]
+          : block(parser)
+
+        # Translate this nud into a function definition for
+        # the support of generics, etc.
+        repr = QFun.new(tag, trigger, params, body, Quotes.new, false)
+
+        # Visit this definition so the Machine knows about it.
+        repr_model = parser.world.visit(repr)
+
+        # Generate an actual parselet that will call this function
+        # on a successful parse,
+        parser.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
+
+        QModelCarrier.new(repr_model)
+      end
+    end
+
+    class PNudTrigger < Nud
+      def initialize(
+        @trigger : String)
+      end
+
+      def parse(parser, tag, token)
+        trigger = parser.world.context.fetch(@trigger)
+
+        unless trigger
+          parser.die("world error: trigger evaporated")
+        end
+
+        model = parser
+          .world
+          .machine
+          .call(trigger, [Str.new(token[:lexeme]).as(Model)])
+
+        QModelCarrier.new(model)
+      end
+    end
   end
 end

@@ -58,11 +58,30 @@ module Ven::Component
     defquote({{quote}}, value : String)
   end
 
+  # A dummy Quote that can be used to experiment with the
+  # Reader without writing a dedicated Quote first.
   class QVoid < Quote
     getter tag
 
     def initialize
       @tag = QTag.new("<dummy>", 1)
+    end
+
+    def to_s(io)
+      io << "<void quote>"
+    end
+  end
+
+  # A thin compatibility layer between the Reader and the Machine.
+  class QModelCarrier < QVoid
+    getter model
+
+    def initialize(@model : Model)
+      super()
+    end
+
+    def to_s(io)
+      io << "<carrier for " << @model << ">"
     end
   end
 

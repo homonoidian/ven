@@ -373,6 +373,10 @@ module Ven
       last ||= B_FALSE
     end
 
+    def visit!(q : QModelCarrier)
+      q.model
+    end
+
     ### Helpers
 
     # Checks whether, according to Ven, the *model* is false.
