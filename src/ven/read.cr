@@ -62,6 +62,7 @@ module Ven
     KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
+
     property keywords, world
 
     def initialize
@@ -85,7 +86,7 @@ module Ven
       @pos = 0
       @line = 1_u32
 
-      # Initializes with the first token:
+      # Initializes the first token:
       word
 
       self
@@ -331,7 +332,9 @@ module Ven
 
     # Reads the *source* under the *filename*.
     def read(filename : String, source : String, &block : Quote -> _)
-      reset(filename, source).module(&block)
+      reset(filename, source).module do |quote|
+        yield quote
+      end
     end
   end
 end
