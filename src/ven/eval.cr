@@ -20,8 +20,15 @@ module Ven
     B_TRUE = MBool.new(true)
     B_FALSE = MBool.new(false)
 
-    def initialize(@context = Context.new)
+    def initialize
+      @world = uninitialized World
+      @context = uninitialized Context
+
       @computes = 0
+    end
+
+    def world=(@world : World)
+      @context = @world.context
     end
 
     ### Error handling

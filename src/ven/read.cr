@@ -63,16 +63,31 @@ module Ven
     private KEYWORDS = %w(_ &_ not is in if else fun given loop queue ensure)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
+    setter world
 
-    def initialize(@file : String, @src : String)
-      @pos = 0
-      @line = 1_u32
-
+    def initialize
       @led = {} of String => Parselet::Led
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
+      prepare
 
+      @pos = uninitialized Int32
+      @src = uninitialized String
+      @file = uninitialized String
+      @line = uninitialized UInt32
+      @world = uninitialized World
+      reset
+    end
+
+    # Resets
+    def reset(@file = "<unknown>", @src = "")
+      @pos = 0
+      @line = 1_u32
+
+      # Initializes with the first token:
       word
+
+      self
     end
 
     # Given the explanation *message*, dies of ParseError.
@@ -315,7 +330,7 @@ module Ven
   # Ven.read("<sample>", "ensure 2 + 2 is 4").first.to_s
   # # ==> "(QEnsure (QBinary is (QBinary + (QNumber 2) (QNumber 2)) (QNumber 4)))"
   # ```
-  def self.read(filename : String, source : String)
-    Reader.new(filename, source).prepare.module
-  end
+  # def self.read(filename : String, source : String)
+  #   Reader.new(filename, source).prepare.module
+  # end
 end

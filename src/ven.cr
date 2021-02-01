@@ -39,16 +39,16 @@ module Ven
       exit(0)
     end
 
-    # Create a Ven::Manager and initialize all builtin libraries
-    def manager?(file : String)
-      manager = Manager.new(file)
+    # Create a Ven::World and initialize all builtin libraries
+    def world?
+      world = World.new
 
-      manager.load(
+      world.load(
         Library::Core,
         Library::System
       )
 
-      manager
+      world
     end
 
     # Read and execute source from `path`. Exit on VenError.
@@ -56,9 +56,9 @@ module Ven
     def file(path : String)
       path = Path[path].expand(home: true).to_s
       source = File.read(path)
-      manager = manager?(path)
+      manager = world?
 
-      manager.feed(source)
+      manager.feed(path, source)
     rescue e : Component::VenError
       error?(e)
     rescue e : File::NotFoundError
@@ -67,7 +67,7 @@ module Ven
 
     # Prepare for and start a REPL
     def repl
-      manager = manager?("<interactive>")
+      world = world?
 
       fancy = Fancyline.new
 
@@ -76,7 +76,7 @@ module Ven
         completions = yielder.call(ctx, range, word)
 
         line = ctx.editor.line
-        scope = manager.context.scope
+        scope = world.context.scope
 
         if line =~ /#{Ven.regex_for(:SYMBOL)}\-?$/
           range = (ctx.editor.line.size - $0.size)..-1
@@ -105,7 +105,7 @@ module Ven
         end
 
         begin
-          puts manager.feed(source)
+          puts world.feed("<interactive>", source)
         rescue e : Component::VenError
           error?(e, quit: false)
         end
