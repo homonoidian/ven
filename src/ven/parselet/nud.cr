@@ -297,5 +297,11 @@ module Ven
         end
       end
     end
+
+    class PQuote < Nud
+      def parse(parser, tag, token)
+        QQuote.new(tag, parser.led(Precedence::PREFIX.value))
+      end
+    end
   end
 end

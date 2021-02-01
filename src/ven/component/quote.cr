@@ -62,6 +62,8 @@ module Ven::Component
   defvalue(QString)
   defvalue(QNumber)
   defvalue(QRegex)
+
+  defquote(QQuote, quote : Quote)
   defquote(QVector, items : Quotes)
 
   defquote(QURef)

@@ -17,7 +17,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>]=|[-<>~+*\/()[\]{},:;=?.|]/
+      /-[->]|\+\+|=>|[-+*\/~<>]=|[-'<>~+*\/()[\]{},:;=?.|]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#[^\n]*)/
     {% else %}
@@ -272,6 +272,7 @@ module Ven
     def prepare
       # Prefixes (NUDs):
       defnud("+", "-", "~", "NOT")
+      defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
       defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)

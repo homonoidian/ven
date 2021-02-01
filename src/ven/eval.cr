@@ -92,6 +92,10 @@ module Ven
       false?(visit(q.value)) ? B_FALSE : B_TRUE
     end
 
+    def visit!(q : QQuote)
+      q.quote
+    end
+
     def visit!(q : QAccessField)
       head = visit(q.head)
 
