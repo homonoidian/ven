@@ -92,10 +92,10 @@ module Ven::Component
     # gets rid of this trace after the *block* has been executed.
     def tracing(t : {QTag, String}, &)
       @traces << Trace.new(t.first, t.last)
-      result = yield
-      @traces.pop
 
-      result
+      yield
+    ensure
+      @traces.pop
     end
 
     # Pushes a *value* onto the underscores stack.
