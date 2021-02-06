@@ -3,10 +3,10 @@ module Ven::Component
   class VenError < Exception
   end
 
-  # The exception that is raised when the parser is given
+  # The exception that is raised when the reader is given
   # malformed or illegal input, and also when the lexical
   # analyzer receives invalid input.
-  class ParseError < VenError
+  class ReadError < VenError
     getter lexeme, line, file, message
 
     # Initializes a parser error.

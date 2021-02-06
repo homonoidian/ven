@@ -94,7 +94,7 @@ module Ven
 
     # Given the explanation *message*, dies of ParseError.
     def die(message : String)
-      raise ParseError.new(@token, @file, message)
+      raise ReadError.new(@token, @file, message)
     end
 
     # Makes a Token tuple given a *type* and a *lexeme*.
@@ -128,7 +128,7 @@ module Ven
           when @pos == @src.size
             token("EOF", "end-of-input")
           else
-            raise ParseError.new(@src[@pos].to_s, @line, @file, "malformed input")
+            raise ReadError.new(@src[@pos].to_s, @line, @file, "malformed input")
           end
         end
 
