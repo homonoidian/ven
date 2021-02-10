@@ -39,16 +39,36 @@ module Ven::Component
     end
   end
 
-  # An untraceable error that is raised when a semantic error
-  # is caught in the interpreter implementation itself. Note
-  # that not all errors are captured that way and boxed into
-  # an InternalError. Many cause standard Crystal runtime errors;
-  # these are more dangerous and uncomfortable than the former.
+  # An exception that is raised when there is an error in the
+  # interpreter implementation itself. InternalErrors are not
+  # as bad (or as dangerous) as standard Crystal errors: if
+  # a standard Crystal error is raised, something is **very**
+  # wrong.
   class InternalError < VenError
     getter message
 
     def initialize(
       @message : String)
+    end
+  end
+
+  # An exception that is raised when there is a problem in the
+  # relationship between different files and modules, or in the
+  # relationship between the reader and the interpreter.
+  class WorldError < VenError
+    getter file, line, message
+
+    @file : String
+    @line : UInt32
+
+    def initialize(tag : QTag, @message : String)
+      @file = tag.file
+      @line = tag.line
+    end
+
+    def initialize(@message : String)
+      @file = "<unknown (probably origin)>"
+      @line = 1
     end
   end
 end

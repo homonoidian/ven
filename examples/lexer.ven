@@ -1,3 +1,5 @@
+expose std;
+
 fun parse(source) given str {
   token = [];
   cursor = 0;
@@ -68,15 +70,6 @@ fun eval(node) given vec =
     else if node(1) is "/"
       lhs / rhs;
   };
-
-fun say(*) =
-  |put(~_ ~ "\n")|: rest;
-
-fun ask(*) =
-  if +(ans = |{ put(~_ ~ " "); get() }| rest) is 1
-    ans(0)
-  else
-    ans;
 
 loop {
   source = ask(">");

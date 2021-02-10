@@ -324,7 +324,14 @@ module Ven
 
         # Generate an actual parselet that will call this function
         # on a successful parse,
-        parser.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
+        #
+        # NOTE: as each 'expose' is read by a different, fresh reader,
+        # NUDs will naturally get defined in this different, fresh reader.
+        # Obviously, we do not want that. What we want instead is for them
+        # all to end up in the World's reader. Now, if we're a script,
+        # World's reader is our only reader. If we're a module,
+        # World's reader is the module's entry reader.
+        parser.world.reader.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
 
         body = parser.word("=") \
           ? [parser.led]
@@ -361,6 +368,22 @@ module Ven
           .call(trigger, [Str.new(token[:lexeme]).as(Model)])
 
         QModelCarrier.new(model)
+      end
+    end
+
+    class PExpose < Nud
+      def parse(parser, tag, token)
+        pieces = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })
+
+        QExpose.new(tag, pieces)
+      end
+    end
+
+    class PDistinct < Nud
+      def parse(parser, tag, token)
+        pieces = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })
+
+        QDistinct.new(tag, pieces)
       end
     end
   end

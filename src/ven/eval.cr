@@ -377,6 +377,18 @@ module Ven
       q.model
     end
 
+    def visit!(q : QExpose)
+      unless @world.gather(q.pieces)
+        die("this distinct was not found: '#{q.pieces.join(".")}'")
+      end
+
+      B_TRUE
+    end
+
+    def visit!(q : QDistinct)
+      B_TRUE
+    end
+
     ### Helpers
 
     # Checks whether, according to Ven, the *model* is false.

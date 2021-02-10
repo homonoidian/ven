@@ -59,7 +59,7 @@ module Ven
     include Component
 
     # A list of keywords protected by the reader.
-    KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure)
+    KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure expose distinct)
 
     getter token = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -326,6 +326,8 @@ module Ven
       defstmt("NUD", Parselet::PNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("LOOP", Parselet::PLoop)
+      defstmt("EXPOSE", Parselet::PExpose)
+      defstmt("DISTINCT", Parselet::PDistinct)
 
       self
     end

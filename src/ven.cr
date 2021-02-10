@@ -7,17 +7,25 @@ module Ven
   VERSION = "0.1.1-rev01"
 
   class CLI
-    # The places the interpreter will visit to gather the modules
-    # a script required. `BOOT` is a compile-time environment
-    # variable containing the path to a boot module (the first
-    # to load & one which defines the internals.)
-    LOOKUP = [Dir.current, {{env("BOOT") || ""}}]
+    # `BOOT` is a compile-time environment variable containing
+    # the path to a boot module (the first to load & one which
+    # defines the internals.) Indeed, it is a directory that
+    # functions in the same way as origin modules do.
+    BOOT = {{env("BOOT")}} || Path[Dir.current] / "std"
 
     def initialize
       @world = World.new
 
       @world.load(Library::Core)
       @world.load(Library::System)
+
+      unless Dir.exists?(BOOT)
+        raise "BOOT ('#{BOOT}') does not exist"
+      end
+
+      if @world.upscrap(Path[BOOT]).empty?
+        raise "BOOT ('#{BOOT}') does not contain any Ven files"
+      end
     end
 
     # Prints the *message* and quits with exit status 0.
@@ -30,7 +38,9 @@ module Ven
     # Prints the *message* of some *kind* and, if given true
     # *quit*, quits with exit status 1.
     def error(kind : String, message : String, quit = false)
-      puts "#{kind.colorize(:light_red).bold}: #{message}"
+      kind = "(#{kind})"
+
+      puts "#{kind.colorize(:light_red).bold} #{message}"
 
       if quit
         exit(1)
@@ -50,6 +60,8 @@ module Ven
         error("runtime error", message)
       when Component::InternalError
         error("internal error", message)
+      when Component::WorldError
+        error("world error", "#{message} (in #{this.file}:#{this.line})")
       end
 
       if quit
@@ -57,17 +69,23 @@ module Ven
       end
     end
 
-    # Reads and evaluates a script found at *path*. Handles
-    # File::NotFoundError. On an error, exits with status 1.
-    def script(path : String)
-      path = Path[path].expand(home: true).to_s
-      source = File.read(path)
+    # Evaluates *source* with filename *filename*.
+    def eval(filename : String, source : String)
+      @world.feed(filename, source)
+    end
 
-      @world.feed(path, source)
+    def open(path : String)
+      this = Path[path].normalize.expand(home: true)
+
+      if File.directory?(this)
+        @world.origin!(this)
+      elsif File.file?(this)
+        eval this.to_s, File.read(this)
+      else
+        error("command-line error", "invalid option, file or directory: #{path}", quit: true)
+      end
     rescue exception : Component::VenError
       error(exception)
-    rescue exception : File::NotFoundError
-      error("command-line error", "file not found (or path invalid): #{path}", quit: true)
     end
 
     # Starts a new Read-Eval-Print loop.
@@ -90,7 +108,7 @@ module Ven
         end
 
         begin
-          puts @world.feed("<interactive>", source)
+          puts eval("<interactive>", source)
         rescue exception : Component::VenError
           error(exception, quit: false)
         end
@@ -113,12 +131,16 @@ module Ven
           error(parser.to_s)
         end
 
+        parser.on "--verbose-world", "Make world verbose (debug)" do
+          @world.verbose = true
+        end
+
         parser.unknown_args do |args|
           case args.size
           when 0
             repl
           when 1
-            script(args.first)
+            open(args.first)
           else
             error(parser.to_s)
           end

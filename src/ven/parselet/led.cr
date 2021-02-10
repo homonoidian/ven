@@ -99,12 +99,7 @@ module Ven
     # of a field access expression.
     class PAccessField < Led
       def parse(parser, tag, left, token)
-        path = [] of String
-
-        while token && token[:type] == "."
-          path << parser.expect("SYMBOL")[:lexeme]
-          token = parser.word(".")
-        end
+        path = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })
 
         QAccessField.new(tag, left, path)
       end

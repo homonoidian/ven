@@ -134,4 +134,7 @@ module Ven::Component
     pres : Quotes,
     step : Quote,
     body : Quotes)
+
+  defquote(QExpose, pieces : Array(String))
+  defquote(QDistinct, pieces : Array(String))
 end
