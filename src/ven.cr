@@ -11,17 +11,13 @@ module Ven
     # the path to a boot module (the first to load & one which
     # defines the internals.) Indeed, it is a directory that
     # functions in the same way as origin modules do.
-    BOOT = {{env("BOOT")}} || Path[Dir.current] / "std"
+    BOOT = {{env("BOOT") || raise "unable to get 'BOOT'"}}
 
     def initialize
       @world = World.new
 
       @world.load(Library::Core)
       @world.load(Library::System)
-
-      unless Dir.exists?(BOOT)
-        raise "BOOT ('#{BOOT}') does not exist"
-      end
 
       if @world.upscrap(Path[BOOT]).empty?
         raise "BOOT ('#{BOOT}') does not contain any Ven files"
