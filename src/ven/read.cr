@@ -1,7 +1,8 @@
 module Ven
-  # Returns the regex pattern for token *name*, which can be:
+  # Returns the regex pattern for word *name*, which can be:
   #   * `:SYMBOL`
   #   * `:STRING`
+  #   * `:REGEX`
   #   * `:NUMBER`
   #   * `:SPECIAL`
   #   * `:IGNORE`.
@@ -34,10 +35,10 @@ module Ven
   private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
 
-  # A token is a tagged lexeme. A lexeme is an excerpt from
+  # A word is a tagged lexeme. A lexeme is an excerpt from
   # the source code. The patterns above explain how to extract
   # these excerpts.
-  alias Token = {type: String, lexeme: String, line: UInt32}
+  alias Word = {type: String, lexeme: String, line: UInt32}
 
   # The levels of LED precedence in ascending order (lowest
   # to highest.)
@@ -61,7 +62,7 @@ module Ven
     # A list of keywords protected by the reader.
     KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure expose distinct)
 
-    getter token = {type: "START", lexeme: "<start>", line: 1_u32}
+    getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
     property keywords, world
 
@@ -86,19 +87,19 @@ module Ven
       @pos = 0
       @line = 1_u32
 
-      # Initializes the first token:
-      word
+      # Reads the first word:
+      word!
 
       self
     end
 
     # Given the explanation *message*, dies of ParseError.
     def die(message : String)
-      raise ReadError.new(@token, @file, message)
+      raise ReadError.new(@word, @file, message)
     end
 
-    # Makes a Token tuple given a *type* and a *lexeme*.
-    private macro token(type, lexeme)
+    # Makes a Word tuple given a *type* and a *lexeme*.
+    private macro word(type, lexeme)
       { type: {{type}}, lexeme: {{lexeme}}, line: @line }
     end
 
@@ -109,41 +110,41 @@ module Ven
     end
 
     # Consumes a fresh word and returns the former word.
-    def word
+    def word!
       fresh =
         loop do
           break case
           when match(RX_IGNORE)
             next @line += $0.count("\n").to_u32
           when match(RX_SPECIAL)
-            token($0.upcase, $0)
+            word($0.upcase, $0)
           when match(RX_SYMBOL)
-            token(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
+            word(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
           when match(RX_NUMBER)
-            token("NUMBER", $0)
+            word("NUMBER", $0)
           when match(RX_STRING)
-            token("STRING", $0)
+            word("STRING", $0)
           when match(RX_REGEX)
-            token("REGEX", $0)
+            word("REGEX", $0)
           when @pos == @src.size
-            token("EOF", "end-of-input")
+            word("EOF", "end-of-input")
           else
             raise ReadError.new(@src[@pos].to_s, @line, @file, "malformed input")
           end
         end
 
-      @token, _ = fresh, @token
+      @word, _ = fresh, @word
     end
 
     # Reads a word if the type of the current word is *restriction*.
-    def word(restriction : String)
-      word if @token[:type] == restriction
+    def word!(restriction : String)
+      word! if @word[:type] == restriction
     end
 
     # Reads a word if one of the *restrictions* matches the
     # current word's type. Dies of parse error otherwise.
     def expect(*restrictions : String)
-      return word if restrictions.includes?(@token[:type])
+      return word! if restrictions.includes?(@word[:type])
 
       die("expected #{restrictions.map(&.dump).join(", ")}")
     end
@@ -165,12 +166,12 @@ module Ven
 
       result = [] of T
 
-      until stop && word(stop)
+      until stop && word!(stop)
         result << unit.call
 
         if stop && sep
-          word(sep) ? next : break expect(stop, sep)
-        elsif sep && !word(sep)
+          word!(sep) ? next : break expect(stop, sep)
+        elsif sep && !word!(sep)
           break
         end
       end
@@ -186,14 +187,14 @@ module Ven
     # Returns the precedence of the current word. Returns 0
     # if it has no precedence.
     private macro precedence?
-      @led[@token[:type]]?.try(&.precedence) || 0
+      @led[(@word[:type])]?.try(&.precedence) || 0
     end
 
     # Parses a led expression with precedence *level*.
     def led(level = Precedence::ZERO.value) : Quote
       left = @nud
-        .fetch(token[:type]) { die("not a nud: '#{token[:type]}'") }
-        .parse(self, tag?, word)
+        .fetch(@word[:type]) { die("not a nud: '#{@word[:type]}'") }
+        .parse(self, tag?, word!)
 
       # 'x' is a symbol by default; But when used in this very
       # position (after a nud), it's an operator. E.g.:
@@ -201,31 +202,29 @@ module Ven
       #   ^     left
       #     ^   <operator>
       #       ^ <right>
-      @token = token("X", "x") if @token[:lexeme] == "x"
+      @word = word("X", "x") if @word[:lexeme] == "x"
 
       while level < precedence?
-        left = @led[(@token[:type])].parse(self, tag?, left, word)
+        left = @led[(@word[:type])].parse(self, tag?, left, word!)
       end
 
       left
     end
 
-    # Parses a statament. *trailer* is a word that, in certain
+    # Parses a statament. *trail* is a word that, in certain
     # cases, functions like a semicolon (e.g., EOF, '}').
-    # *detrail* determines whether or not to consume the trailer.
-    # NOTE: only leds can be separated by semicolon.
     def statement(trail = "EOF") : Quote
       semi = true
 
-      if stmt = @stmt[@token[:type]]?
-        this = stmt.parse(self, tag?, word)
+      if stmt = @stmt[(@word[:type])]?
+        this = stmt.parse(self, tag?, word!)
         # Check whether this statement wants a semicolon
         semi = stmt.semicolon?
       else
         this = led
       end
 
-      if !word(";") && semi && token[:type] != trail
+      if !word!(";") && semi && @word[:type] != trail
         die("neither ';' nor #{trail} weren't found to end the statement")
       end
 
@@ -235,7 +234,7 @@ module Ven
     # Performs a module-level parse (zero or more statements
     # followed by EOF).
     def module(&block : Quote -> _)
-      until word("EOF")
+      until word!("EOF")
         last = yield statement
       end
 

@@ -1,8 +1,8 @@
 module Ven::Component
-  # The context shared between different `Visitor.visit`s.
-  # It implements the *scopes* stack (globalmost to localmost),
-  # the *traces* stack (for tracebacking), and the *underscores*
-  # stack, whose purpose is to implement  `_`, the contextual value.
+  # The context implements the scope semantics via a *scopes*
+  # stack, defines the *traces* stack for the purposes of
+  # tracebacking, and the *underscores* stack for the contextual
+  # values (i.e., `_` and `&_`).
   class Context
     property traces
 
@@ -22,8 +22,8 @@ module Ven::Component
       @scopes.last
     end
 
-    # Walks through the scopes from the localmost to the
-    # globalmost, returning true if found *$QUEUE* variable.
+    # Walks through the scopes, from the localmost to the
+    # globalmost, returning true if found a *$QUEUE* variable.
     def has_queue?
       @scopes.reverse_each do |scope|
         unless scope["$QUEUE"]?.nil?
@@ -32,8 +32,8 @@ module Ven::Component
       end
     end
 
-    # Appends a *value* to the queue. NOTE: does not check
-    # whether a queue exists!
+    # Appends a *value* to the queue.
+    # NOTE: does not check whether a queue exists.
     def queue(value : Model)
       @scopes.reverse_each do |scope|
         if queue = scope["$QUEUE"]?
@@ -44,10 +44,10 @@ module Ven::Component
       value
     end
 
-    # Walks from the globalmost down to the localmost scope,
-    # checking if *name* exists there and redefining it if
-    # it does. Otherwise makes *name* be *value* in the
-    # localmost scope.
+    # Walks from the globalmost to the localmost scope,
+    # checking if *name* exists and overwriting its value
+    # with *value* if it does; otherwise, makes *name*
+    # be *value* in the localmost scope.
     def define(name : String, value : Model)
       @scopes.each do |this|
         if this.has_key?(name)
@@ -68,11 +68,11 @@ module Ven::Component
       end
     end
 
-    # Makes a local scope and executes the given *block*. *initial*
+    # Creates a local scope and executes the given *block*. *initial*
     # is a tuple of keys (variable names) and values (variable values)
-    # the scope will be initialized with. It may be `nil` if such
-    # initialization is unwanted.
-    def local(initial : {Array(String), Models}? = nil, &)
+    # this new local scope will be initialized with. It may
+    # be `nil` if such initialization is not needed.
+    def local(initial : {Array(String), Models}? = nil, &block)
       @scopes << {} of String => Model
 
       if initial
@@ -88,7 +88,7 @@ module Ven::Component
 
     # Records the evaluation of *block* as *trace* and properly
     # gets rid of this trace after the *block* has been executed.
-    def tracing(t : {QTag, String}, &)
+    def tracing(trace t : {QTag, String}, &block)
       @traces << Trace.new(t.first, t.last)
 
       yield

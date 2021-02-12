@@ -93,9 +93,9 @@ module Ven::Component
       end
     end
 
-    # `load` is called once when an extension is 'included',
-    # and so is a reasonable place to define all top-level
-    # things, in other words, the entities this extension exports.
+    # `load` is called when this extension is 'included'.
+    # It is thus a reasonable place to define all top-level
+    # things, i.e., the entities this extension exports.
     abstract def load
   end
 end

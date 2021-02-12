@@ -25,7 +25,7 @@ module Ven
       def parse(parser, tag, left, token)
         # Check whether this is an `is` expression with a `not`
         # following.
-        not_ = token[:lexeme] == "is" && parser.word("NOT")
+        not_ = token[:lexeme] == "is" && parser.word!("NOT")
 
         this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence - 1))
 

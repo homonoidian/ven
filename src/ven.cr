@@ -70,6 +70,8 @@ module Ven
       @world.feed(filename, source)
     end
 
+    # Decides whether to run *path* as a script or as an
+    # origin module, and runs it.
     def open(path : String)
       this = Path[path].normalize.expand(home: true)
 
@@ -84,7 +86,7 @@ module Ven
       error(exception)
     end
 
-    # Starts a new Read-Eval-Print loop.
+    # Starts a new read-eval-print loop.
     def repl
       fancy = Fancyline.new
 
@@ -112,7 +114,7 @@ module Ven
     end
 
     # Parses the command-line arguments and dispatches further
-    # to `repl`, `script`, etc.
+    # to `repl`, `open`, etc.
     def run
       OptionParser.parse do |parser|
         parser.banner = "Usage: #{PROGRAM_NAME} [options] [path/to/script.ven]"

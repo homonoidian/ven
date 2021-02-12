@@ -250,7 +250,7 @@ module Ven::Component
   # `MType`.
   alias TypedParameter = {String, MType}
 
-  # An umbrella `function` type, and a parent for all kinds
+  # An umbrella `function` type, and the parent of all kinds
   # of functions Ven has.
   abstract class MFunction < MClass
     def callable?

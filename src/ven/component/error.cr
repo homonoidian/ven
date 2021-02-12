@@ -10,9 +10,9 @@ module Ven::Component
     getter lexeme, line, file, message
 
     # Initializes a parser error.
-    def initialize(token : Token, @file : String, @message : String)
-      @line = token[:line]
-      @lexeme = token[:lexeme]
+    def initialize(word : Word, @file : String, @message : String)
+      @line = word[:line]
+      @lexeme = word[:lexeme]
     end
 
     # Initializes a lexical error.
@@ -41,7 +41,7 @@ module Ven::Component
 
   # An exception that is raised when there is an error in the
   # interpreter implementation itself. InternalErrors are not
-  # as bad (or as dangerous) as standard Crystal errors: if
+  # as bad (nor as dangerous) as standard Crystal errors: if
   # a standard Crystal error is raised, something is **very**
   # wrong.
   class InternalError < VenError

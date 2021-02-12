@@ -139,8 +139,8 @@ module Ven
         iterative = false
 
         parser.led?(only: PBinary).keys.each do |operator|
-          if consumed = parser.word(operator)
-            if parser.word("|")
+          if consumed = parser.word!(operator)
+            if parser.word!("|")
               return QBinarySpread.new(tag, operator.downcase, parser.led)
             end
 
@@ -166,7 +166,7 @@ module Ven
         parser.expect("|")
 
         # Is this spread an iterative spread?
-        iterative = true if parser.word(":")
+        iterative = true if parser.word!(":")
 
         QLambdaSpread.new(tag, lambda, parser.led, iterative)
       end
@@ -185,7 +185,7 @@ module Ven
       def parse(parser, tag, tok)
         cond = parser.led
         succ = parser.led
-        fail = parser.word("ELSE") ? parser.led : nil
+        fail = parser.word!("ELSE") ? parser.led : nil
 
         QIf.new(tag, cond, succ, fail)
       end
@@ -199,9 +199,9 @@ module Ven
         # Parse the parameters and slurpiness.
         params, slurpy = [] of String, false
 
-        if parser.word("(")
+        if parser.word!("(")
           parameter = -> do
-            if parser.word("*")
+            if parser.word!("*")
               unless slurpy = !slurpy
                 parser.die("multiple '*' not allowed here")
               end
@@ -218,12 +218,12 @@ module Ven
         # Parse the 'given' appendix.
         given = [] of Quote
 
-        if parser.word("GIVEN")
+        if parser.word!("GIVEN")
           given = parser.repeat(sep: ",", unit: -> { parser.led(Precedence::ASSIGNMENT.value) })
         end
 
         # Parse the body.
-        body = parser.word("=") ? [parser.led] : block(parser)
+        body = parser.word!("=") ? [parser.led] : block(parser)
 
         if body.empty?
           parser.die("empty function body illegal")
@@ -262,7 +262,7 @@ module Ven
 
         pres = Quotes.new
 
-        if parser.word("(")
+        if parser.word!("(")
           head = parser.repeat(")", sep: ";")
 
           case head.size
@@ -280,7 +280,7 @@ module Ven
         end
 
         body =
-          if parser.word("{")
+          if parser.word!("{")
             block(parser, opening: false)
           else
             @semicolon, _ = true, [parser.led]
@@ -333,7 +333,7 @@ module Ven
         # World's reader is the module's entry reader.
         parser.world.reader.@nud[unwrapped.upcase] = PNudTrigger.new(trigger)
 
-        body = parser.word("=") \
+        body = parser.word!("=") \
           ? [parser.led]
           : block(parser)
 
