@@ -90,7 +90,8 @@ module Ven
     def repl
       fancy = Fancyline.new
 
-      puts "Hit CTRL+D to exit, or Tab to autocomplete a symbol."
+      puts "Ven #{VERSION}",
+           "Hit CTRL+D to exit, or Tab to autocomplete a symbol."
 
       loop do
         begin
