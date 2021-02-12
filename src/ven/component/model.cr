@@ -33,6 +33,12 @@ module Ven::Component
       MVector.new([self.as(Model)])
     end
 
+    # Converts (casts) this model into an `MBool`. Inverses
+    # (applies `not`) if *inverse* is true.
+    def to_bool(inverse = false) : MBool
+      MBool.new(inverse ? !true? : true?)
+    end
+
     # Returns a field's value for this model (or nil if the
     # field of interest does not exist.)
     def field(name : String) : Model?
@@ -42,6 +48,11 @@ module Ven::Component
     # Returns whether this model is callable or not.
     def callable? : Bool
       false
+    end
+
+    # Returns whether this model is true (for Ven).
+    def true? : Bool
+      true
     end
   end
 
@@ -78,6 +89,10 @@ module Ven::Component
     def to_num
       Num.new(@value ? 1 : 0)
     end
+
+    def true?
+      @value
+    end
   end
 
   # A Ven string.
@@ -99,6 +114,10 @@ module Ven::Component
       true
     end
 
+    def true?
+      @value.size != 0
+    end
+
     def to_s(io)
       @value.dump(io)
     end
@@ -115,6 +134,12 @@ module Ven::Component
 
     def to_s(io)
       io << "`" << @string << "`"
+    end
+
+    def true?
+      # Any regex is true, as any regex (even an empty one)
+      # matches something.
+      true
     end
 
     def to_str
@@ -157,6 +182,10 @@ module Ven::Component
     def to_num
       self
     end
+
+    def true?
+      @value != 0
+    end
   end
 
   # A Ven vector, essentially, an Array of `Model`s.
@@ -178,6 +207,10 @@ module Ven::Component
 
     def callable?
       true
+    end
+
+    def true?
+      @value.size != 0
     end
 
     def to_s(io)

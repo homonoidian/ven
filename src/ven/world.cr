@@ -20,8 +20,8 @@ module Ven
       @machine.world = self
     end
 
-    def visit(*args)
-      @machine.visit(*args)
+    def visit(quote)
+      @machine.visit!(quote)
     end
 
     # Sets the origin of this world to *path*. Origin is the

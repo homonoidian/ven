@@ -6,7 +6,7 @@ fun parse(source) given str {
 
   fun match(pattern) given regex =
     if source.offset(cursor) is pattern
-      cursor += _(0);
+      cursor += _;
 
   fun consume =
     token =

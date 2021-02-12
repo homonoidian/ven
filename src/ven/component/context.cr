@@ -81,11 +81,9 @@ module Ven::Component
         end
       end
 
-      result = yield
-
+      yield
+    ensure
       @scopes.pop
-
-      result
     end
 
     # Records the evaluation of *block* as *trace* and properly
@@ -118,13 +116,12 @@ module Ven::Component
     # by removing unused *values*, if any.
     def with_u(values : Models, &)
       size, _ = @underscores.size, values.each { |value| u!(value) }
-      result = yield
-      if @underscores.size > size
-        (@underscores.size - size).times do
-          @underscores.pop
-        end
+
+      yield
+    ensure
+      (@underscores.size - size.not_nil!).times do
+        @underscores.pop
       end
-      result
     end
 
     # Clears the context: erases the traces, removes all
