@@ -21,6 +21,8 @@ module Ven
     end
 
     def visit(quote)
+      @machine.last = quote
+
       @machine.visit!(quote)
     end
 

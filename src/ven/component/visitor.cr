@@ -1,22 +1,22 @@
 module Ven::Component
   # The base class for a node (in Ven, quote) visitor.
   abstract class Visitor
-    @last : Quote = QVoid.new
+    setter last : Quote = QVoid.new
 
     # Remembers the *quote* as the last visited node, then
     # hands it off to `visit!`.
-    macro visit(quotes)
-      unless (quotes = {{quotes}}).is_a?(Array)
-        @last = quotes
+    private macro visit(quotes)
+      unless (this = {{quotes}}).is_a?(Array)
+        @last = this
       end
 
-      visit!(quotes)
+      visit!(this)
     end
 
     # Same as `visit!(quote)`, but iterates over *quotes*.
     def visit!(quotes : Quotes)
       quotes.map do |quote|
-        visit(quote)
+        visit!(@last = quote)
       end
     end
 

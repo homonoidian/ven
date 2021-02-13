@@ -34,7 +34,9 @@ module Ven
     end
 
     # Dies of runtime error with *message*. Constructs a
-    # traceback.
+    # traceback where the top entry is the outermost call,
+    # and the bottom entry is a unit that was the actual
+    # cause of this death (`@last`).
     def die(message : String)
       traces = [message] + @context.traces + [Trace.new(@last.tag, "<unit>")]
 
