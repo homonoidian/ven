@@ -29,11 +29,11 @@ module Ven::Component
 
           \{% if !fields.empty? %}
             \{% for field in fields %}
-              field = \{{field.var}}
+              %field = \{{field.var}}
 
-              field.is_a?(Array) \
-                ? io << " " << "[" << field.join(" ") << "]"
-                : io << " " << field
+              %field.is_a?(Array) \
+                ? io << " " << "[" << %field.join(" ") << "]"
+                : io << " " << %field
             \{% end %}
           \{% end %}
 

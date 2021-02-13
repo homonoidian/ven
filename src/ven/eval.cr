@@ -28,6 +28,28 @@ module Ven
       @context = @world.context
     end
 
+    # Converts a Crystal boolean into an `MBool`.
+    private macro to_bool(bool)
+      {{bool}} ? B_TRUE : B_FALSE
+    end
+
+    # If *condition* is Crystal true, returns *left*; otherwise,
+    # returns Ven boolean false. *condition* may be omitted;
+    # in that case, *left* will be used as *condition*.
+    # NOTE: if *condition* is true but *left* is semantically
+    # false, returns B_TRUE.
+    private macro may_be(left, if condition = nil)
+      {% if condition %}
+        if {{condition}}
+          (%this = {{left}}).true? ? %this : B_TRUE
+        else
+          B_FALSE
+        end
+      {% else %}
+        (%this = {{left}}) ? %this.not_nil! : B_FALSE
+      {% end %}
+    end
+
     # Dies of runtime error with *message*. Constructs a
     # traceback where the top entry is the outermost call,
     # and the bottom entry is a unit that was the actual
@@ -165,18 +187,23 @@ module Ven
     end
 
     def visit!(q : QIf)
-      cond = visit(q.cond)
+      condition = visit(q.cond)
 
-      # XXX: controversial, e.g., `if (0) 1` yields `1` (1)
-      branch = cond.is_a?(MBool) && !cond.value ? q.alt : q.suc
+      @context.with_u([condition]) do
+        suc, alt = q.suc, q.alt
 
-      branch.nil? \
-        ? B_FALSE
-        : @context.with_u([cond]) { visit(branch) }
+        if condition.true?
+          visit(suc)
+        elsif alt
+          visit(alt)
+        else
+          B_FALSE
+        end
+      end
     end
 
     def visit!(q : QBlock)
-      visit(q.body).last? || B_FALSE
+      may_be visit(q.body).last?
     end
 
     def visit!(q : QAssign)
@@ -339,7 +366,7 @@ module Ven
         end
       end
 
-      last ||= B_FALSE
+      may_be last
     end
 
     def visit!(q : QStepLoop)
@@ -348,7 +375,7 @@ module Ven
         visit(q.step)
       end
 
-      last ||= B_FALSE
+      may_be last
     end
 
     def visit!(q : QComplexLoop)
@@ -362,7 +389,7 @@ module Ven
         visit(q.step)
       end
 
-      last ||= B_FALSE
+      may_be last
     end
 
     def visit!(q : QModelCarrier)
@@ -388,11 +415,6 @@ module Ven
       right.type.is_a?(MClass.class) \
         ? left.class <= right.type.as(MClass.class)
         : left.class <= right.type.as(MStruct.class)
-    end
-
-    # Converts a Crystal boolean into an `MBool`.
-    private macro to_bool(bool)
-      {{bool}} ? B_TRUE : B_FALSE
     end
 
     # Accesses *head*'s field *field*. Returns nil if there
@@ -633,36 +655,45 @@ module Ven
         "#{left}, #{right} (try changing the order)")
     end
 
+    # Checks whether *left* and  *right* are equal by value (not
+    # semantically). E.g., while `0 is false` (semantic equality)
+    # yields true, `0 <eqv> false` yields false.
+    # NOTE: `eqv` is not available inside the language itself.
+    def eqv?(left, right)
+      false
+    end
+
+    # See `eqv?(left, right)`.
+    def eqv?(left : Num | Str | MBool, right : Num | Str | MBool)
+      left.value == right.value
+    end
+
+    # See `eqv?(left, right)`.
+    def eqv?(left : Vec, right : Vec)
+      lv, rv = left.value, right.value
+
+      lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
+    end
+
     # Computes a binary operation. This is the third (and the
     # last) step of binary operator evaluation, and it requires
     # *left* and *right* be **normalized**.
     def compute(operator, left : Model, right : Model) : Model
       left =
         case {operator, left, right}
-        when {"is", MBool, MBool}
-          to_bool left.value == right.value
-        when {"is", Num, Num}, {"is", Str, Str}
-          left.value == right.value ? left : B_FALSE
-        when {"is", Vec, Vec}
-          if left.value.size != right.value.size
-            B_FALSE
-          else
-            it = left.value.zip(right.value) do |lv, rv|
-              break false unless compute("is", lv, rv).true?
-            end
-
-            to_bool it.nil?
-          end
-        when {"is", Str, MRegex}
-          left.value =~ right.value ? Str.new($0) : B_FALSE
+        when {"is", MBool, MBool},
+             {"is", Num, Num},
+             {"is", Str, Str},
+             {"is", Vec, Vec}
+          may_be left, if: eqv?(left, right)
         when {"is", _, MType}
           to_bool of?(left, right)
+        when {"is", Str, MRegex}
+          may_be Str.new($0), if: left.value =~ right.value
         when {"in", _, Vec}
-          right.value.each do |item|
-            if (result = binary("is", left, item)).true?
-              break result
-            end
-          end || B_FALSE
+          it = right.value.each { |i| break i if eqv?(left, i) }
+
+          may_be it
         when {"<", Num, Num}
           to_bool left.value < right.value
         when {">", Num, Num}

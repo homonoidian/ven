@@ -40,11 +40,14 @@ ensure [1, 2] & [3, 4] is [1, 2, 3, 4];
 ensure &1 is [1];
 
 #) x accepts (REPEATABLE : vec | str, COUNT : num) or (COUNT : num, REPEATABLE : vec | str).
+#) fallbacks to (vec, num): 2 x 2 => [2] x 2 => [2, 2]
 
 ensure 2 x [1, 2, 3] is [1, 2, 3, 1, 2, 3];
 ensure 2 x "a" is "aa";
 ensure [1, 2, 3] x 2 is [1, 2, 3, 1, 2, 3];
 ensure "a" x 2 is "aa";
+ensure 3 x 0 is [];
+ensure 0 x 3 is [0, 0, 0];
 
 #) # accepts vec | str and returns length
 

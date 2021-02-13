@@ -6,11 +6,11 @@ module Ven::Component
     # Remembers the *quote* as the last visited node, then
     # hands it off to `visit!`.
     private macro visit(quotes)
-      unless (this = {{quotes}}).is_a?(Array)
-        @last = this
+      unless (%this = {{quotes}}).is_a?(Array)
+        @last = %this
       end
 
-      visit!(this)
+      visit!(%this)
     end
 
     # Same as `visit!(quote)`, but iterates over *quotes*.
