@@ -5,7 +5,7 @@ distinct std.io;
 #) vector of the arguments if there were multiple, or the
 #) argument if there was only one.
 fun say(*) {
-  args = |{ put(~&_ ~ "\n"); _ }|: rest;
+  args = |{ put(&_ ~ "\n"); _ }|: rest;
 
   if length(args) is 1 {
     args(0)
@@ -20,7 +20,7 @@ fun say(*) {
 #) multiple arguments, or the input itself if there was only
 #) one argument.
 fun ask(*) {
-  responses = |{ put(~_ ~ " "); get() }| rest;
+  responses = |get(_ ~ " ")| rest;
 
   if length(responses) is 1 {
     responses(0)

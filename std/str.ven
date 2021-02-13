@@ -2,4 +2,4 @@ distinct std.str;
 
 #) Returns the length of the *string*.
 fun length(string) given str =
-  string + 0;
+  #string;

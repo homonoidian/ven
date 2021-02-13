@@ -2,7 +2,7 @@ distinct std.vec;
 
 #) Returns the length of the *vector*.
 fun length(vector) given vec =
-  +vector;
+  #vector;
 
 #) Returns the sum of *vector*'s elements.
 fun sum(vector) given vec =
