@@ -12,9 +12,6 @@ module Ven
     # Maximum amount of normalization passes (see `normalize`).
     MAX_NORMALIZE_PASSES = 500
 
-    # Maximum amount of compute cycles (see `compute`).
-    MAX_COMPUTE_CYCLES = 500
-
     # Ven booleans are structs (copy on use) and need no
     # repetitive `.new`s.
     B_TRUE = MBool.new(true)
@@ -25,8 +22,6 @@ module Ven
     def initialize
       @world = uninitialized World
       @context = uninitialized Context
-
-      @computes = 0
     end
 
     def world=(@world : World)
@@ -529,20 +524,19 @@ module Ven
     # Applies unary *operator* to *operand*.
     def unary(operator, operand : Model) : Model
       case operator
-      when "+", "-"
-        this = operand.is_a?(Str) \
-          ? operand.to_num(parse: true)
-          : operand.to_num
-
-        if operator == "-"
-          this.value = -this.value
+      when "+" then operand.to_num
+      when "-" then -operand.to_num
+      when "~" then operand.to_str
+      when "&" then operand.to_vec
+      when "not" then operand.to_bool(inverse: true)
+      when "#"
+        unless operand.is_a?(Vec) || operand.is_a?(Str)
+          operand = operand.to_str
         end
 
-        this
-      when "~"
-        operand.to_str
-      when "not"
-        operand.to_bool(inverse: true)
+        operand.is_a?(Str) \
+          ? operand.to_num(parse: false)
+          : operand.to_num
       else
         die("could not apply '#{operator}' to #{operand}")
       end
@@ -554,6 +548,7 @@ module Ven
     # *operator*.
     def compatible?(operator, left : Model, right : Model) : Bool
       case {operator, left, right}
+      when {"is", Vec, Vec}
       when {"is", MBool, MBool}
       when {"is", Str, MRegex}
       when {"is", _, MType}
@@ -570,11 +565,8 @@ module Ven
       when {"is", Str, Str},
            {"~", Str, Str},
            {"x", Str, Num}
-      when {"~", Vec, Vec},
+      when {"&", Vec, Vec},
            {"x", Vec, Num}
-      when {_, Vec, Vec}
-        # Other vector operations are distributed on vector items;
-        # so there is no need nor support for their normalization
       else
         return false # i.e., incompatible
       end
@@ -582,9 +574,8 @@ module Ven
       true
     end
 
-    # Searches for the types *left* and *right* can be converted
-    # to so *operator* is able to work with them. Returns a
-    # tuple with *left*, *right* converted into these types.
+    # Converts *left* and *right* into the types *operator*
+    # expects (i.e.,  `compatible?`).
     def normalize(operator, left : Model, right : Model) : {Model, Model}
       case operator
       when "is" then case {left, right}
@@ -606,22 +597,26 @@ module Ven
       when "<", ">", "<=", ">="
         {left.to_num, right.to_num}
       when "+", "-", "*", "/" then case {left, right}
-        when {Vec, _}
-          {left, right.to_vec}
-        when {_, Vec}
-          {left.to_vec, right}
+        when {_, Num}
+          {left.to_num, right}
+        when {Num, _}
+          {left, right.to_num}
         else
           {left.to_num, right.to_num}
         end
       when "~" then case {left, right}
-        when {Vec, _}
-          {left, right.to_vec}
-        when {_, Vec}
-          {left.to_vec, right}
-        when {Str, _}
-          {left, right.to_str}
         when {_, Str}
           {left.to_str, right}
+        when {Str, _}
+          {left, right.to_str}
+        else
+          {left.to_str, right.to_str}
+        end
+      when "&" then case {left, right}
+        when {_, Vec}
+          {left.to_vec, right}
+        when {Vec, _}
+          {left, right.to_vec}
         else
           {left.to_vec, right.to_vec}
         end
@@ -642,19 +637,22 @@ module Ven
     # last) step of binary operator evaluation, and it requires
     # *left* and *right* be **normalized**.
     def compute(operator, left : Model, right : Model) : Model
-      if (@computes += 1) > MAX_COMPUTE_CYCLES
-        raise InternalError.new(
-            "too many compute cycles; you've probably found " \
-            "an implementation bug: normalizing this operator " \
-            "('#{operator}') causes an infinite loop")
-      end
-
       left =
         case {operator, left, right}
         when {"is", MBool, MBool}
           to_bool left.value == right.value
         when {"is", Num, Num}, {"is", Str, Str}
           left.value == right.value ? left : B_FALSE
+        when {"is", Vec, Vec}
+          if left.value.size != right.value.size
+            B_FALSE
+          else
+            it = left.value.zip(right.value) do |lv, rv|
+              break false unless compute("is", lv, rv).true?
+            end
+
+            to_bool it.nil?
+          end
         when {"is", Str, MRegex}
           left.value =~ right.value ? Str.new($0) : B_FALSE
         when {"is", _, MType}
@@ -683,31 +681,15 @@ module Ven
           Num.new(left.value / right.value)
         when {"~", Str, Str}
           Str.new(left.value + right.value)
+        when {"&", Vec, Vec}
+          Vec.new(left.value + right.value)
         when {"x", Str, Num}
           Str.new(left.value * right.value.to_big_i)
-        when {"~", Vec, Vec}
-          Vec.new(left.value + right.value)
         when {"x", Vec, Num}
           Vec.new(left.value * right.value.to_big_i)
-        when {_, Vec, Vec}
-          if right.value.empty?
-            right
-          else
-            result =
-              # NOTE: if there are not enough items in *right* to
-              # cover *left*, the last item of *right* will be
-              # repeated `left.size - right.size` times and used.
-              left.value.zip?(right.value).map do |a, b|
-                binary(operator, a, b || right.value.last).as(Model)
-              end
-
-            Vec.new(result)
-          end
         else
           die("could not apply '#{operator}' to #{left}, #{right}")
         end
-
-      @computes -= 1
 
       left
     rescue DivisionByZeroError

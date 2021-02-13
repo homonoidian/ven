@@ -100,7 +100,7 @@ module Ven::Component
     # Returns the length of this string if *parse* is false,
     # which it is by default; otherwise, if it is true, returns
     # this string parsed into an `MNumber`.
-    def to_num(parse = false)
+    def to_num(parse = true)
       Num.new(parse ? @value : @value.size)
     rescue InvalidBigDecimalException
       raise ModelCastException.new("#{self} is not a base-10 number")
@@ -185,6 +185,12 @@ module Ven::Component
 
     def true?
       @value != 0
+    end
+
+    def -
+      @value *= -1
+
+      self
     end
   end
 

@@ -18,7 +18,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>]=|[-'<>~+*\/()[\]{},:;=?.|#]/
+      /-[->]|\+\+|=>|[-+*\/~<>]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#\)[^\n]*)/
     {% else %}
@@ -116,10 +116,10 @@ module Ven
           break case
           when match(RX_IGNORE)
             next @line += $0.count("\n").to_u32
-          when match(RX_SPECIAL)
-            word($0.upcase, $0)
           when match(RX_SYMBOL)
             word(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
+          when match(RX_SPECIAL)
+            word($0.upcase, $0)
           when match(RX_NUMBER)
             word("NUMBER", $0)
           when match(RX_STRING)
@@ -291,7 +291,7 @@ module Ven
     # base Ven.
     def prepare
       # Prefixes (NUDs):
-      defnud("+", "-", "~", "NOT")
+      defnud("+", "-", "~", "&", "#", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
@@ -309,12 +309,12 @@ module Ven
 
       # Infixes (LEDs):
       defled("=", Parselet::PAssign, precedence: ASSIGNMENT)
-      defled("+=", "-=", "*=", "/=", "~=",
+      defled("+=", "-=", "*=", "/=", "~=", "&=",
         common: Parselet::PBinaryAssign,
         precedence: ASSIGNMENT)
       defled("?", Parselet::PIntoBool, precedence: ASSIGNMENT)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
-      defled("+", "-", "~", precedence: ADDITION)
+      defled("+", "-", "~", "&", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
       defled("++", Parselet::PReturnIncrement, precedence: POSTFIX)
       defled("--", Parselet::PReturnDecrement, precedence: POSTFIX)

@@ -5,8 +5,10 @@ fun parse(source) given str {
   cursor = 0;
 
   fun match(pattern) given regex =
-    if source.offset(cursor) is pattern
-      cursor += _;
+    if source.offset(cursor) is pattern {
+      cursor += #&_;
+      _;
+    }
 
   fun consume =
     token =
