@@ -529,7 +529,7 @@ module Ven
         die("could not apply '#{operator}' to #{operand}")
       end
     rescue e : ModelCastException
-      die("'#{operator}': cannot cast #{operand}: #{e.message}")
+      die("'#{operator}': cannot normalize #{operand}: #{e.message}")
     end
 
     # Returns whether *left* and *right* can be used with
@@ -716,7 +716,7 @@ module Ven
 
       compute(operator, left, right)
     rescue e : ModelCastException
-      die("'#{operator}': cannot normalize: #{left}, #{right}: #{e.message}")
+      die("'#{operator}': cannot normalize #{left}, #{right}: #{e.message}")
     end
 
     # Evaluates the *tree* within the *context*. `clear`s this

@@ -18,9 +18,9 @@ module Ven
     {% elsif name == :NUMBER %}
       /\d*\.\d+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>]=|[-'<>~+*\/()[\]{},:;=?.|]/
+      /-[->]|\+\+|=>|[-+*\/~<>]=|[-'<>~+*\/()[\]{},:;=?.|#]/
     {% elsif name == :IGNORE %}
-      /([ \n\r\t]+|#[^\n]*)/
+      /([ \n\r\t]+|#\)[^\n]*)/
     {% else %}
       {{ raise "[critical]: no pattern for #{name}" }}
     {% end %}

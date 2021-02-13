@@ -1,6 +1,6 @@
 distinct std;
 
-# XXX: remove!
+#) XXX: remove!
 nud "MODULE-NUD-TEST"(this) {
   this
 }

@@ -1,9 +1,9 @@
 distinct std.io;
 
-# Prints the arguments to the standard output. Stringifies
-# each argument and adds a newline to its end. Returns a
-# vector of the arguments if there were multiple, or the
-# argument if there was only one.
+#) Prints the arguments to the standard output. Stringifies
+#) each argument and adds a newline to its end. Returns a
+#) vector of the arguments if there were multiple, or the
+#) argument if there was only one.
 fun say(*) {
   args = |{ put(~&_ ~ "\n"); _ }|: rest;
 
@@ -14,11 +14,11 @@ fun say(*) {
   }
 }
 
-# Prints one argument, followed by whitespace, and waits for
-# the user to input something. Does the same for every other
-# argument. Returns a vector of these inputs if there were
-# multiple arguments, or the input itself if there was only
-# one argument.
+#) Prints one argument, followed by whitespace, and waits for
+#) the user to input something. Does the same for every other
+#) argument. Returns a vector of these inputs if there were
+#) multiple arguments, or the input itself if there was only
+#) one argument.
 fun ask(*) {
   responses = |{ put(~_ ~ " "); get() }| rest;
 
