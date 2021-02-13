@@ -218,20 +218,20 @@ module Ven
       # We need two copies of the given value: one we'll work
       # with, and one the user expects to be returned.
       given = visit(q.value)
-      value = given
+      value = given.dup
 
-      # If we're `~=`, the semantics is a little different than
-      # with <left> = <left> ~ <value>.
-      if q.operator == "~"
-        # We *wrap* anything given into a vector, not convert.
-        value = Vec.new([value])
-      end
+      # We **wrap** *value* into a vector, not convert. E.g.,
+      #   x = [1, 2];
+      #   x &= [3];
+      #   ensure x is [1, 2, [3]];
+      #   y = [1, 2];
+      #   y = y & [3];
+      #   ensure y is [1, 2, 3];
+      value = Vec.new([value]) if q.operator == "&"
 
       result = binary(q.operator, previous, value)
-
       @context.define(q.target, result)
 
-      # XXX: is this what users expect?
       given
     end
 
