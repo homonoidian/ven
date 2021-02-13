@@ -412,10 +412,26 @@ module Ven
 
     # Typechecks *args* against *constraints* (using `of?`).
     def typecheck(constraints : Array(TypedParameter), args : Models) : Bool
+      rest_type =
+        if constraints.last?.try(&.[0]) == "*"
+          constraints.last[1]
+        end
+
+      # Rest typecheck semantics differs a bit from normal
+      # constraint checking; omit the rest constraint.
+      constraints = constraints[...-1] if rest_type
+
       constraints.zip?(args).each do |constraint, argument|
         # Ignore missing arguments.
         unless argument.nil? || of?(argument, constraint[1])
           return false
+        end
+      end
+
+      # Rest typecheck:
+      if rest_type
+        return args[constraints.size...].all? do |argument|
+          of?(argument, rest_type)
         end
       end
 

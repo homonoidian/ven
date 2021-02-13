@@ -276,13 +276,17 @@ module Ven::Component
 
     def initialize(@tag, @name, @constraints, @body, @slurpy)
       @arity = @constraints.size.to_u8
-      @params = @constraints.map(&.first)
 
-      if @slurpy
-        @constraints << {"*", @constraints.last?.try(&.[1]) || MType::ANY}
-      end
+      # All constraint names except `*` are parameters.
+      @params = @constraints.map(&.first).reject!(&.== "*")
 
-      @general = @slurpy || @params.empty? || @constraints.any? { |c| c[1].is_a?(MType::ANY)  }
+
+      # Whether or not this function is general:
+      @general =
+        @constraints.empty? ||
+        @constraints.any? do |constraint|
+          constraint[1].is_a?(MType::ANY)
+        end
 
       @@FIELDS["name"] = Str.new(@name)
       @@FIELDS["arity"] = Num.new(@arity.to_i32)

@@ -203,8 +203,10 @@ module Ven
           parameter = -> do
             if parser.word!("*")
               unless slurpy = !slurpy
-                parser.die("multiple '*' not allowed here")
+                parser.die("more than one '*' in function parameters")
               end
+
+              "*"
             else
               parser.expect("SYMBOL")[:lexeme]
             end
@@ -229,7 +231,7 @@ module Ven
           parser.die("empty function body illegal")
         end
 
-        if params.empty? && !given.empty?
+        if params.empty? && !slurpy && !given.empty?
           parser.die("zero-arity functions cannot have a 'given'")
         end
 
