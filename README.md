@@ -1,32 +1,47 @@
-# Ven
+Ven is a programming language that aims to be a flexible medium for thought.
+Because of this, it has many curious features:
 
-In short, Ven is a playground for trying out my (and your!)
-ideas in programming language implementation and design. Right now,
+* Extremal cooperation between the parts of the implementation.
+* Unrestricted access to the language's internals anywhere and at any point in time.
+* Context and constant guesswork (compile-time and runtime alike).
+* Interpretation and compilation, together (TODO).
 
-* Ven is highly dynamic (like: `ensure "hello" + "world" is 10`).
-* Ven is highly unstable.
-* Ven is mostly unusable (what I want to say is this: Ven is
-  not meant to be used at this particular stage of development)
-* Ven has no tests, and that's a *very* big problem.
-* Ven has no roadmap (but see issue #2).
-* Ven is very slow (approx. 100-500x CPython, exponential at times).
+### Building Ven
 
-### Trying Ven
+*On \*nix*:
 
-Ven is written in Crystal, a language itself not yet ready. Beware!
+1. Install [Crystal, shards](https://crystal-lang.org/install/) and *libgmp*.
+2. Download this repository (via `git clone` or GitHub's *Download ZIP*).
+3. Unzip if necessary. `cd` into the downloaded repository.
+4. Run `shards install` to install the libraries Ven depends on.
+5. Run `shards build --release`. **IMPORTANT**: it is obligatory
+   to have the *BOOT* environment variable set; it should contain
+   an absolute path to *std/* (e.g., `/home/user/Downloads/ven/std`),
+   orelse building will fail. E.g., if you are using BASH:
+   `BOOT=/absolute/path/to/std shards build --release`.
+6. The executable will be in `bin/`.
 
-To compile Ven, you will need (as far as I know):
+*On Windows*:
 
-+ `crystal` and `shards` (see [Crystal installation instructions](https://crystal-lang.org/install/))
-+ `libgmp` (math)
+:no_good: Try WSL.
 
-Clone this repository, `cd` into the clone, run `shards install` to
-install Ven's dependencies and `shards build --release` to build
-Ven. The executable will be in `bin`.
+### The Ven Pipeline
+
+Imagine a cooperative committee where every member fulfills
+some job and, at the same time, can ask the other members for
+help.
+
++ *src/ven/world* manages the relationships between the committee
+  members; i.e., it is the committee itself.
++ *src/ven/read* is the reader. It processes a file into a series
+  AST nodes (called quotes in Ven), advancing one at a time.
++ *src/ven/eval* is, right now, the only evaluation machinery Ven has.
+  After the reader produces a statement quote, *eval* evaluates it.
++ *src/ven/component/context* is, roughly speaking, the context all
+  of this happens in.
 
 ### Contributing
 
-Fork, branch, change and pull request. Beware! `eval.cr`, `ven.cr`
-and others will be subject to major changes and deletions.
-Stable files (no major changes planned) are `read.cr`,
-`parselet/*` and `component/quote.cr`.
+1. Fork.
+2. Commit.
+3. PR when ready.
