@@ -9,9 +9,6 @@ module Ven
     # Maximum call depth (see `call`).
     MAX_CALL_DEPTH = 500
 
-    # Maximum amount of normalization passes (see `normalize`).
-    MAX_NORMALIZE_PASSES = 500
-
     # Ven booleans are structs (copy on use) and need no
     # repetitive `.new`s.
     B_TRUE = MBool.new(true)
@@ -268,12 +265,14 @@ module Ven
       when MGenericFunction
         existing.add(this)
       when MConcreteFunction
-        generic = MGenericFunction.new(q.name)
+        if existing != this
+          generic = MGenericFunction.new(q.name)
 
-        generic.add(existing)
-        generic.add(this)
+          generic.add(existing)
+          generic.add(this)
+        end
 
-        @context.define(q.name, generic)
+        @context.define(q.name, generic ||= this)
       else
         @context.define(q.name, this)
       end
@@ -618,30 +617,12 @@ module Ven
         end
       when "<", ">", "<=", ">="
         {left.to_num, right.to_num}
-      when "+", "-", "*", "/" then case {left, right}
-        when {_, Num}
-          {left.to_num, right}
-        when {Num, _}
-          {left, right.to_num}
-        else
-          {left.to_num, right.to_num}
-        end
-      when "~" then case {left, right}
-        when {_, Str}
-          {left.to_str, right}
-        when {Str, _}
-          {left, right.to_str}
-        else
-          {left.to_str, right.to_str}
-        end
-      when "&" then case {left, right}
-        when {_, Vec}
-          {left.to_vec, right}
-        when {Vec, _}
-          {left, right.to_vec}
-        else
-          {left.to_vec, right.to_vec}
-        end
+      when "+", "-", "*", "/"
+        {left.to_num, right.to_num}
+      when "~"
+        {left.to_str, right.to_str}
+      when "&"
+        {left.to_vec, right.to_vec}
       when "x" then case {left, right}
         when {_, Vec}, {_, Str}
           {right, left.to_num}
@@ -691,9 +672,7 @@ module Ven
         when {"is", Str, MRegex}
           may_be Str.new($0), if: left.value =~ right.value
         when {"in", _, Vec}
-          it = right.value.each { |i| break i if eqv?(left, i) }
-
-          may_be it
+          may_be right.value.each { |i| break i if eqv?(left, i) }
         when {"<", Num, Num}
           to_bool left.value < right.value
         when {">", Num, Num}
@@ -729,19 +708,7 @@ module Ven
 
     # Applies binary *operator* to *left* and *right*.
     def binary(operator, left : Model, right : Model) : Model
-      passes = 0
-
-      # Perform normalization passes until *operator* is
-      # compatible with *left*, *right*.
-      until compatible?(operator, left, right)
-        if (passes += 1) > MAX_NORMALIZE_PASSES
-          raise InternalError.new(
-              "too many normalization passes; you've probably " \
-              "found an implementation bug, as '#{operator}' " \
-              "requested normalization more than " \
-              "#{MAX_NORMALIZE_PASSES} times")
-        end
-
+      unless compatible?(operator, left, right)
         left, right = normalize(operator, left, right)
       end
 
