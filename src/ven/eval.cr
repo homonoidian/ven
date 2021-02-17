@@ -348,20 +348,31 @@ module Ven
       end
     end
 
+    # :nodoc:
+    private macro evaluated_body_last?
+      last = visit(q.body).last?
+    end
+
     def visit!(q : QBaseLoop)
-      if q.base.is_a?(QNumber)
-        amount = visit(q.base).as(Num).value
+      last : Model?
+
+      base = visit(q.base)
+
+      if base.is_a?(Num)
+        amount = base.value
 
         unless amount.denominator == 1
           die("cannot iterate non-whole amount of times: #{amount}")
         end
 
         amount.numerator.times do
-          last = visit(q.body)
+          evaluated_body_last?
         end
-      else
+      elsif base.true?
+        evaluated_body_last?
+
         while visit(q.base).true?
-          last = visit(q.body).last?
+          evaluated_body_last?
         end
       end
 
@@ -370,7 +381,8 @@ module Ven
 
     def visit!(q : QStepLoop)
       while visit(q.base).true?
-        last = visit(q.body).last?
+        evaluated_body_last?
+
         visit(q.step)
       end
 
@@ -381,9 +393,10 @@ module Ven
       visit(q.start)
 
       while visit(q.base).true?
+        # Evaluate pres (pre-statements):
         visit(q.pres)
 
-        last = visit(q.body).last?
+        evaluated_body_last?
 
         visit(q.step)
       end
