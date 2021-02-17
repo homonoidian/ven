@@ -137,4 +137,6 @@ module Ven::Component
 
   defquote(QExpose, pieces : Array(String))
   defquote(QDistinct, pieces : Array(String))
+
+  defquote(QFail, args : Quotes)
 end

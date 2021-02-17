@@ -123,20 +123,5 @@ module Ven::Component
         @underscores.pop
       end
     end
-
-    # Clears the context: erases the traces, removes all
-    # scopes but the globalmost (leftmost), and clears
-    # the underscores stack (XXX).
-    def clear
-      @traces.clear
-      @scopes.pop(@scopes.size - 1)
-
-      # XXX: this is disputed. Although '_' and '&_' are
-      # illegal at top-level, this may break the REPL in
-      # some mysterious way.
-      @underscores.clear
-
-      self
-    end
   end
 end

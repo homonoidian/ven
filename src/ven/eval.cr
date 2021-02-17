@@ -16,6 +16,15 @@ module Ven
 
     getter world
 
+    class FailException < Exception
+      getter tag, args
+
+      def initialize(
+        @tag : QTag,
+        @args : Models)
+      end
+    end
+
     def initialize
       @world = uninitialized World
       @context = uninitialized Context
@@ -330,7 +339,11 @@ module Ven
       end
 
       @context.tracing({q.tag, "<call to #{head}>"}) do
-        call(head, args)
+        begin
+          call(head, args)
+        rescue FailException
+          die("uncaught 'fail': this function has no failback variants")
+        end
       end
     end
 
@@ -420,6 +433,12 @@ module Ven
       B_TRUE
     end
 
+    def visit!(q : QFail)
+      args = visit(q.args)
+
+      raise FailException.new(q.tag, args)
+    end
+
     # Checks if *left* has type *right*.
     def of?(left : Model, right : MType) : Bool
       return true if right.type == MAny
@@ -504,7 +523,11 @@ module Ven
       callee.variants.each do |variant|
         if (variant.slurpy && args.size >= variant.arity) || variant.params.size == args.size
           if typecheck(variant.constraints, args)
-            return call(variant, args, typecheck: false)
+            begin
+              return call(variant, args, typecheck: false)
+            rescue fail : FailException
+              args = fail.args unless fail.args.empty?
+            end
           end
         end
       end
@@ -728,12 +751,6 @@ module Ven
       compute(operator, left, right)
     rescue e : ModelCastException
       die("'#{operator}': cannot normalize #{left}, #{right}: #{e.message}")
-    end
-
-    # Evaluates the *tree* within the *context*. `clear`s this
-    # context beforehand.
-    def self.run(tree : Quotes, context : Context)
-      new(context.clear).visit(tree)
     end
   end
 end

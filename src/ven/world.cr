@@ -23,7 +23,12 @@ module Ven
     def visit(quote)
       @machine.last = quote
 
-      @machine.visit!(quote)
+      begin
+        @machine.visit!(quote)
+      rescue Machine::FailException
+        # XXX: doesn't belong here much.
+        @machine.die("uncaught 'fail': fail reached top-level")
+      end
     end
 
     # Sets the origin of this world to *path*. Origin is the

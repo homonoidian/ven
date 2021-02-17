@@ -17,7 +17,7 @@ module Ven
             {{parser}}.expect("{")
           {% end %}
 
-          {{parser}}.repeat("}", unit: -> { {{parser}}.statement("}") })
+          {{parser}}.repeat("}", unit: ->{{parser}}.statement)
         end
       end
 
@@ -386,6 +386,18 @@ module Ven
         pieces = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })
 
         QDistinct.new(tag, pieces)
+      end
+    end
+
+    class PFail < Nud
+      def parse(parser, tag, token)
+        args = Quotes.new
+
+        unless parser.eoi?
+          args = parser.repeat(sep: ",")
+        end
+
+        QFail.new(tag, args)
       end
     end
   end

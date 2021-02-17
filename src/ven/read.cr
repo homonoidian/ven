@@ -60,7 +60,10 @@ module Ven
     include Component
 
     # A list of keywords protected by the reader.
-    KEYWORDS = %w(_ &_ nud not is in if else fun given loop queue ensure expose distinct)
+    KEYWORDS = %w(
+      _ &_ nud not is in if else fun
+      given loop fail queue ensure
+      expose distinct)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -211,9 +214,13 @@ module Ven
       left
     end
 
-    # Parses a statament. *trail* is a word that, in certain
-    # cases, functions like a semicolon (e.g., EOF, '}').
-    def statement(trail = "EOF") : Quote
+    # Returns whether this token is a valid statement delimiter.
+    def eoi?
+      {"EOF", "}", ";"}.includes?(word[:type])
+    end
+
+    # Parses a single statament.
+    def statement : Quote
       semi = true
 
       if stmt = @stmt[(@word[:type])]?
@@ -224,8 +231,8 @@ module Ven
         this = led
       end
 
-      if !word!(";") && semi && @word[:type] != trail
-        die("neither ';' nor #{trail} weren't found to end the statement")
+      if !word!(";") && semi && !eoi?
+        die("neither ';' nor end-of-input were found to end the statement")
       end
 
       this
@@ -294,6 +301,7 @@ module Ven
       defnud("+", "-", "~", "&", "#", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
+      defnud("FAIL", Parselet::PFail)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
       defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
       defnud("SYMBOL", Parselet::PSymbol)
