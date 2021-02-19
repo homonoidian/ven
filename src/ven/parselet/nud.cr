@@ -389,15 +389,21 @@ module Ven
       end
     end
 
-    class PFail < Nud
+    class PNext < Nud
+      SCOPES = %w(FUN LOOP)
+
       def parse(parser, tag, token)
         args = Quotes.new
 
-        unless parser.eoi?
+        if SCOPES.includes?(parser.word[:type])
+          scope = parser.word![:lexeme]
+        end
+
+        if parser.is_nud?
           args = parser.repeat(sep: ",")
         end
 
-        QFail.new(tag, args)
+        QNext.new(tag, scope, args)
       end
     end
   end

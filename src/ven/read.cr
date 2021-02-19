@@ -62,7 +62,7 @@ module Ven
     # A list of keywords protected by the reader.
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
-      given loop fail queue ensure
+      given loop next queue ensure
       expose distinct)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
@@ -195,9 +195,13 @@ module Ven
 
     # Parses a led expression with precedence *level*.
     def led(level = Precedence::ZERO.value) : Quote
-      left = @nud
-        .fetch(@word[:type]) { die("not a nud: '#{@word[:type]}'") }
-        .parse(self, tag?, word!)
+      unless is_nud?
+        kind = is_stmt? ? "statement" : "led"
+
+        die("found a #{kind} where a nud was expected")
+      end
+
+      left = @nud[(@word[:type])].parse(self, tag?, word!)
 
       # 'x' is a symbol by default; But when used in this very
       # position (after a nud), it's an operator. E.g.:
@@ -254,10 +258,25 @@ module Ven
       @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
     end
 
+    # Returns whether this word is a nud.
+    def is_nud?
+      @nud.has_key?(@word[:type])
+    end
+
     # Returns an array of leds that are of `.class` *only*.
     # If given no *only*, or *only* is nil, returns all leds.
     def led?(only pick : (Parselet::Led.class)? = nil)
       @led.reject { |_, led| pick.nil? ? false : led.class != pick }
+    end
+
+    # Returns whether this word is a led.
+    def is_led?
+      @led.has_key?(@word[:type])
+    end
+
+    # Returns whether this word is a statement.
+    def is_stmt?
+      @stmt.has_key?(@word[:type])
     end
 
     # Stores a nud in a hash *storage*, under the key *type*.
@@ -301,7 +320,7 @@ module Ven
       defnud("+", "-", "~", "&", "#", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
-      defnud("FAIL", Parselet::PFail)
+      defnud("NEXT", Parselet::PNext)
       defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
       defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
       defnud("SYMBOL", Parselet::PSymbol)

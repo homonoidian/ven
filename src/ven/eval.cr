@@ -16,15 +16,6 @@ module Ven
 
     getter world
 
-    class FailException < Exception
-      getter tag, args
-
-      def initialize(
-        @tag : QTag,
-        @args : Models)
-      end
-    end
-
     def initialize
       @world = uninitialized World
       @context = uninitialized Context
@@ -339,11 +330,7 @@ module Ven
       end
 
       @context.tracing({q.tag, "<call to #{head}>"}) do
-        begin
-          call(head, args)
-        rescue FailException
-          die("uncaught 'fail': this function has no failback variants")
-        end
+        call(head, args)
       end
     end
 
@@ -366,12 +353,31 @@ module Ven
       last = visit(q.body).last?
     end
 
+    # :nodoc:
+    #
+    # Boilerplate code for loops (QBaseLoop, QStepLoop and QComplexLoop)
+    # that can handle 'next's in scope 'loop'.
+    private macro loop_body_handler
+      begin
+        evaluated_body_last?
+      rescue interrupt : NextInterrupt
+        if interrupt.scope.nil? || interrupt.scope == "loop"
+          unless interrupt.args.empty?
+            die("no support for 'next loop' arguments yet :(")
+          end
+
+          next
+        end
+
+        raise interrupt
+      end
+    end
+
     def visit!(q : QBaseLoop)
-      last : Model?
+      last = nil
 
-      base = visit(q.base)
-
-      if base.is_a?(Num)
+      case base = visit(q.base)
+      when Num
         amount = base.value
 
         unless amount.denominator == 1
@@ -379,13 +385,15 @@ module Ven
         end
 
         amount.numerator.times do
-          evaluated_body_last?
+          loop_body_handler
         end
-      elsif base.true?
-        evaluated_body_last?
+      when .true?
+        loop do
+          loop_body_handler
 
-        while visit(q.base).true?
-          evaluated_body_last?
+          unless visit(q.base).true?
+            break
+          end
         end
       end
 
@@ -394,7 +402,7 @@ module Ven
 
     def visit!(q : QStepLoop)
       while visit(q.base).true?
-        evaluated_body_last?
+        loop_body_handler
 
         visit(q.step)
       end
@@ -409,7 +417,7 @@ module Ven
         # Evaluate pres (pre-statements):
         visit(q.pres)
 
-        evaluated_body_last?
+        loop_body_handler
 
         visit(q.step)
       end
@@ -433,10 +441,10 @@ module Ven
       B_TRUE
     end
 
-    def visit!(q : QFail)
+    def visit!(q : QNext)
       args = visit(q.args)
 
-      raise FailException.new(q.tag, args)
+      raise NextInterrupt.new(q.scope, args)
     end
 
     # Checks if *left* has type *right*.
@@ -489,32 +497,43 @@ module Ven
     end
 
     # Calls an `MConcreteFunction` with *args*, checking the
-    # types if *typecheck* is true.
-    def call(callee : MConcreteFunction, args : Models, typecheck = true) : Model
-      if typecheck
-        unless callee.slurpy || callee.arity == args.size
-          die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
+    # types if *typecheck* is true. *generic* determines the
+    # behavior of 'next': if set to true, 'next' won't be catched.
+    def call(callee : MConcreteFunction, args : Models, typecheck = true, generic = false) : Model
+      loop do
+        begin
+          if typecheck
+            unless callee.slurpy || callee.arity == args.size
+              die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
+            end
+
+            unless typecheck(callee.constraints, args)
+              die("typecheck failed for #{callee}: #{args.join(", ")}")
+            end
+          end
+
+          @context.local({callee.params, args}) do
+            if @context.traces.size > MAX_CALL_DEPTH
+              die("too many calls: very deep or infinite recursion")
+            end
+
+            unless callee.slurpy
+              return visit(callee.body).last
+            end
+
+            @context.scope["rest"] = Vec.new(args[callee.params.size...])
+
+            @context.with_u(args.reverse) do
+              return visit(callee.body).last
+            end
+          end
+        end
+      rescue interrupt : NextInterrupt
+        if !generic && (interrupt.scope.nil? || interrupt.scope == "fun")
+          next (args = interrupt.args unless interrupt.args.empty?)
         end
 
-        unless typecheck(callee.constraints, args)
-          die("typecheck failed for #{callee}: #{args.join(", ")}")
-        end
-      end
-
-      @context.local({callee.params, args}) do
-        if @context.traces.size > MAX_CALL_DEPTH
-          die("too many calls: very deep or infinite recursion")
-        end
-
-        unless callee.slurpy
-          return visit(callee.body).last
-        end
-
-        @context.scope["rest"] = Vec.new(args[callee.params.size...])
-
-        @context.with_u(args.reverse) do
-          visit(callee.body).last
-        end
+        raise interrupt
       end
     end
 
@@ -524,9 +543,13 @@ module Ven
         if (variant.slurpy && args.size >= variant.arity) || variant.params.size == args.size
           if typecheck(variant.constraints, args)
             begin
-              return call(variant, args, typecheck: false)
-            rescue fail : FailException
-              args = fail.args unless fail.args.empty?
+              return call(variant, args, typecheck: false, generic: true)
+            rescue interrupt : NextInterrupt
+              if interrupt.scope.nil? || interrupt.scope == "fun"
+                next (args = interrupt.args unless interrupt.args.empty?)
+              end
+
+              raise interrupt
             end
           end
         end

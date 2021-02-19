@@ -25,9 +25,10 @@ module Ven
 
       begin
         @machine.visit!(quote)
-      rescue Machine::FailException
-        # XXX: doesn't belong here much.
-        @machine.die("uncaught 'fail': fail reached top-level")
+      rescue interrupt : NextInterrupt
+        scope = interrupt.scope ? " #{interrupt.scope}" : ""
+
+        @machine.die("world caught 'next#{scope}'")
       end
     end
 

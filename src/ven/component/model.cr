@@ -307,12 +307,11 @@ module Ven::Component
       params.size <=> other.params.size
     end
 
-    # Returns whether this function has its name equal to *other*'s,
-    # params same as *other*'s, and generality same as *other*'s.
+    # Returns whether this function's signature is  equal
+    # to *other*'s.
     def ==(other : MConcreteFunction)
       other.name == @name &&
-      other.general == @general &&
-      other.params == @params
+      other.constraints == @constraints
     end
 
     def to_s(io)
