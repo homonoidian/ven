@@ -1,6 +1,8 @@
 module Ven::Component
-  # The trace a capsule (see `Context.local`) leaves while
-  # being evaluated.
+  alias Traces = Array(Trace)
+
+  # Some evaluations leave a trace to lead the user to the
+  # actual source of an error, if one occurs.
   class Trace
     getter tag, name
 

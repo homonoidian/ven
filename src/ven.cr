@@ -7,6 +7,8 @@ module Ven
   VERSION = "0.1.1-rev02"
 
   class CLI
+    include Component
+
     # `BOOT` is a compile-time environment variable containing
     # the path to a boot module (the first to load & one which
     # defines the internals.) Indeed, it is a directory that
@@ -34,7 +36,7 @@ module Ven
     # Prints the *message* of some *kind* and, if given true
     # *quit*, quits with exit status 1.
     def error(kind : String, message : String, quit = false)
-      kind = "(#{kind})"
+      kind = "[#{kind}]"
 
       puts "#{kind.colorize(:light_red).bold} #{message}"
 
@@ -46,23 +48,42 @@ module Ven
     # Chooses the appropriate kind and message for *this*,
     # a Ven error, and `error`s them. If *quit* is true,
     # exits with status 1 afterwards.
-    def error(this : Component::VenError, quit = true)
+    def error(this : VenError, quit = true)
       message = this.message.not_nil!
 
       case this
-      when Component::ReadError
+      when ReadError
         error("read error", "#{message} (in #{this.file}:#{this.line}, near '#{this.lexeme}')")
-      when Component::RuntimeError
-        error("runtime error", message)
-      when Component::InternalError
+      when RuntimeError
+        error("runtime error", "#{message}\n#{format_traces(this.trace)}")
+      when InternalError
         error("internal error", message)
-      when Component::WorldError
+      when WorldError
         error("world error", "#{message} (in #{this.file}:#{this.line})")
       end
 
       if quit
         exit(1)
       end
+    end
+
+    # Returns a string of prettified *traces*. *root_spaces*
+    # is the number of spaces before each trace; *code_spaces*
+    # is the number of spaces before each source excerpt.
+    def format_traces(traces : Traces, root_spaces = 2, code_spaces = 4)
+      result = traces.map do |trace|
+        file = trace.tag.file
+        line = trace.tag.line
+
+        if File.exists?(file)
+          source = File.read(file).lines[line - 1].lstrip(" ")
+          excerpt = "\n #{" " * code_spaces}#{line}| #{source}"
+        end
+
+        "#{" " * root_spaces}from #{trace}#{excerpt}"
+      end
+
+      result.join("\n")
     end
 
     # Evaluates *source* with filename *filename*.
@@ -82,7 +103,7 @@ module Ven
       else
         error("command-line error", "invalid option, file or directory: #{path}", quit: true)
       end
-    rescue exception : Component::VenError
+    rescue exception : VenError
       error(exception)
     end
 
@@ -108,7 +129,7 @@ module Ven
 
         begin
           puts eval("<interactive>", source)
-        rescue exception : Component::VenError
+        rescue exception : VenError
           error(exception, quit: false)
         end
       end

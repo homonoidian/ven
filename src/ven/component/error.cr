@@ -4,12 +4,12 @@ module Ven::Component
   end
 
   # The exception that is raised when the reader is given
-  # malformed or illegal input, and also when the lexical
-  # analyzer receives invalid input.
+  # malformed or illegal input, or when the lexical analyzer
+  # receives invalid input.
   class ReadError < VenError
     getter lexeme, line, file, message
 
-    # Initializes a parser error.
+    # Initializes a reader error.
     def initialize(word : Word, @file : String, @message : String)
       @line = word[:line]
       @lexeme = word[:lexeme]
@@ -25,15 +25,15 @@ module Ven::Component
   end
 
   # The exception that is raised when the interpreter
-  # encounters a traceable semantic error (error in the
-  # meaning of a program), or a 'die' call.
+  # encounters a traceable semantic error.
   class RuntimeError < VenError
-    getter file, line, message
+    getter file, line, message, trace
 
     @file : String
     @line : UInt32
+    @trace: Traces
 
-    def initialize(tag : QTag, @message : String)
+    def initialize(tag : QTag, @message : String, @trace)
       @file = tag.file
       @line = tag.line
     end

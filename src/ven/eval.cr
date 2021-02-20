@@ -52,9 +52,9 @@ module Ven
     # and the bottom entry is a unit that was the actual
     # cause of this death (`@last`).
     def die(message : String)
-      traces = [message] + @context.traces + [Trace.new(@last.tag, "<unit>")]
+      traces = @context.traces + [Trace.new(@last.tag, "<unit>")]
 
-      raise RuntimeError.new(@last.tag, traces.join("\n from "))
+      raise RuntimeError.new(@last.tag, message, traces)
     end
 
     def visit!(q : QSymbol)
@@ -624,38 +624,28 @@ module Ven
       die("'#{operator}': cannot normalize #{operand}: #{e.message}")
     end
 
-    # Returns whether *left* and *right* can be used with
-    # *operator*.
-    def compatible?(operator, left : Model, right : Model) : Bool
-      case {operator, left, right}
-      when {"is", Vec, Vec}
-      when {"is", MBool, MBool}
-      when {"is", Str, MRegex}
-      when {"is", _, MType}
-      when {"in", _, Vec}
-      when {"is", Num, Num},
-           {"<", Num, Num},
-           {">", Num, Num},
-           {"<=", Num, Num},
-           {">=", Num, Num}
-      when {"+", Num, Num},
-           {"-", Num, Num},
-           {"*", Num, Num},
-           {"/", Num, Num}
-      when {"is", Str, Str},
-           {"~", Str, Str},
-           {"x", Str, Num}
-      when {"&", Vec, Vec},
-           {"x", Vec, Num}
-      else
-        return false # i.e., incompatible
-      end
+    # Checks whether *left* and  *right* are equal by value (not
+    # semantically). E.g., while `0 is false` (semantic equality)
+    # yields true, `0 <eqv> false` yields false.
+    # NOTE: `eqv` is not available inside the language itself.
+    def eqv?(left, right)
+      false
+    end
 
-      true
+    # See `eqv?(left, right)`.
+    def eqv?(left : Num | Str | MBool, right : Num | Str | MBool)
+      left.value == right.value
+    end
+
+    # See `eqv?(left, right)`.
+    def eqv?(left : Vec, right : Vec)
+      lv, rv = left.value, right.value
+
+      lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
     end
 
     # Converts *left* and *right* into the types *operator*
-    # expects (i.e.,  `compatible?`).
+    # can work with.
     def normalize(operator, left : Model, right : Model) : {Model, Model}
       case operator
       when "is" then case {left, right}
@@ -695,83 +685,59 @@ module Ven
         "#{left}, #{right} (try changing the order)")
     end
 
-    # Checks whether *left* and  *right* are equal by value (not
-    # semantically). E.g., while `0 is false` (semantic equality)
-    # yields true, `0 <eqv> false` yields false.
-    # NOTE: `eqv` is not available inside the language itself.
-    def eqv?(left, right)
-      false
-    end
-
-    # See `eqv?(left, right)`.
-    def eqv?(left : Num | Str | MBool, right : Num | Str | MBool)
-      left.value == right.value
-    end
-
-    # See `eqv?(left, right)`.
-    def eqv?(left : Vec, right : Vec)
-      lv, rv = left.value, right.value
-
-      lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
-    end
-
-    # Computes a binary operation. This is the third (and the
-    # last) step of binary operator evaluation, and it requires
-    # *left* and *right* be **normalized**.
-    def compute(operator, left : Model, right : Model) : Model
-      left =
-        case {operator, left, right}
-        when {"is", MBool, MBool},
-             {"is", Num, Num},
-             {"is", Str, Str},
-             {"is", Vec, Vec}
-          may_be left, if: eqv?(left, right)
-        when {"is", _, MType}
-          to_bool of?(left, right)
-        when {"is", Str, MRegex}
-          may_be Str.new($0), if: left.value =~ right.value
-        when {"in", _, Vec}
-          may_be right.value.each { |i| break i if eqv?(left, i) }
-        when {"<", Num, Num}
-          to_bool left.value < right.value
-        when {">", Num, Num}
-          to_bool left.value > right.value
-        when {"<=", Num, Num}
-          to_bool left.value <= right.value
-        when {">=", Num, Num}
-          to_bool left.value >= right.value
-        when {"+", Num, Num}
-          Num.new(left.value + right.value)
-        when {"-", Num, Num}
-          Num.new(left.value - right.value)
-        when {"*", Num, Num}
-          Num.new(left.value * right.value)
-        when {"/", Num, Num}
-          Num.new(left.value / right.value)
-        when {"~", Str, Str}
-          Str.new(left.value + right.value)
-        when {"&", Vec, Vec}
-          Vec.new(left.value + right.value)
-        when {"x", Str, Num}
-          Str.new(left.value * right.value.to_big_i)
-        when {"x", Vec, Num}
-          Vec.new(left.value * right.value.to_big_i)
-        else
-          die("could not apply '#{operator}' to #{left}, #{right}")
-        end
-
-      left
+    # Computes a binary operation. Returns false if *left*
+    # and/or *right* are not of types *operator* can work with.
+    def compute(operator, left : Model, right : Model)
+      case {operator, left, right}
+      when {"is", MBool, MBool},
+           {"is", Num, Num},
+           {"is", Str, Str},
+           {"is", Vec, Vec}
+        may_be left, if: eqv?(left, right)
+      when {"is", _, MType}
+        to_bool of?(left, right)
+      when {"is", Str, MRegex}
+        may_be Str.new($0), if: left.value =~ right.value
+      when {"in", _, Vec}
+        may_be right.value.each { |i| break i if eqv?(left, i) }
+      when {"<", Num, Num}
+        to_bool left.value < right.value
+      when {">", Num, Num}
+        to_bool left.value > right.value
+      when {"<=", Num, Num}
+        to_bool left.value <= right.value
+      when {">=", Num, Num}
+        to_bool left.value >= right.value
+      when {"+", Num, Num}
+        Num.new(left.value + right.value)
+      when {"-", Num, Num}
+        Num.new(left.value - right.value)
+      when {"*", Num, Num}
+        Num.new(left.value * right.value)
+      when {"/", Num, Num}
+        Num.new(left.value / right.value)
+      when {"~", Str, Str}
+        Str.new(left.value + right.value)
+      when {"&", Vec, Vec}
+        Vec.new(left.value + right.value)
+      when {"x", Str, Num}
+        Str.new(left.value * right.value.to_big_i)
+      when {"x", Vec, Num}
+        Vec.new(left.value * right.value.to_big_i)
+      else
+        false
+      end
     rescue DivisionByZeroError
       die("'#{operator}': division by zero: #{left}, #{right}")
     end
 
     # Applies binary *operator* to *left* and *right*.
-    def binary(operator, left : Model, right : Model) : Model
-      unless compatible?(operator, left, right)
+    def binary(operator, left : Model, right : Model)
+      until result = compute(operator, left, right)
         left, right = normalize(operator, left, right)
       end
 
-      compute(operator, left, right)
+      result.as(Model)
     rescue e : ModelCastException
       die("'#{operator}': cannot normalize #{left}, #{right}: #{e.message}")
     end
