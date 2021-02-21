@@ -358,6 +358,10 @@ module Ven
       self
     end
 
+    def to_s(io)
+      io << "<reader for '#{@file}'>"
+    end
+
     # Reads the *source* under the *filename*.
     def read(filename : String, source : String, &block : Quote -> _)
       reset(filename, source).module do |quote|

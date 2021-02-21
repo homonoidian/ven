@@ -434,7 +434,7 @@ module Ven
     end
 
     def visit!(q : QExpose)
-      unless @world.gather(q.pieces)
+      unless @world.expose(q.pieces)
         die("this distinct was not found: '#{q.pieces.join(".")}'")
       end
 

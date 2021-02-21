@@ -56,19 +56,5 @@ module Ven::Component
   # relationship between different files and modules, or in the
   # relationship between the reader and the interpreter.
   class WorldError < VenError
-    getter file, line, message
-
-    @file : String
-    @line : UInt32
-
-    def initialize(tag : QTag, @message : String)
-      @file = tag.file
-      @line = tag.line
-    end
-
-    def initialize(@message : String)
-      @file = "<unknown (probably origin)>"
-      @line = 1
-    end
   end
 end

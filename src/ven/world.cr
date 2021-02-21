@@ -1,4 +1,7 @@
 module Ven
+  # `World` manages communication & cooperation between the
+  # different parts of Ven. It is also used as an inter-file
+  # medium.
   class World
     include Component
 
@@ -7,10 +10,15 @@ module Ven
     # Whether or not this World is verbose.
     setter verbose : Bool = false
 
-    def initialize
-      # Scraps are all '.ven' files this origin has.
-      @scraps = [] of String
-      @gathered = [] of Array(String)
+    # An umbrella Ven module.
+    private alias Module = { loaded: Bool, distincts: Array(Reader) }
+
+    def initialize(boot : Path)
+      # The paths in which we will search for '.ven' files.
+      @lookup = [boot]
+
+      # Module registry (the modules that we have found).
+      @modules = {} of Array(String) => Module
 
       @reader = Reader.new
       @machine = Machine.new
@@ -20,7 +28,111 @@ module Ven
       @machine.world = self
     end
 
-    def visit(quote)
+    # Dies of `WorldError` with *message*.
+    def die(message : String)
+      raise WorldError.new(message)
+    end
+
+    # Adds *directory* to the lookup paths if there isn't
+    # an identical path already.
+    def <<(directory : Path)
+      @lookup << directory unless @lookup.includes?(directory)
+    end
+
+    # Gathers all '.ven' files in the lookup directories and
+    # registers each in `@modules`, under its appropriate
+    # 'distinct' path. *except* can be used to ignore a
+    # specific '.ven' file.
+    def gather(ignore : String? = nil)
+      @lookup.each do |path|
+        unless File.directory?(path)
+          die("this lookup path is not a directory: #{path}")
+        end
+
+        puts "<gather in '#{path}'>" if @verbose
+
+        # Get all '.ven' files in *path*. Try to search for
+        # a 'distinct' in each one, and, if found, create
+        # (or update) the corresponding entry in *@modules*.
+        Dir["#{path}/**/*.ven"].each do |file|
+          next if file == ignore
+
+          contents = File.read(file)
+
+          f_reader = Reader.new
+          f_reader.world = self
+
+          f_reader.read(file, contents) do |quote|
+            break unless quote.is_a?(QDistinct)
+
+            break @modules.has_key?(quote.pieces) \
+              ? (@modules[quote.pieces][:distincts] << f_reader)
+              : (@modules[quote.pieces] = { loaded: false, distincts: [f_reader] })
+          end
+        end
+      end
+
+      if @verbose
+        @modules.each do |distinct, mod|
+          puts "-> distinct #{distinct.join(".")}:"
+
+          mod[:distincts].each do |f_reader|
+            puts " |-> #{f_reader}"
+          end
+        end
+      end
+    end
+
+    # Makes a list of candidate modules matching *distinct*
+    # and evaluates these candidate modules in the scope of
+    # this world. Returns false if found no candidate modules.
+    def expose(distinct : Array(String)) : Bool
+      # Choose the modules whose names are equal to *distinct*
+      # or start with *distinct*.
+      candidates = @modules.select do |k|
+        k[0, distinct.size]? == distinct
+      end
+
+      if candidates.empty?
+        return false
+      end
+
+      candidates.each do |name, module_|
+        # Make sure that we didn't evaluate this module already.
+        unless module_.[:loaded]
+          @modules[name] = { loaded: true, distincts: [] of Reader }
+
+          module_[:distincts].each do |f_reader|
+            puts "<expose(): visit using '#{f_reader}'>" if @verbose
+
+            # Can't use Reader.new.read since it will reset, but
+            # it's actually just a wrapper around `.module`.
+            f_reader.module do |quote|
+              visit(quote)
+            end
+          end
+        end
+      end
+
+      true
+    end
+
+    # Returns the origin for the *directory*. Dies if this
+    # origin does not exist.
+    # Origin is a Ven script which has the same name as the
+    # *directory*. For example, for the *directory* `a/b/c`
+    # the origin will be `a/b/c/c.ven`.
+    def origin(directory : Path)
+      unless File.exists?(origin = directory / "#{directory.basename}.ven")
+        die("origin file not found in '#{directory}': make sure '#{origin}' exists")
+      end
+
+      origin
+    end
+
+    # Visits a quote in the scope of this world. Dies on any
+    # interrupt (e.g. `NextInterrupt`) that was not captured.
+    def visit(quote : Quote)
       @machine.last = quote
 
       begin
@@ -30,117 +142,6 @@ module Ven
 
         @machine.die("world caught 'next#{scope}'")
       end
-    end
-
-    # Sets the origin of this world to *path*. Origin is the
-    # root directory of the module. It must contain, and such
-    # check is performed here, an **entry** file, which must
-    # have the same name as the basename of *path* (e.g., for
-    # origin `a/b/c/` entry is `c.ven`, i.e., `a/b/c/c.ven`).
-    def origin!(path : Path)
-      unless File.exists?(entry = path / "#{path.basename}.ven")
-        raise WorldError.new("module origin has no entry: make sure '#{entry}' exists")
-      end
-
-      upscrap(path)
-
-      feed "origin entry #{entry}", File.read(entry)
-    end
-
-    # Collects all '.ven' files in *path*, which should be
-    # a directory (this is **not** checked).
-    def scrap(path : Path)
-      Dir["#{path}/**/*.ven"]
-    end
-
-    # Updates the scraps of this World by `scrap`ping *path*.
-    def upscrap(path : Path)
-      @scraps += scrap(path)
-    end
-
-    # Checks if the *scrap*'s first statement is a `distinct`
-    # statement, then makes sure *pieces* starts with this
-    # distinct's pieces, and evaluates the rest of the statements
-    # within this world. Returns the status of the whole operation:
-    # true if all went good and false otherwise.
-    def expose!(pieces : Array(String), scrap : String)
-      first = true
-      distinct = false
-      contents = File.read(scrap)
-
-      # Fresh Readers are required for every scrap, as this
-      # World's Reader is *in progress* of reading the entry.
-      scrap_reader = Reader.new
-      scrap_reader.world = self
-
-      scrap_reader.read(scrap, contents) do |quote|
-        if first && quote.is_a?(QDistinct)
-          # (this is the first statement, this is distinct)
-          if quote.pieces[0, pieces.size]? == pieces
-            # (this distinct's pieces match *pieces*)
-            first = false
-            distinct = true
-
-            if @verbose
-              puts "[debug: Distinct *found* in '#{scrap}': it is" \
-                   " #{quote.pieces}, while I searched for #{pieces}]",
-                   "[debug: Now I know about: #{quote.pieces}]"
-            end
-
-            next @gathered << quote.pieces
-          end
-        elsif !first
-          if distinct && quote.is_a?(QDistinct)
-            # (there was a distinct and this is a distinct)
-            raise WorldError.new(quote.tag,
-              "duplicate 'distinct' statement in one file")
-          elsif distinct
-            # (there was distinct)
-            next visit(quote).as(Model)
-          end
-        end
-
-        return false
-      end
-
-      true
-    end
-
-    # Goes through the available `@scraps`, searching for ones
-    # that `expose!` *pieces*. Returns whether or not one or more
-    # of such scraps were found.
-    def gather(pieces : Array(String))
-      found = gathered?(pieces)
-
-      if @verbose
-        puts "[debug: Do I know about #{pieces}? #{found ? "yes" : "no"}]"
-      end
-
-      unless found
-        @scraps.each do |scrap|
-          if @verbose
-            puts "[debug: I will try to find #{pieces} in '#{scrap}']"
-          end
-
-          if expose!(pieces, scrap)
-            found = true
-
-            # May have gathered the pieces of the module,
-            # but not the module as a whole.
-            unless gathered?(pieces)
-              @gathered << pieces
-            end
-          end
-        end
-      end
-
-      found
-    end
-
-    # Returns whether the *scrap* had already been gathered
-    # (see `gather`).
-    def gathered?(pieces : Array(String))
-      @gathered.includes?(pieces)
     end
 
     # Loads given *extensions*, a bunch of Component::Extension

@@ -13,17 +13,13 @@ module Ven
     # the path to a boot module (the first to load & one which
     # defines the internals.) Indeed, it is a directory that
     # functions in the same way as origin modules do.
-    BOOT = {{env("BOOT") || raise "unable to get 'BOOT'"}}
+    BOOT = Path[{{env("BOOT") || raise "unable to get 'BOOT'"}}]
 
     def initialize
-      @world = World.new
+      @world = World.new(BOOT)
 
       @world.load(Library::Core)
       @world.load(Library::System)
-
-      if @world.upscrap(Path[BOOT]).empty?
-        raise "BOOT ('#{BOOT}') does not contain any Ven files"
-      end
     end
 
     # Prints the *message* and quits with exit status 0.
@@ -59,7 +55,7 @@ module Ven
       when InternalError
         error("internal error", message)
       when WorldError
-        error("world error", "#{message} (in #{this.file}:#{this.line})")
+        error("world error", message)
       end
 
       if quit
@@ -86,23 +82,30 @@ module Ven
       result.join("\n")
     end
 
-    # Evaluates *source* with filename *filename*.
+    # Evaluates *source* under the filename *filename*.
     def eval(filename : String, source : String)
       @world.feed(filename, source)
     end
 
-    # Decides whether to run *path* as a script or as an
-    # origin module, and runs it.
+    # Does the necessary negotiations with the world and runs
+    # the script/module *path*.
     def open(path : String)
-      this = Path[path].normalize.expand(home: true)
+      path = Path[path].normalize.expand(home: true)
 
-      if File.directory?(this)
-        @world.origin!(this)
-      elsif File.file?(this)
-        eval this.to_s, File.read(this)
+      if File.directory?(path)
+        @world << path
+        path = @world.origin(path)
+      elsif File.file?(path)
+        @world << path.parent
       else
         error("command-line error", "invalid option, file or directory: #{path}", quit: true)
       end
+
+      # Now, gather all '.ven' files we know about except
+      # ourselves.
+      @world.gather(ignore: path.to_s)
+
+      eval path.to_s, File.read(path)
     rescue exception : VenError
       error(exception)
     end
@@ -113,6 +116,9 @@ module Ven
 
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
+
+      # First, gather all '.ven' files we know about.
+      @world.gather
 
       loop do
         begin
