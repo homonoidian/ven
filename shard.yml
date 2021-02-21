@@ -1,5 +1,5 @@
 name: ven
-version: 0.1.1-rev02
+version: 0.1.1-rev03
 crystal: '>= 0.36.1'
 
 targets:

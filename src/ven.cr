@@ -4,7 +4,7 @@ require "option_parser"
 require "./ven/**"
 
 module Ven
-  VERSION = "0.1.1-rev02"
+  VERSION = "0.1.1-rev03"
 
   class CLI
     include Component
