@@ -7,6 +7,11 @@ module Ven::Component
       @file : String,
       @line : UInt32)
     end
+
+    # Returns whether this tag is equal to the *other* tag.
+    def ==(other : QTag)
+      @file == other.file && @line == other.line
+    end
   end
 
   # The base class of all Ven AST nodes, which are called

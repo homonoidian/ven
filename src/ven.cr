@@ -77,7 +77,7 @@ module Ven
 
         if File.exists?(file)
           source = File.read(file).lines[line - 1].lstrip(" ")
-          excerpt = "\n #{" " * code_spaces}#{line}| #{source}"
+          excerpt = "\n#{" " * code_spaces}#{line}| #{source}"
         end
 
         "#{" " * root_spaces}from #{trace}#{excerpt}"

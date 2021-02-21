@@ -1,0 +1,69 @@
+expose std;
+
+interest = [
+  "first name",
+  "last name",
+  "address",
+  "age"
+];
+
+answers = |ask("What is your " ~ _ ~ "?")| interest;
+
+|say(_)| answers;
+
+fun not-slurpy(a, b, c) given num {
+  say("not-slurpy(a, b, c) given num")
+}
+
+fun not-slurpy(a, b, c) {
+  say("not-slurpy(a, b, c)")
+}
+
+fun slurpy(a, b, c, *) given num {
+  say("slurpy(a, b, c, *) given num")
+}
+
+fun slurpy(a, b, *) given str {
+  say("slurpy(a, b, *) given str")
+}
+
+fun slurpy(*) {
+  say("slurpy(*)")
+}
+
+#) Should succeed:
+not-slurpy(1, 2, 3);
+not-slurpy("a", "b", "c");
+
+#) Should fail:
+#)not-slurpy(1, 2, 3, 4);
+#)not-slurpy("a", 3, "c", 4);
+
+#) Should succeed:
+slurpy(1, 2, 3, 4, 5, 6, 7);
+slurpy(1, 2, 3);
+slurpy("a", "b", "c", "d", "e");
+slurpy("a", "b");
+slurpy(1, "b", [3], 4);
+slurpy();
+
+#) Concretes are loopy:
+fun up-to-ten(this) given num =
+  if this < 10
+    next say(this + 1)
+  else
+    this;
+
+up-to-ten(0);
+
+fun factorial(N) {
+  N * factorial(N - 1)
+}
+
+fun factorial(N) given num {
+  if (N < 1) 1 else next N;
+}
+
+#) Does 2x more work. Max arg is MAX_CALLS - 1 (-_-)
+#) Succeeds in ~200ms (!)
+factorial(499).say()

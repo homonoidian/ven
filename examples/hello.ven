@@ -1,0 +1,3 @@
+expose std;
+
+say("Hello, World!");

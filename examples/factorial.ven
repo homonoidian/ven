@@ -1,3 +1,11 @@
-fun factorial(n) = if (n is 1) 1 else n * factorial(n - 1);
+expose std;
 
-factorial(+"500");
+fun factorial(n) =
+  if (n < 1)
+    1
+  else
+    n * factorial(n - 1);
+
+ask("What number? (max = 500)")
+  .factorial()
+  .say();

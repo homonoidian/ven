@@ -52,7 +52,11 @@ module Ven
     # and the bottom entry is a unit that was the actual
     # cause of this death (`@last`).
     def die(message : String)
-      traces = @context.traces + [Trace.new(@last.tag, "<unit>")]
+      traces = @context.traces.dup
+
+      unless traces.last?.try(&.tag) == @last.tag
+        traces += [Trace.new(@last.tag, "<unit>")]
+      end
 
       raise RuntimeError.new(@last.tag, message, traces)
     end
