@@ -258,9 +258,10 @@ module Ven
       @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
     end
 
-    # Returns whether this word is a nud.
-    def is_nud?
-      @nud.has_key?(@word[:type])
+    # Returns whether this word is a nud. *pick* may be provided
+    # to check only certain parselet classes.
+    def is_nud?(only pick : (Parselet::Nud.class)? = nil)
+      nud?(pick).has_key?(@word[:type])
     end
 
     # Returns an array of leds that are of `.class` *only*.
@@ -269,9 +270,10 @@ module Ven
       @led.reject { |_, led| pick.nil? ? false : led.class != pick }
     end
 
-    # Returns whether this word is a led.
-    def is_led?
-      @led.has_key?(@word[:type])
+    # Returns whether this word is a led. *pick* may be provided
+    # to check only certain parselet classes.
+    def is_led?(only pick : (Parselet::Led.class)? = nil)
+      led?(pick).has_key?(@word[:type])
     end
 
     # Returns whether this word is a statement.

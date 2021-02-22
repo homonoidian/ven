@@ -3,7 +3,7 @@ module Ven
     include Component
 
     # Left-denotated token parser works with a *token*, to the
-    # *left* of which a semantically meaningful construct exists.
+    # *left* of which there is a quote of interest.
     abstract class Led
       getter precedence : UInt8
 
@@ -19,30 +19,29 @@ module Ven
         token : Token)
     end
 
-    # Parses a binary operation into a QBinary; `2 + 2`, `2 is "2"`,
-    # `1 ~ 2` are all examples of a binary operation.
+    # Parses a binary operation into a QBinary: `2 + 2`,
+    # `2 is "2"`, `1 ~ 2` etc.
     class PBinary < Led
-      def parse(parser, tag, left, token)
-        # Check whether this is an `is` expression with a `not`
-        # following.
-        not_ = token[:lexeme] == "is" && parser.word!("NOT")
+      # These operators may be followed by a `not`:
+      NOT_FOLLOWS = %(IS)
 
+      def parse(parser, tag, left, token)
+        not = NOT_FOLLOWS.includes?(token[:type]) && parser.word!("NOT")
         this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence - 1))
 
-        not_ ? QUnary.new(tag, "not", this) : this
+        not ? QUnary.new(tag, "not", this) : this
       end
     end
 
     # Parses a call into a QCall: `x(1)`, `[1, 2, 3](1, 2)`,
-    # for example.
+    # etc.
     class PCall < Led
       def parse(parser, tag, left, token)
         QCall.new(tag, left, parser.repeat(")", ","))
       end
     end
 
-    # Parses an assignment into a QAssign; `x = 2` is an example
-    # of an assignment.
+    # Parses an assignment into a QAssign: `x = 2`, etc.
     class PAssign < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
@@ -51,31 +50,30 @@ module Ven
       end
     end
 
-    # Parses a binary operator assignment into a QBinaryAssign.
-    # E.g., `x += 2`, `foo ~= 3`.
+    # Parses a binary operator assignment into a QBinaryAssign:
+    # `x += 2`, `foo ~= 3`, etc.
     class PBinaryAssign < Led
       def parse(parser, tag, left, token)
+        operator = token[:type].chars.first.to_s
+
         unless left.is_a?(QSymbol)
           parser.die("left-hand side of '#{token[:type]}' must be a symbol")
         end
 
-        QBinaryAssign.new(tag,
-          token[:type][0].to_s,
-          left.value,
-          parser.led)
+        QBinaryAssign.new(tag, operator, left.value, parser.led)
       end
     end
 
-    # Parses an into-bool expression into a QIntoBool. For example,
-    # `x is 4?`.
+    # Parses an into-bool expression into a QIntoBool: `x is 4?`,
+    # `[1, 2, false]?`, etc.
     class PIntoBool < Led
       def parse(parser, tag, left, token)
         QIntoBool.new(tag, left)
       end
     end
 
-    # Parses a return-increment expression into a QReturnIncrement.
-    # E.g., `x++`, `foo_bar++`.
+    # Parses a return-increment expression into a QReturnIncrement:
+    # `x++`, `foo_bar++`, etc.
     class PReturnIncrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
@@ -84,8 +82,8 @@ module Ven
       end
     end
 
-    # Parses a return-decrement expression into a QReturnDecrement.
-    # E.g., `x--`, `foo_bar--`.
+    # Parses a return-decrement expression into a QReturnDecrement:
+    # `x--`, `foo_bar--`, etc.
     class PReturnDecrement < Led
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
@@ -94,9 +92,8 @@ module Ven
       end
     end
 
-    # Parses a field access expression into a QAccessField.
-    # `a.b.c`, `1.bar`, `"quux".strip!` are all examples
-    # of a field access expression.
+    # Parses a field access expression into a QAccessField:
+    # `a.b.c`, `1.bar`, `"quux".strip!`, etc.
     class PAccessField < Led
       def parse(parser, tag, left, token)
         path = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })

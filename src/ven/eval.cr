@@ -730,7 +730,7 @@ module Ven
       when {"is", Str, MRegex}
         may_be Str.new($0), if: left.value =~ right.value
       when {"in", _, Vec}
-        may_be right.value.each { |i| break i if binary("is", left, i) }
+        may_be right.value.each { |i| break i if eqv?(left, i) }
       when {"<", Num, Num}
         to_bool left.value < right.value
       when {">", Num, Num}
