@@ -167,7 +167,7 @@ module Ven
       result = [] of Model
 
       @context.tracing({q.tag, "<spread>"}) do
-        @context.local do
+        @context.in do
           operand.value.each_with_index do |item, index|
             @context.with_u([Num.new(index), item]) do
               factor = visit(q.lambda)
@@ -451,6 +451,12 @@ module Ven
       raise NextInterrupt.new(q.scope, args)
     end
 
+    def visit!(q : QBox)
+      box = MBox.new(q.name)
+
+      @context.define(q.name, box)
+    end
+
     # Checks if *left* has type *right*.
     def of?(left : Model, right : MType) : Bool
       return true if right.type == MAny
@@ -500,6 +506,12 @@ module Ven
       true
     end
 
+    def call(callee : MBox, args : Models)
+      @context.in([] of String, args) do |scope|
+        MBoxInstance.new(callee, scope)
+      end
+    end
+
     # Calls an `MConcreteFunction` with *args*, checking the
     # types if *typecheck* is true. *generic* determines the
     # behavior of 'next': if set to true, 'next' won't be catched.
@@ -516,7 +528,7 @@ module Ven
             end
           end
 
-          @context.local({callee.params, args}) do
+          @context.in(callee.params, args) do |scope|
             if @context.traces.size > MAX_CALL_DEPTH
               die("too many calls: very deep or infinite recursion")
             end
@@ -525,7 +537,7 @@ module Ven
               return visit(callee.body).last
             end
 
-            @context.scope["rest"] = Vec.new(args[callee.params.size...])
+            scope["rest"] = Vec.new(args[callee.params.size...])
 
             @context.with_u(args.reverse) do
               return visit(callee.body).last
@@ -648,11 +660,24 @@ module Ven
       lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
     end
 
+    # See `eqv?(left, right)`.
+    def eqv?(left : MBox, right : MBox)
+      left.name == right.name
+    end
+
+    # See `eqv?(left, right)`.
+    def eqv?(left : MBoxInstance, right : MBox)
+      eqv?(left.parent, right)
+    end
+
     # Converts *left* and *right* into the types *operator*
     # can work with.
     def normalize(operator, left : Model, right : Model) : {Model, Model}
       case operator
       when "is" then case {left, right}
+        when {_, MBox},
+             {_, MBoxInstance}
+          {right, left}
         when {Vec, _}
           {left, right.to_vec}
         when {_, Vec}
@@ -696,14 +721,16 @@ module Ven
       when {"is", MBool, MBool},
            {"is", Num, Num},
            {"is", Str, Str},
-           {"is", Vec, Vec}
+           {"is", Vec, Vec},
+           {"is", MBox, _},
+           {"is", MBoxInstance, _}
         may_be left, if: eqv?(left, right)
       when {"is", _, MType}
         to_bool of?(left, right)
       when {"is", Str, MRegex}
         may_be Str.new($0), if: left.value =~ right.value
       when {"in", _, Vec}
-        may_be right.value.each { |i| break i if eqv?(left, i) }
+        may_be right.value.each { |i| break i if binary("is", left, i) }
       when {"<", Num, Num}
         to_bool left.value < right.value
       when {">", Num, Num}

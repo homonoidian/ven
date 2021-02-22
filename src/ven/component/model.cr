@@ -40,7 +40,9 @@ module Ven::Component
     end
 
     # Returns a field's value for this model (or nil if the
-    # field of interest does not exist.)
+    # field of interest does not exist.) This function may
+    # be used to handle dynamic fields (fields that can change
+    # during execution.)
     def field(name : String) : Model?
       @@FIELDS[name]?
     end
@@ -286,7 +288,6 @@ module Ven::Component
       # All constraint names except `*` are parameters.
       @params = @constraints.map(&.first).reject!(&.== "*")
 
-
       # Whether or not this function is general:
       @general =
         @constraints.empty? ||
@@ -357,10 +358,6 @@ module Ven::Component
     end
 
     def field(name)
-      # These are dynamic fields; their values change over
-      # time. Thus, `model_template`'s static @@FIELD system
-      # does not work for us so well anymore.
-
       case name
       when "variants"
         Vec.new(variants.map { |c| c.as(Model) })
@@ -387,6 +384,39 @@ module Ven::Component
 
     def to_s(io)
       io << "builtin " << @name
+    end
+  end
+
+  class MBox < MClass
+    getter name
+
+    def initialize(
+      @name : String)
+    end
+
+    def callable?
+      true
+    end
+
+    def to_s(io)
+      io << "box " << @name
+    end
+  end
+
+  class MBoxInstance < MClass
+    getter parent, scope
+
+    def initialize(
+      @parent : MBox,
+      @scope : Scope)
+    end
+
+    def field(name)
+      @scope[name]?
+    end
+
+    def to_s(io)
+      io << "instance of " << @parent
     end
   end
 end

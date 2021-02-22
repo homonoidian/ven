@@ -63,7 +63,7 @@ module Ven
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
       given loop next queue ensure
-      expose distinct)
+      expose distinct box)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -351,6 +351,7 @@ module Ven
       # Statements:
       defstmt("NUD", Parselet::PNud)
       defstmt("FUN", Parselet::PFun)
+      defstmt("BOX", Parselet::PBox)
       defstmt("LOOP", Parselet::PLoop)
       defstmt("EXPOSE", Parselet::PExpose)
       defstmt("DISTINCT", Parselet::PDistinct)

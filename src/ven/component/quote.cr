@@ -144,4 +144,6 @@ module Ven::Component
   defquote(QDistinct, pieces : Array(String))
 
   defquote(QNext, scope : String?, args : Quotes)
+
+  defquote(QBox, name : String)
 end

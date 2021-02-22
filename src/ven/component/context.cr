@@ -1,4 +1,6 @@
 module Ven::Component
+  alias Scope = Hash(String, Model)
+
   # The context implements the scope semantics via a *scopes*
   # stack, defines the *traces* stack for the purposes of
   # tracebacking, and the *underscores* stack for the contextual
@@ -8,7 +10,7 @@ module Ven::Component
 
     def initialize
       @traces = [] of Trace
-      @scopes = [{} of String => Model]
+      @scopes = [Scope.new]
       @underscores = [] of Model
     end
 
@@ -68,20 +70,19 @@ module Ven::Component
       end
     end
 
-    # Creates a local scope and executes the given *block*. *initial*
-    # is a tuple of keys (variable names) and values (variable values)
-    # this new local scope will be initialized with. It may
-    # be `nil` if such initialization is not needed.
-    def local(initial : {Array(String), Models}? = nil, &block)
-      @scopes << {} of String => Model
+    # Executes *block* in a new scope. This new scope is also
+    # passed as an argument to *block*. *names* and *values*
+    # are names and values the new scope will be initialized with.
+    def in(names : Array(String), values : Models, &block : Scope ->)
+      yield (@scopes << Scope.zip names, values).last
+    ensure
+      @scopes.pop
+    end
 
-      if initial
-        initial.first.zip(initial.last) do |name, value|
-          scope[name] = value
-        end
-      end
-
-      yield
+    # Executes *block* in a new scope. This new scope is also
+    # passed as an argument to *block*.
+    def in(&block : Scope ->)
+      yield (@scopes << Scope.new).last
     ensure
       @scopes.pop
     end

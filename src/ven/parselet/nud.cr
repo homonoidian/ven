@@ -406,5 +406,17 @@ module Ven
         QNext.new(tag, scope, args)
       end
     end
+
+    class PBox < Nud
+      def parse(parser, tag, token)
+        name = parser.expect("SYMBOL")[:lexeme]
+
+        unless name.chars.first.uppercase?
+          parser.die("illegal box name: must be capitalized")
+        end
+
+        QBox.new(tag, name)
+      end
+    end
   end
 end
