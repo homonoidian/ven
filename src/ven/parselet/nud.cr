@@ -417,7 +417,15 @@ module Ven
           parser.die("illegal box name: must be capitalized")
         end
 
-        QBox.new(tag, name)
+        params = parser.word!("(") \
+          ? PFun.parameters(parser)
+          : [] of String
+
+        given = parser.word!("GIVEN") \
+          ? PFun.given(parser)
+          : Quotes.new
+
+        QBox.new(tag, name, params, given)
       end
     end
   end

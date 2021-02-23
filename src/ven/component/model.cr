@@ -254,9 +254,20 @@ module Ven::Component
   abstract class MAny < MClass
   end
 
-  # A tuple that consists of parameter's name and parameter's
-  # `MType`.
-  alias TypedParameter = {String, MType}
+  # TypedParameter is, in essence, a parameter's name and
+  # parameter's `MType`.
+  struct TypedParameter
+    getter name, type
+
+    def initialize(
+      @name : String,
+      @type : MType)
+    end
+
+    def to_s(io)
+      io << @name << ": " << @type
+    end
+  end
 
   # An umbrella `function` type, and the parent of all kinds
   # of functions Ven has.
@@ -274,26 +285,24 @@ module Ven::Component
   # to be a thing.
   class MConcreteFunction < MFunction
     getter tag : QTag,
-      name : String,
-      body : Quotes,
-      slurpy : Bool,
-      params : Array(String),
-      constraints : Array(TypedParameter),
-      general : Bool,
-      arity : UInt8
+           name : String,
+           body : Quotes,
+           slurpy : Bool,
+           params : Array(String),
+           constraints : Array(TypedParameter),
+           general : Bool,
+           arity : UInt8
 
     def initialize(@tag, @name, @constraints, @body, @slurpy)
       @arity = @constraints.size.to_u8
 
       # All constraint names except `*` are parameters.
-      @params = @constraints.map(&.first).reject!(&.== "*")
+      @params = @constraints.map(&.name).reject!("*")
 
       # Whether or not this function is general:
       @general =
         @constraints.empty? ||
-        @constraints.any? do |constraint|
-          constraint[1].is_a?(MType::ANY)
-        end
+        @constraints.any?(&.type.is_a?(MType::ANY))
 
       @@FIELDS["name"] = Str.new(@name)
       @@FIELDS["arity"] = Num.new(@arity.to_i32)
@@ -316,7 +325,7 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << @name << "(" << constraints.map(&.join(": ")).join(", ") << ")"
+      io << @name << "(" << @constraints.join(", ") << ")"
     end
   end
 
@@ -340,7 +349,7 @@ module Ven::Component
       target.each_with_index do |existing, index|
         # Each constraint is a `TypedParameter`. With &[1] we
         # can compare just the types.
-        if existing.constraints.map(&.[1]) == variant.constraints.map(&.[1])
+        if existing.constraints.map(&.type) == variant.constraints.map(&.type)
           # Overwrite & return if found an identical variant:
           return target[index] = variant
         end
@@ -388,10 +397,19 @@ module Ven::Component
   end
 
   class MBox < MClass
-    getter name
+    getter tag : QTag,
+           name : String,
+           arity : UInt8,
+           slurpy : Bool,
+           params : Array(String),
+           constraints : Array(TypedParameter)
 
-    def initialize(
-      @name : String)
+    def initialize(@tag, @name, @constraints)
+      @params = @constraints.map(&.name).reject("*")
+      @arity = @params.size.to_u8
+
+      # If slurpy, @arity is one less:
+      @slurpy = @arity != @constraints.size
     end
 
     def callable?
@@ -399,7 +417,7 @@ module Ven::Component
     end
 
     def to_s(io)
-      io << "box " << @name
+      io << "box " << @name << "(" << @constraints.join(", ") << ")"
     end
   end
 

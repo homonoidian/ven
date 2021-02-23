@@ -47,6 +47,26 @@ module Ven
       {% end %}
     end
 
+    # Constrains *names* to *types*. Evaluates the *types*,
+    # making sure that each returns a type and dying if it
+    # does not. If there is no type for the corresponding
+    # name, makes it be MType::ANY.
+    def constrained(names : Array(String), by types : Quotes)
+      last = MType::ANY
+
+      names.zip?(types).map do |name, type|
+        unless type.nil?
+          last = visit(type)
+
+          unless last.is_a?(MType)
+            die("failed to constrain '#{name}' to #{last}")
+          end
+        end
+
+        TypedParameter.new(name, last)
+      end
+    end
+
     # Dies of runtime error with *message*. Constructs a
     # traceback where the top entry is the outermost call,
     # and the bottom entry is a unit that was the actual
@@ -237,23 +257,12 @@ module Ven
     end
 
     def visit!(q : QFun)
-      # Evaluate the 'given' expressions, making sure that
-      # each returns a type. If the type was not specified
-      # for a parameter, make it MType::ANY.
-      last = MType::ANY
-
-      params = q.params.zip?(q.given).map do |param, type|
-        if !type.nil? && !(last = visit(type)).is_a?(MType)
-          die("this 'given' expression did not return a type: #{type}")
-        end
-
-        {param, last.as(MType)}
-      end
+      constraints = constrained(q.params, by: q.given)
 
       this = MConcreteFunction.new(
         q.tag,
         q.name,
-        params,
+        constraints,
         q.body,
         q.slurpy)
 
@@ -452,7 +461,9 @@ module Ven
     end
 
     def visit!(q : QBox)
-      box = MBox.new(q.name)
+      constraints = constrained(q.params, by: q.given)
+
+      box = MBox.new(q.tag, q.name, constraints)
 
       @context.define(q.name, box)
     end
@@ -481,8 +492,8 @@ module Ven
     # Typechecks *args* against *constraints* (using `of?`).
     def typecheck(constraints : Array(TypedParameter), args : Models) : Bool
       rest_type =
-        if constraints.last?.try(&.[0]) == "*"
-          constraints.last[1]
+        if constraints.last?.try(&.name) == "*"
+          constraints.last.type
         end
 
       # Rest typecheck semantics differs a bit from normal
@@ -491,7 +502,7 @@ module Ven
 
       constraints.zip?(args).each do |constraint, argument|
         # Ignore missing arguments.
-        unless argument.nil? || of?(argument, constraint[1])
+        unless argument.nil? || of?(argument, constraint.type)
           return false
         end
       end
@@ -506,8 +517,22 @@ module Ven
       true
     end
 
+    # Instantiates an `MBox` with arguments *args*.
     def call(callee : MBox, args : Models)
-      @context.in([] of String, args) do |scope|
+      unless callee.slurpy || args.size == callee.arity
+        die("#{callee} did not receive the correct amount of " \
+            "arguments (#{callee.arity})")
+      end
+
+      unless typecheck(callee.constraints, args)
+        die("typecheck failed for #{callee}: #{args.join(", ")}")
+      end
+
+      @context.in(callee.params, args) do |scope|
+        if callee.slurpy
+          scope["rest"] = Vec.new(args[callee.arity...])
+        end
+
         MBoxInstance.new(callee, scope)
       end
     end
@@ -520,7 +545,8 @@ module Ven
         begin
           if typecheck
             unless callee.slurpy || callee.arity == args.size
-              die("#{callee} expected #{callee.arity} argument(s), got #{args.size}")
+              die("#{callee} did not receive the correct amount of " \
+                  "arguments (#{callee.arity})")
             end
 
             unless typecheck(callee.constraints, args)
