@@ -138,9 +138,7 @@ module Ven
       begin
         @machine.visit!(quote)
       rescue interrupt : NextInterrupt
-        scope = interrupt.scope ? " #{interrupt.scope}" : ""
-
-        @machine.die("world caught 'next#{scope}'")
+        @machine.die("#{interrupt} caught by the world")
       end
     end
 

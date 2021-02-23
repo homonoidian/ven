@@ -55,15 +55,3 @@ fun up-to-ten(this) given num =
     this;
 
 up-to-ten(0);
-
-fun factorial(N) {
-  N * factorial(N - 1)
-}
-
-fun factorial(N) given num {
-  if (N < 1) 1 else next N;
-}
-
-#) Does 2x more work. Max arg is MAX_CALLS - 1 (-_-)
-#) Succeeds in ~200ms (!)
-factorial(499).say()

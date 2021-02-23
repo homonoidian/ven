@@ -533,9 +533,17 @@ module Ven
               die("too many calls: very deep or infinite recursion")
             end
 
+            # If this is **not** a slurpy, break out of the loop
+            # with the visited body's last expression:
             unless callee.slurpy
               return visit(callee.body).last
             end
+
+            # If this is a slurpy, though, make the 'rest'
+            # variable contain the remaining arguments, push
+            # **all** (XXX) arguments to the underscores stack
+            # in reverse order and break out of the loop with
+            # visited body's last expression.
 
             scope["rest"] = Vec.new(args[callee.params.size...])
 
@@ -545,7 +553,11 @@ module Ven
           end
         end
       rescue interrupt : NextInterrupt
-        if !generic && (interrupt.scope.nil? || interrupt.scope == "fun")
+        unless interrupt.scope.nil? || interrupt.scope == "fun"
+          die("#{interrupt} caught by #{callee}")
+        end
+
+        unless generic
           next (args = interrupt.args unless interrupt.args.empty?)
         end
 
@@ -555,23 +567,32 @@ module Ven
 
     # Calls an `MGenericFunction` with *args*.
     def call(callee : MGenericFunction, args) : Model
-      callee.variants.each do |variant|
-        if (variant.slurpy && args.size >= variant.arity) || variant.params.size == args.size
-          if typecheck(variant.constraints, args)
-            begin
-              return call(variant, args, typecheck: false, generic: true)
-            rescue interrupt : NextInterrupt
-              if interrupt.scope.nil? || interrupt.scope == "fun"
-                next (args = interrupt.args unless interrupt.args.empty?)
-              end
+      loop do
+        begin
+          # Goes over the variants until a *suitable* variant
+          # is found & typecheck against constraints passes.
+          callee.variants.each do |variant|
+            suitable =
+              (variant.slurpy && args.size >= variant.arity) ||
+              (variant.params.size == args.size)
 
-              raise interrupt
+            if suitable && typecheck(variant.constraints, args)
+              return call(variant, args, typecheck: false, generic: true)
             end
           end
-        end
-      end
+        rescue interrupt : NextInterrupt
+          # Dies on any 'next' other than bare 'next' or 'next fun':
+          unless interrupt.scope.nil? || interrupt.scope == "fun"
+            die("#{interrupt} caught by #{callee}")
+          end
 
-      die("no concrete of #{callee} could receive these arguments: #{args.join(", ")}")
+          next (args = interrupt.args unless interrupt.args.empty?)
+        end
+
+        # Gone through all variants and no suitable variants
+        # were found:
+        die("no concrete of #{callee} accepts these arguments: #{args.join(", ")}")
+      end
     end
 
     # Calls an `MBuiltinFunction` with *args*.
