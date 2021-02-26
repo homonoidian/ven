@@ -463,7 +463,7 @@ module Ven
     def visit!(q : QBox)
       constraints = constrained(q.params, by: q.given)
 
-      box = MBox.new(q.tag, q.name, constraints)
+      box = MBox.new(q.tag, q.name, constraints, q.namespace)
 
       @context.define(q.name, box)
     end
@@ -529,6 +529,10 @@ module Ven
       end
 
       @context.in(callee.params, args) do |scope|
+        callee.namespace.each do |name, value|
+          scope[name] = visit(value)
+        end
+
         if callee.slurpy
           scope["rest"] = Vec.new(args[callee.arity...])
         end

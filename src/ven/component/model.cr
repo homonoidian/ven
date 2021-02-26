@@ -402,9 +402,10 @@ module Ven::Component
            arity : UInt8,
            slurpy : Bool,
            params : Array(String),
+           namespace : Hash(String, Quote),
            constraints : Array(TypedParameter)
 
-    def initialize(@tag, @name, @constraints)
+    def initialize(@tag, @name, @constraints, @namespace)
       @params = @constraints.map(&.name).reject("*")
       @arity = @params.size.to_u8
 

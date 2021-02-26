@@ -408,7 +408,16 @@ module Ven
     end
 
     # Parses a 'box' statement: `box Foo`. Box name must be
-    # capitalized.
+    # capitalized. A box can accept parameters the way funs
+    # accept them: `box Foo(a, b) given num`, etc. Boxes can
+    # have blocks (namespaces), which may contain solely
+    # assignments (`PAssign`s):
+    # ```
+    #   box Foo {
+    #     x = 0;
+    #     y = x;
+    #  }
+    # ```
     class PBox < Nud
       def parse(parser, tag, token)
         name = parser.expect("SYMBOL")[:lexeme]
@@ -425,7 +434,26 @@ module Ven
           ? PFun.given(parser)
           : Quotes.new
 
-        QBox.new(tag, name, params, given)
+        namespace =
+          if parser.word!("{")
+            # We do not require the semicolon from now on.
+            @semicolon = false
+
+            parser.repeat "}", ";", -> do
+              it = parser.led
+
+              # Box blocks may only contain assignments.
+              unless it.is_a?(QAssign)
+                parser.die("statements other than assignment illegal in box blocks")
+              end
+
+              {it.target, it.value}
+            end
+          else
+            {} of String => Quote
+          end
+
+        QBox.new(tag, name, params, given, namespace.to_h)
       end
     end
   end

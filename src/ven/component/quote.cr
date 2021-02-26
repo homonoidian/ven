@@ -148,5 +148,6 @@ module Ven::Component
   defquote(QBox,
     name : String,
     params : Array(String),
-    given : Quotes)
+    given : Quotes,
+    namespace : Hash(String, Quote))
 end
