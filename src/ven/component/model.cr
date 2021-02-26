@@ -129,13 +129,16 @@ module Ven::Component
   struct MRegex < MStruct
     property value
 
-    def initialize(
-      @value : Regex,
-      @string : String = @value.to_s)
+    def initialize(@value : Regex)
+      @source = @value.to_s
+    end
+
+    def initialize(@source : String)
+      @value = Regex.new(!@source.starts_with?("^") ? "^" + @source : @source)
     end
 
     def to_s(io)
-      io << "`" << @string << "`"
+      io << "`" << @source << "`"
     end
 
     def true?
@@ -145,7 +148,7 @@ module Ven::Component
     end
 
     def to_str
-      Str.new(@string)
+      Str.new(@source)
     end
   end
 

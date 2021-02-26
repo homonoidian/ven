@@ -77,7 +77,8 @@ module Ven::Component
     end
   end
 
-  # A thin compatibility layer between the Reader and the Machine.
+  # A thin compatibility layer between the `Reader` and the
+  # `Machine`.
   class QModelCarrier < QVoid
     getter model
 
@@ -151,7 +152,7 @@ module Ven::Component
       DynamicFieldAccessor |
       MultiFieldAccessor))
 
-  defquote(QBinarySpread, operator : String, body : Quote)
+  defquote(QBinarySpread, operator : String, operand : Quote)
   defquote(QLambdaSpread, lambda : Quote, operand : Quote, iterative : Bool)
 
   defquote(QBlock, body : Quotes)

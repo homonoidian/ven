@@ -1,7 +1,5 @@
 require "./component/*"
 
-require "big"
-
 module Ven
   class Machine < Component::Visitor
     include Component
@@ -9,8 +7,8 @@ module Ven
     # Maximum call depth (see `call`).
     MAX_CALL_DEPTH = 500
 
-    # Ven booleans are structs (copy on use) and need no
-    # repetitive `.new`s.
+    # Ven booleans are structs (copy on use). There is no
+    # need for the `.new`s everywhere (?)
     B_TRUE = MBool.new(true)
     B_FALSE = MBool.new(false)
 
@@ -31,8 +29,9 @@ module Ven
     end
 
     # If *condition* is Crystal true, returns *left*; otherwise,
-    # returns Ven boolean false. *condition* may be omitted;
-    # in that case, *left* will be used as *condition*.
+    # returns **Ven boolean** false. *condition* may be omitted;
+    # in that case, *left* itself will be used as the condition.
+    #
     # NOTE: if *condition* is true but *left* is semantically
     # false, returns B_TRUE.
     private macro may_be(left, if condition = nil)
@@ -49,8 +48,8 @@ module Ven
 
     # Constrains *names* to *types*. Evaluates the *types*,
     # making sure that each returns a type and dying if it
-    # does not. If there is no type for the corresponding
-    # name, makes it be MType::ANY.
+    # does not. Uses `MType::ANY` for the missing types, if
+    # there are any.
     def constrained(names : Array(String), by types : Quotes)
       last = MType::ANY
 
@@ -69,8 +68,10 @@ module Ven
 
     # Dies of runtime error with *message*. Constructs a
     # traceback where the top entry is the outermost call,
-    # and the bottom entry is a unit that was the actual
-    # cause of this death (`@last`).
+    # and the bottom entry the caller of death itself.
+    # Issues a `<unit>` traceback entry to display the last
+    # node in execution, unless it duplicates the last traceback
+    # entry.
     def die(message : String)
       traces = @context.traces.dup
 
@@ -82,11 +83,7 @@ module Ven
     end
 
     def visit!(q : QSymbol)
-      unless value = @context.fetch(q.value)
-        die("could not find '#{q.value}' in current scope")
-      end
-
-      value.as(Model)
+      @context.fetch(q.value) || die("could not find '#{q.value}' in current scope")
     end
 
     def visit!(q : QNumber)
@@ -98,12 +95,9 @@ module Ven
     end
 
     def visit!(q : QRegex)
-      # Assume we'll be matching from the start of the string:
-      regex = q.value.starts_with?("^") ? q.value : "^#{q.value}"
-
-      MRegex.new(Regex.new(regex), string: q.value)
+      MRegex.new(q.value)
     rescue ArgumentError
-      die("regex syntax error: invalid PCRE literal: #{q}")
+      die("regex syntax error: invalid PCRE literal: `#{q.value}`")
     end
 
     def visit!(q : QVector)
@@ -141,29 +135,25 @@ module Ven
     def visit!(q : QAccessField)
       head = visit(q.head)
 
-      unless value = field(head, q.path)
-        die("could not resolve #{q.path} for this value: #{head}")
-      end
-
-      value
+      field(head, q.path) || die("could not resolve #{q.path} for this value: #{head}")
     end
 
     def visit!(q : QBinarySpread)
-      body = visit(q.body)
+      operand = visit(q.operand)
 
-      if !body.is_a?(Vec)
-        die("could not spread on this value: #{body}")
-      elsif body.value.size == 0
-        return body
-      elsif body.value.size == 1
-        return body.value.first
+      if !operand.is_a?(Vec)
+        die("could not spread over this value: #{operand}")
+      elsif operand.value.empty?
+        return operand
+      elsif operand.value.size == 1
+        return operand.value.first
       end
 
       # Apply the operation on two first items to induce
-      # the type of the accumulator
-      memo = binary(q.operator, body.value.first, body.value[1])
+      # the type of the accumulator:
+      memo = binary(q.operator, operand.value.first, operand.value[1])
 
-      body.value[2...].reduce(memo) do |acc, item|
+      operand.value[2...].reduce(memo) do |acc, item|
         binary(q.operator, acc, item)
       end
     end
@@ -177,28 +167,25 @@ module Ven
         return operand
       end
 
-      item = operand.value.first
-      result = [] of Model
+      result = Models.new
 
-      @context.tracing({q.tag, "<spread>"}) do
-        @context.in do
-          operand.value.each_with_index do |item, index|
-            @context.with_u([Num.new(index), item]) do
-              factor = visit(q.lambda)
+      @context.in do
+        operand.value.each_with_index do |item, index|
+          @context.with_u([Num.new(index), item]) do
+            this = visit(q.lambda)
 
-              unless q.iterative
-                if factor.is_a?(MBool)
-                  factor = (factor.value ? item : next)
-                end
+            # Iterative spreads do not map (what we're doing
+            # below is essentially mapping).
+            next if q.iterative
 
-                result << factor
-              end
+            unless this.is_a?(MBool) && !this.value
+              result << this
             end
           end
         end
       end
 
-      result.empty? ? operand : Vec.new(result)
+      q.iterative ? operand : Vec.new(result)
     end
 
     def visit!(q : QIf)
@@ -218,7 +205,7 @@ module Ven
     end
 
     def visit!(q : QBlock)
-      may_be visit(q.body).last?
+      visit(q.body).last? || die("cannot evaluate an empty block")
     end
 
     def visit!(q : QAssign)
@@ -227,27 +214,27 @@ module Ven
 
     def visit!(q : QBinaryAssign)
       unless previous = @context.fetch(q.target)
-        die("this assignment is illegal: '#{q.target}' was never declared")
+        die("'#{q.target}' has to be set to something first")
       end
 
       # We need two copies of the given value: one we'll work
-      # with, and one the user expects to be returned.
-      given = visit(q.value)
-      value = given.dup
+      # with ourselves, the other we'll give back to the user.
+      original = visit(q.value)
+      working = original.dup
 
-      # We **wrap** *value* into a vector, not convert. E.g.,
+      # We **wrap** *working* in a vector, not convert. E.g.,
       #   x = [1, 2];
-      #   x &= [3];
+      #   x &= [3]; #) wraps
       #   ensure x is [1, 2, [3]];
       #   y = [1, 2];
-      #   y = y & [3];
+      #   y = y & [3]; #) converts
       #   ensure y is [1, 2, 3];
-      value = Vec.new([value]) if q.operator == "&"
+      working = Vec.new([working]) if q.operator == "&"
 
-      result = binary(q.operator, previous, value)
-      @context.define(q.target, result)
+      @context.define(q.target,
+        binary(q.operator, previous, working))
 
-      given
+      original
     end
 
     def visit!(q : QFun)
@@ -261,11 +248,11 @@ module Ven
         q.slurpy)
 
       # Try to find an existing function, generic or concrete.
-      # If found a generic function, add this function as one
+      # If found a generic function, add *this* function as one
       # of its implementations. If found a concrete function,
       # create a generic that can hold both the found function
-      # and this one. If found nothing, store this concrete
-      # function under the name it has.
+      # and *this* function. If found nothing, store *this* as
+      # a concrete function.
       existing = @context.fetch(q.name)
 
       case existing
@@ -286,8 +273,10 @@ module Ven
     end
 
     def visit!(q : QEnsure)
-      unless (value = visit(q.expression)).true?
-        die("failed to ensure: #{value}")
+      value = visit(q.expression)
+
+      unless value.true?
+        die("'ensure' got a falsey value")
       end
 
       value
@@ -306,8 +295,9 @@ module Ven
             # *route* is not a field. But we must make sure
             # it is a single field accessor.
             unless route.is_a?(SingleFieldAccessor)
-              die("attempt to resolve a dynamic field on " \
-                  "a value that does not exist")
+              die(
+                "attempt to resolve a dynamic field on " \
+                "a value that does not exist")
             end
 
             route = route.field
@@ -362,9 +352,7 @@ module Ven
     end
 
     def visit!(q : QInfiniteLoop)
-      loop do
-        visit(q.body)
-      end
+      loop { visit(q.body) }
     end
 
     # :nodoc:
@@ -374,18 +362,16 @@ module Ven
 
     # :nodoc:
     #
-    # Boilerplate code for loops (QBaseLoop, QStepLoop and QComplexLoop)
-    # that can handle 'next's in scope 'loop'.
+    # Boilerplate code for the loops (QBaseLoop, QStepLoop
+    # and QComplexLoop) that handle 'next loop's (& bare 'next's).
     private macro loop_body_handler
       begin
         evaluated_body_last?
       rescue interrupt : NextInterrupt
-        if interrupt.scope.nil? || interrupt.scope == "loop"
-          unless interrupt.args.empty?
-            die("no support for 'next loop' arguments yet :(")
-          end
-
-          next
+        if interrupt.target.nil? || interrupt.target == "loop"
+          interrupt.args.empty? \
+            ? next
+            : die("no support for 'next loop' arguments yet :(")
         end
 
         raise interrupt
@@ -434,6 +420,12 @@ module Ven
 
       while visit(q.base).true?
         # Evaluate pres (pre-statements):
+        #  loop (a; b; c; d; e) ...
+        #  start-^  ^  {^^}  ^
+        #     base -+   |    |
+        #         pres -+    |
+        #              step -+
+
         visit(q.pres)
 
         loop_body_handler
@@ -523,13 +515,12 @@ module Ven
     # `Vec` of the gathered values, or nil if some were not
     # found.
     def field(head, accessor : MultiFieldAccessor)
-      Vec.new(
+      values =
         accessor.field.map do |field|
-          return unless value = field(head, field)
-
-          value
+          return unless value = field(head, field); value
         end
-      )
+
+      Vec.new(values)
     end
 
     # Resolves the *route* for *head*.
@@ -553,32 +544,27 @@ module Ven
       end
     end
 
-    # Typechecks *args* against *constraints* (using `of?`).
+    # Typechecks *args* against *constraints* (via `of?`).
     def typecheck(constraints : Array(TypedParameter), args : Models) : Bool
-      rest_type =
+      rest =
         if constraints.last?.try(&.name) == "*"
           constraints.last.type
         end
 
-      # Rest typecheck semantics differs a bit from normal
-      # constraint checking; omit the rest constraint.
-      constraints = constraints[...-1] if rest_type
+      # Rest typecheck semantics differs a bit from the
+      # normal constraint checking; we will omit the rest
+      # constraint for now, if there ever was one.
+      constraints = constraints[...-1] if rest
 
-      constraints.zip?(args).each do |constraint, argument|
-        # Ignore missing arguments.
-        unless argument.nil? || of?(argument, constraint.type)
+      constraints.zip(args).each do |constraint, argument|
+        unless of?(argument, constraint.type)
           return false
         end
       end
 
-      # Rest typecheck:
-      if rest_type
-        return args[constraints.size...].all? do |argument|
-          of?(argument, rest_type)
-        end
-      end
-
-      true
+      rest \
+        ? args[constraints.size...].all? { |this| of?(this, rest) }
+        : true
     end
 
     # Instantiates an `MBox` with arguments *args*.
@@ -607,7 +593,8 @@ module Ven
 
     # Calls an `MConcreteFunction` with *args*, checking the
     # types if *typecheck* is true. *generic* determines the
-    # behavior of 'next': if set to true, 'next' won't be catched.
+    # behavior of 'next': if set to true, 'next' would not be
+    # captured.
     def call(callee : MConcreteFunction, args : Models, typecheck = true, generic = false) : Model
       loop do
         begin
@@ -647,7 +634,7 @@ module Ven
           end
         end
       rescue interrupt : NextInterrupt
-        unless interrupt.scope.nil? || interrupt.scope == "fun"
+        unless interrupt.target.nil? || interrupt.target == "fun"
           die("#{interrupt} caught by #{callee}")
         end
 
@@ -663,8 +650,8 @@ module Ven
     def call(callee : MGenericFunction, args) : Model
       loop do
         begin
-          # Goes over the variants until a *suitable* variant
-          # is found & typecheck against constraints passes.
+          # Goes over the variants of *callee* until a *suitable*
+          # variant is found & typecheck against constraints passes.
           callee.variants.each do |variant|
             suitable =
               (variant.slurpy && args.size >= variant.arity) ||
@@ -675,9 +662,8 @@ module Ven
             end
           end
         rescue interrupt : NextInterrupt
-          # Dies on any 'next' other than bare 'next' or 'next fun':
-          unless interrupt.scope.nil? || interrupt.scope == "fun"
-            die("#{interrupt} caught by #{callee}")
+          unless interrupt.target.nil? || interrupt.target == "fun"
+            die("#{interrupt} captured by #{callee}")
           end
 
           next (args = interrupt.args unless interrupt.args.empty?)
@@ -758,7 +744,8 @@ module Ven
     # Checks whether *left* and  *right* are equal by value (not
     # semantically). E.g., while `0 is false` (semantic equality)
     # yields true, `0 <eqv> false` yields false.
-    # NOTE: `eqv` is not available inside the language itself.
+    #
+    # NOTE: `eqv` is not available inside the language yet.
     def eqv?(left, right)
       false
     end
