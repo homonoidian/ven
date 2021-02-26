@@ -93,12 +93,34 @@ module Ven
     end
 
     # Parses a field access expression into a QAccessField:
-    # `a.b.c`, `1.bar`, `"quux".strip!`, etc.
+    # `a.b.c`, `1.bar`, `"quux".strip!`, etc. Also parses
+    # multifield access (`a.[b, c]`) and dynamic field
+    # access (`a.(b)`).
     class PAccessField < Led
       def parse(parser, tag, left, token)
-        path = parser.repeat(sep: ".", unit: -> { parser.expect("SYMBOL")[:lexeme] })
+        path = parser.repeat(sep: ".", unit: -> { member(parser, tag) })
 
         QAccessField.new(tag, left, path)
+      end
+
+      def member(parser, tag)
+        token = parser.expect("SYMBOL", "[", "(")
+
+        if token[:type] == "SYMBOL"
+          SingleFieldAccessor.new(token[:lexeme])
+        elsif token[:type] == "("
+          DynamicFieldAccessor.new(PGroup.new.parse(parser, tag, token))
+        else # if it[:type] == "["
+          vector = PVector.new.parse(parser, tag, token)
+
+          # Wrap all vector items into dynamic field accessors:
+          wrapped =
+            vector.items.map do |route|
+              DynamicFieldAccessor.new(route)
+            end
+
+          MultiFieldAccessor.new(wrapped)
+        end
       end
     end
   end

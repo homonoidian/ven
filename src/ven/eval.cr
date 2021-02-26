@@ -141,17 +141,11 @@ module Ven
     def visit!(q : QAccessField)
       head = visit(q.head)
 
-      q.path.each do |route|
-        value = field(head, route)
-
-        unless value
-          die("field '#{route}' not found for this value: #{head}")
-        end
-
-        head = value.as(Model)
+      unless value = field(head, q.path)
+        die("could not resolve #{q.path} for this value: #{head}")
       end
 
-      head
+      value
     end
 
     def visit!(q : QBinarySpread)
@@ -306,12 +300,19 @@ module Ven
       if (access = q.callee).is_a?(QAccessField)
         head = visit(access.head)
 
-        # Try to `field` until a field is not found
+        # Try to `field` until a field is **not** found
         access.path.each_with_index do |route, index|
           unless value = field(head, route)
-            # *route* is not a field. Try making a call to a
-            # variable named *route*, whose value will be the
-            # callee and *head* the only argument.
+            # *route* is not a field. But we must make sure
+            # it is a single field accessor.
+            unless route.is_a?(SingleFieldAccessor)
+              die("attempt to resolve a dynamic field on " \
+                  "a value that does not exist")
+            end
+
+            route = route.field
+
+            # Try searching for a variable called *route*.
             callee = @context.fetch(route)
 
             unless callee && callee.callable?
@@ -321,7 +322,12 @@ module Ven
             end
 
             if access.path.size == index + 1
-              # We're going for the normies' call!
+              # Here, we're on the last path member:
+              #   a.b.c(1).d(1, 2, 3)
+              #   ^^^^^^^^ ^ ^^^^^^^
+              #   [||||||] | [|||||]
+              #     head   |   args
+              #          callee
               args.unshift(head)
 
               break head = callee
@@ -475,6 +481,64 @@ module Ven
       right.type.is_a?(MClass.class) \
         ? left.class <= right.type.as(MClass.class)
         : left.class <= right.type.as(MStruct.class)
+    end
+
+    # Resolves a `SingleFieldAccessor` for *head*. Simply an
+    # unpack alias for `field(head, field)`;
+    def field(head, accessor : SingleFieldAccessor)
+      field(head, accessor.field)
+    end
+
+    # Resolves a `DynamicFieldAccessor` for *head*. The *field*
+    # of the DynamicFieldAccessor must evaluate to `Str`.
+    # `QSymbol`s, though, follow a different evaluation model:
+    # if symbol is an existing variable, the value of this
+    # variable is used as the field's name; if it is not, the
+    # symbol itself is used as the field's name. A similar
+    # rule applies to nested `QAccessField`s.
+    def field(head, accessor : DynamicFieldAccessor)
+      case field = accessor.field
+      when QSymbol # a freestanding symbol
+        unless @context.fetch(field.value)
+          return field(head, field.value)
+        end
+      when QAccessField # a nested field access
+        if (nfa_head = field.head).is_a?(QSymbol)
+          if value = field(head, nfa_head.value)
+            return field(value, field.path)
+          end
+        end
+      end
+
+      value = visit(accessor.field)
+
+      unless value.is_a?(Str)
+        die("field accessor returned this instead of a string: #{field}")
+      end
+
+      field(head, value.value)
+    end
+
+    # Resolves a `MultiFieldAccessor` for *head*. Returns a
+    # `Vec` of the gathered values, or nil if some were not
+    # found.
+    def field(head, accessor : MultiFieldAccessor)
+      Vec.new(
+        accessor.field.map do |field|
+          return unless value = field(head, field)
+
+          value
+        end
+      )
+    end
+
+    # Resolves the *route* for *head*.
+    def field(head, route : Array(FieldAccessor))
+      route.each do |routee|
+        break unless head = field(head, routee)
+      end
+
+      head
     end
 
     # Accesses *head*'s field *field*. Returns nil if there
