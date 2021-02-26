@@ -466,7 +466,7 @@ module Ven
       @context.define(q.name, box)
     end
 
-    # Checks if *left* has type *right*.
+    # Checks if *left* is of the type *right*.
     def of?(left : Model, right : MType) : Bool
       return true if right.type == MAny
 
@@ -505,7 +505,7 @@ module Ven
       value = visit(accessor.field)
 
       unless value.is_a?(Str)
-        die("field accessor returned this instead of a string: #{field}")
+        die("field accessor returned this instead of a string: #{value}")
       end
 
       field(head, value.value)
@@ -591,7 +591,7 @@ module Ven
       end
     end
 
-    # Calls an `MConcreteFunction` with *args*, checking the
+    # Calls an `MConcreteFunction` with *args*, checking their
     # types if *typecheck* is true. *generic* determines the
     # behavior of 'next': if set to true, 'next' would not be
     # captured.
@@ -750,24 +750,24 @@ module Ven
       false
     end
 
-    # See `eqv?(left, right)`.
+    # :ditto:
     def eqv?(left : Num | Str | MBool, right : Num | Str | MBool)
       left.value == right.value
     end
 
-    # See `eqv?(left, right)`.
+    # :ditto:
     def eqv?(left : Vec, right : Vec)
       lv, rv = left.value, right.value
 
       lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
     end
 
-    # See `eqv?(left, right)`.
+    # :ditto:
     def eqv?(left : MBox, right : MBox)
       left.name == right.name
     end
 
-    # See `eqv?(left, right)`.
+    # :ditto:
     def eqv?(left : MBoxInstance, right : MBox)
       eqv?(left.parent, right)
     end

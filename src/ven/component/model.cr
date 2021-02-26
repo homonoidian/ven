@@ -159,7 +159,7 @@ module Ven::Component
     Component.model_template?
   end
 
-  # A Ven number, implemented with caching in mind.
+  # A Ven number.
   class MNumber < MClass
     property value : BigRational
 
@@ -257,8 +257,7 @@ module Ven::Component
   abstract class MAny < MClass
   end
 
-  # TypedParameter is, in essence, a parameter's name and
-  # parameter's `MType`.
+  # TypedParameter is just a parameter's name and type.
   struct TypedParameter
     getter name, type
 
@@ -272,8 +271,8 @@ module Ven::Component
     end
   end
 
-  # An umbrella `function` type, and the parent of all kinds
-  # of functions Ven has.
+  # An umbrella `function` type, and the parent of all the
+  # kinds of functions Ven has.
   abstract class MFunction < MClass
     def callable?
       true
@@ -284,8 +283,8 @@ module Ven::Component
   # amongst others, a *name*, a *body*, a *tag*, and a set of
   # *constraints* which define the very identity of any concrete
   # function. All concrete functions are constrained, but the `any`
-  # constraint is used by default, allowing unconstraintness
-  # to be a thing.
+  # constraint is used by default, allowing for some sort of
+  # pseudo-unconstraintness.
   class MConcreteFunction < MFunction
     getter tag : QTag,
            name : String,
@@ -315,7 +314,7 @@ module Ven::Component
       @@FIELDS["body"] = Vec.new(@body.map { |n| n.as(Model) })
     end
 
-    # Compares this function to *other* based on arity.
+    # Compares this function's arity with the *other*'s arity.
     def <=>(other : MConcreteFunction)
       params.size <=> other.params.size
     end

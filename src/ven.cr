@@ -22,14 +22,14 @@ module Ven
       @world.load(Library::System)
     end
 
-    # Prints the *message* and quits with exit status 0.
+    # Prints a *message* and quits with exit status 0.
     def error(message : String)
       puts message
 
       exit(0)
     end
 
-    # Prints the *message* of some *kind* and, if given true
+    # Prints a *message* of some *kind* and, if given true
     # *quit*, quits with exit status 1.
     def error(kind : String, message : String, quit = false)
       kind = "[#{kind}]"
@@ -42,8 +42,8 @@ module Ven
     end
 
     # Chooses the appropriate kind and message for *this*,
-    # a Ven error, and `error`s them. If *quit* is true,
-    # exits with status 1 afterwards.
+    # a Ven error, and `error`s. If *quit* is true, exits
+    # with status 1 afterwards.
     def error(this : VenError, quit = true)
       message = this.message.not_nil!
 
@@ -63,9 +63,10 @@ module Ven
       end
     end
 
-    # Returns a string of prettified *traces*. *root_spaces*
-    # is the number of spaces before each trace; *code_spaces*
-    # is the number of spaces before each source excerpt.
+    # Returns a string of properly formatted *traces*.
+    # *root_spaces* is the number of spaces before each trace;
+    # *code_spaces* is the number of spaces before each source
+    # code excerpt.
     def format_traces(traces : Traces, root_spaces = 2, code_spaces = 4)
       result = traces.map do |trace|
         file = trace.tag.file

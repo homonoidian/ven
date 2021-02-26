@@ -40,8 +40,8 @@ module Ven
     end
 
     # Gathers all '.ven' files in the lookup directories and
-    # registers each in `@modules`, under its appropriate
-    # 'distinct' path. *except* can be used to ignore a
+    # registers each in `@modules`, under their appropriate
+    # 'distinct' paths. *except* can be used to ignore a
     # specific '.ven' file.
     def gather(ignore : String? = nil)
       @lookup.each do |path|
@@ -84,7 +84,7 @@ module Ven
     end
 
     # Makes a list of candidate modules matching *distinct*
-    # and evaluates these candidate modules in the scope of
+    # and evaluates these candidate modules in the context of
     # this world. Returns false if found no candidate modules.
     def expose(distinct : Array(String)) : Bool
       # Choose the modules whose names are equal to *distinct*
@@ -119,7 +119,7 @@ module Ven
 
     # Returns the origin for the *directory*. Dies if this
     # origin does not exist.
-    # Origin is a Ven script which has the same name as the
+    # Origin is a Ven script that has the same name as the
     # *directory*. For example, for the *directory* `a/b/c`
     # the origin will be `a/b/c/c.ven`.
     def origin(directory : Path)
@@ -130,7 +130,7 @@ module Ven
       origin
     end
 
-    # Visits a quote in the scope of this world. Dies on any
+    # Visits a quote in the context of this world. Dies on any
     # interrupt (e.g. `NextInterrupt`) that was not captured.
     def visit(quote : Quote)
       @machine.last = quote
@@ -142,16 +142,14 @@ module Ven
       end
     end
 
-    # Loads given *extensions*, a bunch of Component::Extension
-    # subclasses.
+    # Loads given *extensions* into the context of this world.
     def load(*extensions : Component::Extension.class)
       extensions.each do |extension|
         extension.new(@context).load
       end
     end
 
-    # Reads and evaluates a String of *source* under the
-    # filename *filename*.
+    # Reads and evaluates *source* under the filename *filename*.
     def feed(filename : String, source : String)
       @reader.read(filename, source) do |quote|
         visit(quote)

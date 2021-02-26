@@ -113,7 +113,7 @@ module Ven::Component
   defquote(QReturnDecrement, target : String)
   defquote(QReturnIncrement, target : String)
 
-  # Part of the field access' (`QFieldAccess`) path.
+  # Part of the field access' (`QAccessField`) path.
   abstract struct FieldAccessor(T)
     getter field
 
