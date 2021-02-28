@@ -53,6 +53,20 @@ module Ven::Component
       @@FIELDS[name]?
     end
 
+    # Returns whether this model is of the type *other*.
+    def of?(other : MType) : Bool
+      return true if other.type == MAny
+
+      other.type.is_a?(MClass.class) \
+        ? self.class <= other.type.as(MClass.class)
+        : self.class <= other.type.as(MStruct.class)
+    end
+
+    # :ditto:
+    def of?(other)
+      false
+    end
+
     # Returns whether this model is equal-by-value to the
     # *other* model.
     def eqv?(other : Model) : Bool
@@ -270,10 +284,10 @@ module Ven::Component
   abstract class MAny < MClass
   end
 
-  # A parameter constrained by a type.
+  # A parameter constrained by a Ven value.
   struct ConstrainedParameter
     getter name : String
-    getter constraint : MType
+    getter constraint : Model
 
     def initialize(@name, @constraint)
     end
@@ -282,10 +296,20 @@ module Ven::Component
       io << @name << ": " << @constraint
     end
 
-    # Returns whether this parameter's constraint is equal
-    # to the *other* parameter's constraint.
+    # Returns whether this parameter's constraint matches
+    # the *other* model.
+    def matches(other : Model)
+      if @constraint.is_a?(MType)
+        return other.of?(@constraint)
+      end
+
+      @constraint.eqv?(other)
+    end
+
+    # Returns whether this constraint is equal to the *other*
+    # constraint.
     def ==(other : ConstrainedParameter)
-      @constraint == other.constraint
+      matches(other.constraint)
     end
   end
 

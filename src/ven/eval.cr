@@ -56,10 +56,6 @@ module Ven
       names.zip?(types).map do |name, type|
         unless type.nil?
           constraint = visit(type)
-
-          unless constraint.is_a?(MType)
-            die("failed to constrain '#{name}' to #{constraint}")
-          end
         end
 
         ConstrainedParameter.new(name, constraint)
@@ -466,15 +462,6 @@ module Ven
       @context.define(q.name, box)
     end
 
-    # Checks if *left* is of the type *right*.
-    def of?(left : Model, right : MType) : Bool
-      return true if right.type == MAny
-
-      right.type.is_a?(MClass.class) \
-        ? left.class <= right.type.as(MClass.class)
-        : left.class <= right.type.as(MStruct.class)
-    end
-
     # Resolves a `SingleFieldAccessor` for *head*. Simply an
     # unpack alias for `field(head, field)`;
     def field(head, accessor : SingleFieldAccessor)
@@ -548,7 +535,7 @@ module Ven
     def typecheck(constraints : ConstrainedParameters, args : Models) : Bool
       rest =
         if constraints.last?.try(&.name) == "*"
-          constraints.last.constraint
+          constraints.last
         end
 
       # Rest typecheck semantics differs a bit from the
@@ -556,15 +543,17 @@ module Ven
       # constraint for now, if there ever was one.
       constraints = constraints[...-1] if rest
 
-      constraints.zip(args).each do |param, argument|
-        unless of?(argument, param.constraint)
+      constraints.zip(args).each do |constraint, argument|
+        unless constraint.matches(argument)
           return false
         end
       end
 
-      rest \
-        ? args[constraints.size...].all? { |this| of?(this, rest) }
-        : true
+      return true unless rest
+
+      args[constraints.size...].all? do |this|
+        rest.matches(this)
+      end
     end
 
     # Instantiates an `MBox` with arguments *args*.
@@ -795,7 +784,7 @@ module Ven
            {"is", MBoxInstance, _}
         may_be left, if: left.eqv?(right)
       when {"is", _, MType}
-        to_bool of?(left, right)
+        to_bool left.of?(right)
       when {"is", Str, MRegex}
         may_be Str.new($0), if: left.value =~ right.value
       when {"in", _, Vec}
