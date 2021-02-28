@@ -21,9 +21,6 @@ module Ven::Component
 
   # :nodoc:
   macro model_template?
-    # The fields this model provides access to.
-    @@FIELDS = {} of String => Model
-
     # Converts (casts) this model into a `Num`.
     def to_num : Num
       raise ModelCastException.new("could not convert to num")
@@ -46,11 +43,9 @@ module Ven::Component
     end
 
     # Returns a field's value for this model (or nil if the
-    # field of interest does not exist). This method may also
-    # be used to handle dynamic fields (fields whose values may
-    # change over time).
+    # field of interest does not exist).
     def field(name : String) : Model?
-      @@FIELDS[name]?
+      nil
     end
 
     # Returns whether this model is of the type *other*.
@@ -284,12 +279,40 @@ module Ven::Component
   abstract class MAny < MClass
   end
 
+  # An enum of parameter weights. Do not change the order!
+  private enum Weight
+    ANY_ANON = 1
+    ANY_NAME
+    TYPE_ANON
+    TYPE_NAME
+    VALUE_ANON
+    VALUE_NAME
+  end
+
   # A parameter constrained by a Ven value.
   struct ConstrainedParameter
     getter name : String
     getter constraint : Model
 
+    getter weight : Weight do
+      anon = anonymous?.to_unsafe
+
+      case constraint
+      when MType::ANY
+        Weight::ANY_NAME - anon
+      when MType
+        Weight::TYPE_NAME - anon
+      else
+        Weight::VALUE_NAME - anon
+      end
+    end
+
     def initialize(@name, @constraint)
+    end
+
+    # Returns whether this parameter is anonymous.
+    def anonymous?
+      name.in?("*")
     end
 
     def to_s(io)
@@ -309,6 +332,12 @@ module Ven::Component
     # Returns whether this constraint is equal to the *other*
     # constraint.
     def ==(other : ConstrainedParameter)
+      # If we're given two type constraints, compare them
+      # directly (and not via `of?`).
+      if @constraint.is_a?(MType) && other.constraint.is_a?(MType)
+        return @constraint == other.constraint && anonymous? == other.anonymous?
+      end
+
       matches(other.constraint)
     end
   end
@@ -333,32 +362,45 @@ module Ven::Component
     getter name : String
     getter body : Quotes
     getter arity : UInt8
-    getter slurpy : Bool
-    getter general : Bool
     getter params : Array(String)
+    getter slurpy : Bool
+    getter priority : Int32
     getter constraints : ConstrainedParameters
 
     def initialize(@tag, @name, @constraints, @body, @slurpy)
-      # All constraint names except `*` are parameters.
-      @params = @constraints.map(&.name).reject!("*")
-
+      @priority = priority?
+      @params = @constraints.reject(&.anonymous?).map(&.name)
       @arity = @params.size.to_u8
+    end
 
-      @general =
-        @constraints.empty? ||
-        @constraints.any? &.constraint.is_a?(MType::ANY)
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "arity"
+        Num.new(@arity.to_i)
+      when "params"
+        Vec.new(@params.map { |it| Str.new(it) })
+      when "priority"
+        Num.new(@priority)
+      when "slurpy?"
+        MBool.new(@slurpy)
+      when "body"
+        Vec.new(@body)
+      end
+    end
 
-      @@FIELDS["name"] = Str.new(@name)
-      @@FIELDS["arity"] = Num.new(@arity.to_i32)
-      @@FIELDS["params"] = Vec.new(@params.map { |p| Str.new(p).as(Model) })
-      @@FIELDS["slurpy?"] = MBool.new(@slurpy)
-      @@FIELDS["general?"] = MBool.new(@general)
-      @@FIELDS["body"] = Vec.new(@body.map { |n| n.as(Model) })
+    # Computes the priority of this concrete. Priority is the
+    # sum of weights of the parameters this concrete takes
+    # (including anonymous parameters) multiplied by the amount
+    # of them.
+    def priority?
+      @constraints.map(&.weight.value).sum * @constraints.size
     end
 
     # Compares this function's arity with the *other*'s arity.
     def <=>(other : MConcreteFunction)
-      @arity <=> other.arity
+      @priority <=> other.priority
     end
 
     # Returns whether this function's signature is equal to
@@ -381,7 +423,6 @@ module Ven::Component
     getter variants = Array(MConcreteFunction).new
 
     def initialize(@name)
-      @@FIELDS["name"] = Str.new(@name)
     end
 
     # Adds *variant* to the list of variants this generic
@@ -402,12 +443,12 @@ module Ven::Component
 
     def field(name)
       case name
+      when "name"
+        Str.new(@name)
       when "variants"
         Vec.new(@variants)
       when "variancy"
         Num.new(@variants.size)
-      else
-        @@FIELDS[name]?
       end
     end
 
