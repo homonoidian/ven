@@ -208,9 +208,7 @@ module Ven::Component
     end
 
     def -
-      @value = -@value
-
-      self
+      Num.new(-@value)
     end
   end
 
@@ -493,6 +491,10 @@ module Ven::Component
       @name == other.name
     end
 
+    def eqv?(other : MBoxInstance)
+      eqv?(other.parent)
+    end
+
     def callable?
       true
     end
@@ -517,6 +519,11 @@ module Ven::Component
 
     def eqv?(other : MBox)
       @parent.eqv?(other)
+    end
+
+    # XXX: stricten!
+    def eqv?(other : MBoxInstance)
+      parent.eqv?(other.parent)
     end
 
     def to_s(io)
