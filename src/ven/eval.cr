@@ -51,18 +51,18 @@ module Ven
     # does not. Uses `MType::ANY` for the missing types, if
     # there are any.
     def constrained(names : Array(String), by types : Quotes)
-      last = MType::ANY
+      constraint = MType::ANY
 
       names.zip?(types).map do |name, type|
         unless type.nil?
-          last = visit(type)
+          constraint = visit(type)
 
-          unless last.is_a?(MType)
-            die("failed to constrain '#{name}' to #{last}")
+          unless constraint.is_a?(MType)
+            die("failed to constrain '#{name}' to #{constraint}")
           end
         end
 
-        TypedParameter.new(name, last)
+        ConstrainedParameter.new(name, constraint)
       end
     end
 
@@ -545,10 +545,10 @@ module Ven
     end
 
     # Typechecks *args* against *constraints* (via `of?`).
-    def typecheck(constraints : Array(TypedParameter), args : Models) : Bool
+    def typecheck(constraints : ConstrainedParameters, args : Models) : Bool
       rest =
         if constraints.last?.try(&.name) == "*"
-          constraints.last.type
+          constraints.last.constraint
         end
 
       # Rest typecheck semantics differs a bit from the
@@ -556,8 +556,8 @@ module Ven
       # constraint for now, if there ever was one.
       constraints = constraints[...-1] if rest
 
-      constraints.zip(args).each do |constraint, argument|
-        unless of?(argument, constraint.type)
+      constraints.zip(args).each do |param, argument|
+        unless of?(argument, param.constraint)
           return false
         end
       end
@@ -669,9 +669,7 @@ module Ven
           next (args = interrupt.args unless interrupt.args.empty?)
         end
 
-        # Gone through all variants and no suitable variants
-        # were found:
-        die("no concrete of #{callee} accepts these arguments: #{args.join(", ")}")
+        die("#{callee} could not accept these arguments: #{args.join(", ")}")
       end
     end
 
@@ -685,7 +683,7 @@ module Ven
       return Vec.new if args.empty?
 
       items = args.map do |index|
-        if !(index.is_a?(MNumber) && index.value.denominator == 1)
+        if !(index.is_a?(Num) && index.value.denominator == 1)
           die("invalid vector index: #{index}")
         elsif !(item = vector.value[index.value.numerator]?)
           die("vector index out of range: #{index}")
@@ -702,7 +700,7 @@ module Ven
       return Str.new("") if args.empty?
 
       chars = args.map do |index|
-        if !(index.is_a?(MNumber) && index.value.denominator == 1)
+        if !(index.is_a?(Num) && index.value.denominator == 1)
           die("invalid string index: #{index}")
         elsif !(char = string.value[index.value.numerator]?)
           die("string index out of range: #{index}")
@@ -739,37 +737,6 @@ module Ven
       end
     rescue e : ModelCastException
       die("'#{operator}': cannot normalize #{operand}: #{e.message}")
-    end
-
-    # Checks whether *left* and  *right* are equal by value (not
-    # semantically). E.g., while `0 is false` (semantic equality)
-    # yields true, `0 <eqv> false` yields false.
-    #
-    # NOTE: `eqv` is not available inside the language yet.
-    def eqv?(left, right)
-      false
-    end
-
-    # :ditto:
-    def eqv?(left : Num | Str | MBool, right : Num | Str | MBool)
-      left.value == right.value
-    end
-
-    # :ditto:
-    def eqv?(left : Vec, right : Vec)
-      lv, rv = left.value, right.value
-
-      lv.size == rv.size && lv.zip(rv).all? { |li, ri| eqv?(li, ri) }
-    end
-
-    # :ditto:
-    def eqv?(left : MBox, right : MBox)
-      left.name == right.name
-    end
-
-    # :ditto:
-    def eqv?(left : MBoxInstance, right : MBox)
-      eqv?(left.parent, right)
     end
 
     # Converts *left* and *right* into the types *operator*
@@ -826,13 +793,13 @@ module Ven
            {"is", Vec, Vec},
            {"is", MBox, _},
            {"is", MBoxInstance, _}
-        may_be left, if: eqv?(left, right)
+        may_be left, if: left.eqv?(right)
       when {"is", _, MType}
         to_bool of?(left, right)
       when {"is", Str, MRegex}
         may_be Str.new($0), if: left.value =~ right.value
       when {"in", _, Vec}
-        may_be right.value.each { |i| break i if eqv?(left, i) }
+        may_be right.value.each { |i| break i if left.eqv?(i) }
       when {"<", Num, Num}
         to_bool left.value < right.value
       when {">", Num, Num}
