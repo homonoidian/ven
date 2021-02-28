@@ -108,8 +108,7 @@ module Ven
     # Parses a unary operation into a QUnary: `+12.34`,
     # `~[1, 2, 3]`, `-true`, etc.
     class PUnary < Nud
-      def initialize(
-        @precedence : UInt8)
+      def initialize(@precedence : UInt8)
       end
 
       def parse(parser, tag, token)
@@ -344,8 +343,7 @@ module Ven
     # A trigger parselet that will call the trigger function
     # (named after *@trigger*.)
     class PNudTrigger < Nud
-      def initialize(
-        @trigger : String)
+      def initialize(@trigger : String)
       end
 
       def parse(parser, tag, token)

@@ -1,11 +1,10 @@
 module Ven::Component
   # The interrupt raised when a 'next' expression evaluates.
   class NextInterrupt < Exception
-    getter target, args
+    getter args : Models
+    getter target : String?
 
-    def initialize(
-      @target : String?,
-      @args : Models)
+    def initialize(@target, @args)
     end
 
     def to_s(io)

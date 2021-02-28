@@ -7,33 +7,29 @@ module Ven::Component
   # malformed or illegal input, or when the lexical analyzer
   # receives invalid input.
   class ReadError < VenError
-    getter lexeme, line, file, message
-
-    # Initializes a reader error.
-    def initialize(word : Word, @file : String, @message : String)
-      @line = word[:line]
-      @lexeme = word[:lexeme]
-    end
+    getter line : UInt32
+    getter file : String
+    getter lexeme : String
 
     # Initializes a lexical error.
-    def initialize(
-      @lexeme : String,
-      @line : UInt32,
-      @file : String,
-      @message : String)
+    def initialize(@lexeme, @line, @file, @message)
+    end
+
+    # Initializes a reader error.
+    def initialize(word : Word, @file, @message)
+      @line = word[:line]
+      @lexeme = word[:lexeme]
     end
   end
 
   # The exception that is raised when the interpreter
   # encounters a traceable semantic error.
   class RuntimeError < VenError
-    getter file, line, message, trace
+    getter file : String
+    getter line : UInt32
+    getter trace : Traces
 
-    @file : String
-    @line : UInt32
-    @trace: Traces
-
-    def initialize(tag : QTag, @message : String, @trace)
+    def initialize(tag : QTag, @message, @trace)
       @file = tag.file
       @line = tag.line
     end
@@ -45,11 +41,6 @@ module Ven::Component
   # a standard Crystal error is raised, something is **very**
   # wrong.
   class InternalError < VenError
-    getter message
-
-    def initialize(
-      @message : String)
-    end
   end
 
   # An exception that is raised when there is a problem in the

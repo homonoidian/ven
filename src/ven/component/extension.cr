@@ -5,8 +5,7 @@ module Ven::Component
   abstract class Extension
     include Component
 
-    def initialize(
-      @context : Context)
+    def initialize(@context : Context)
     end
 
     # Defines a Ven variable. *name* is a String, and *value*

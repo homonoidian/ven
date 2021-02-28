@@ -7,8 +7,7 @@ module Ven
     abstract class Led
       getter precedence : UInt8
 
-      def initialize(
-        @precedence)
+      def initialize(@precedence)
       end
 
       # Performs the parsing.

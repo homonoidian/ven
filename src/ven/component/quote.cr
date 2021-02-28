@@ -1,11 +1,10 @@
 module Ven::Component
   # The location (*file*name and *line* number) of a `Quote`.
   struct QTag
-    getter file, line
+    getter file : String
+    getter line : UInt32
 
-    def initialize(
-      @file : String,
-      @line : UInt32)
+    def initialize(@file, @line)
     end
 
     # Returns whether this tag is equal to the *other* tag.
@@ -69,7 +68,7 @@ module Ven::Component
     getter tag
 
     def initialize
-      @tag = QTag.new("<dummy>", 1)
+      @tag = QTag.new("<dummy>", 1_u32)
     end
 
     def to_s(io)
