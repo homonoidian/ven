@@ -1,0 +1,154 @@
+#) 01-operators
+#) ------------
+#) Ven has two kinds of operators: unary operators and binary
+#) operators. Ven tries to distinguish these operators by the
+#) type they work on.
+
+
+#) UNARY OPERATORS (take one value):
+#) +, -, ~, &, #, not
+
+
+#) Unary '+' and '-' work exclusively with type num and try
+#) to convert anything they are given into type num:
+
+ensure +1 is 1; #) does nothing
+ensure +"123" is 123; #) converts type str into type num
+ensure +[1, 2, 3] is 3; #) returns vector's length
+
+#) Essentially, '-' negates the result of unary '+':
+
+ensure -1 is -1;
+ensure -"123" is -123;
+ensure -[1, 2, 3] is -3;
+
+
+#) Unary '~' converts anything it is given into type str
+#) (stringifies):
+
+ensure ~1 is "1";
+ensure ~1.234 is "1.234";
+ensure ~"hello" is "hello";
+ensure ~[1, 2, 3] is "[1, 2, 3]";
+
+
+#) Unary '&' wraps anything it is given (except a vector) in
+#) a vector:
+
+ensure &1 is [1];
+ensure &"hello" is ["hello"];
+ensure &[1, 2, 3] is [1, 2, 3];
+
+
+#) Unary '#' returns the length of whatever it is given:
+
+ensure #"hello" is 5;
+ensure #[1, 2, 3] is 3;
+
+#) It fallbacks to type str:
+
+ensure #123 is 3; #) i.e. #123 => #~123 => #"123" => 3
+
+
+#) Unary 'not' returns the inverse boolean of whatever it
+#) is given:
+
+ensure not 0 is true;
+ensure not 1 is false;
+
+
+#) BINARY OPERATORS (take two values)
+#) +, -, *, /, ~, &, x, is, in, <, >, <=, >=
+
+
+#) As with the unary operations, '+' and '-' specialize on
+#) type num. '*' and '/' also specialize on type num.
+
+ensure 2 + 2 is 4;
+ensure 6 - 3 is 3;
+ensure 2 * 3 is 6;
+ensure 1 / 2 is 0.5;
+
+ensure "2" + 2 is 4;
+ensure 6 - "3" is 3;
+ensure "2" * "3" is 6;
+ensure ["one item"] / ["two", "items"] is 0.5;
+
+
+#) '~' works with type str:
+
+ensure 1 ~ 2 is "12";
+ensure 1 ~ "2" is "12";
+ensure "foo" ~ "bar" is "foobar";
+ensure [1, 2] ~ [3, 4] is "[1, 2][3, 4]";
+
+
+#) '&' works with type vec:
+
+ensure 1 & 2 is [1, 2];
+ensure 1 & [2] is [1, 2];
+ensure [1] & 2 is [1, 2];
+ensure [1] & [2] is [1, 2];
+
+
+#) 'x' repeats whatever it is given:
+
+#)     |--- what
+#)    \_/
+ensure 1 x 2 is [1, 1];
+#)        /-\
+#)         |--- how many times
+
+ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+ensure "a" x 10 is "aaaaaaaaaa";
+ensure 10 x "a" is "aaaaaaaaaa";
+
+ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+
+
+#) 'is' checks for semantic identity:
+
+ensure 1 is 1;
+ensure 1 is not 2;
+ensure 1 is true;
+ensure 1 is "1";
+ensure 1 is [1];
+
+
+#) 'in' checks whether a vec contains an item. 'in' is much
+#) stricter than 'is' (uses value equality):
+
+ensure 1 in [1, 2, 3];
+ensure not ("1" in [1, 2, 3]);
+
+
+#) '<', '>', '<=', '>='
+
+ensure 1 < 2;
+ensure 2 > 1;
+ensure 2 <= 2;
+ensure 3 >= 2;
+
+
+#) ASSIGNMENT
+#) =, (+, -, *, /)=, ~=, &=
+
+foo = 1;
+bar = "xyzzy";
+baz = [1, 2, 3];
+
+ensure (foo += 1) is 1;
+ensure foo is 2;
+
+ensure (bar ~= "s") is "s";
+ensure bar is "xyzzys";
+
+ensure (baz &= [4, 5, 6]) is [4, 5, 6];
+ensure baz is [1, 2, 3, [4, 5, 6]];
+
+a = 1;
+
+ensure (a ~= 2) is 2;
+ensure a is "12";

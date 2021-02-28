@@ -16,7 +16,7 @@ module Ven
     {% elsif name == :REGEX %}
       /`([^\\`]|\\.)*`/
     {% elsif name == :NUMBER %}
-      /\d*\.\d+|[1-9][\d_]*|0/
+      /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
       /-[->]|\+\+|=>|[-+*\/~<>&]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
