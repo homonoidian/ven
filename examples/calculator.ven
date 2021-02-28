@@ -44,7 +44,7 @@ fun parse(source) given str {
     operator = consume();
 
     loop (precedence < (level = precedence?()))
-      left = ["binary", operator(0), left, infix(level - 1)];
+      left = ["binary", operator(0), left, infix(level)];
 
     left
   }

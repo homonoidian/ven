@@ -26,7 +26,7 @@ module Ven
 
       def parse(parser, tag, left, token)
         not = NOT_FOLLOWS.includes?(token[:type]) && parser.word!("NOT")
-        this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence - 1))
+        this = QBinary.new(tag, token[:lexeme], left, parser.led(@precedence))
 
         not ? QUnary.new(tag, "not", this) : this
       end
