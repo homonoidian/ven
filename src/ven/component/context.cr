@@ -50,12 +50,6 @@ module Ven::Component
     # outermost scope *if it existed before* and in the innermost
     # scope if it had not.
     def define(name : String, value : Model)
-      @scopes.each do |this|
-        if this.has_key?(name)
-          return this[name] = value
-        end
-      end
-
       scope[name] = value
     end
 
