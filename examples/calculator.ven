@@ -99,23 +99,16 @@ fun read(source) given str {
 
 
 #) Evaluates the *entity*.
-fun eval(entity) =
-  die("eval(): unknown entity: " ~ entity);
+fun eval(entity) = die("eval(): unknown entity: " ~ entity);
 
 fun eval(entity) given Num = +entity.value;
+fun eval(entity) given Pos = eval(entity.a);
 fun eval(entity) given Neg = -eval(entity.a);
 
-fun eval(entity) given Add =
-  eval(entity.a) + eval(entity.b);
-
-fun eval(entity) given Sub =
-  eval(entity.a) - eval(entity.b);
-
-fun eval(entity) given Mul =
-  eval(entity.a) * eval(entity.b);
-
-fun eval(entity) given Div =
-  eval(entity.a) / eval(entity.b);
+fun eval(entity) given Add = eval(entity.a) + eval(entity.b);
+fun eval(entity) given Sub = eval(entity.a) - eval(entity.b);
+fun eval(entity) given Mul = eval(entity.a) * eval(entity.b);
+fun eval(entity) given Div = eval(entity.a) / eval(entity.b);
 
 
 #) Read-eval-print loop:

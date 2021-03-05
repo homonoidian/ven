@@ -4,8 +4,14 @@ module Ven
   class Machine < Component::Visitor
     include Component
 
-    # Maximum call depth (see `call`).
-    MAX_CALL_DEPTH = 500
+    # Maximum call depth (see `call`). Release builds allow
+    # deeper call nesting.
+    MAX_CALL_DEPTH =
+      {% if flag?(:release) %}
+        1024
+      {% else %}
+        512
+      {% end %}
 
     # Ven booleans are structs (copy on use). There is no
     # need for the `.new`s everywhere (?)

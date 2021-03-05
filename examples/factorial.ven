@@ -6,6 +6,6 @@ fun factorial(n) =
   else
     n * factorial(n - 1);
 
-ask("What number? (max = 499)")
+ask("What number?")
   .factorial()
   .say();
