@@ -1,8 +1,8 @@
 require "./suite/*"
 
 module Ven
-  class Machine < Component::Visitor
-    include Component
+  class Machine < Suite::Visitor
+    include Suite
 
     # Maximum call depth (see `call`). Release builds allow
     # deeper call nesting.

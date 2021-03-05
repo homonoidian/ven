@@ -1,9 +1,9 @@
-module Ven::Component
+module Ven::Suite
   # The base class of all built-in (that is, written in Crystal)
   # libraries. To get a feel of a real extension, see `Library::Core`
   # (src/ven/library/core.cr)
   abstract class Extension
-    include Component
+    include Suite
 
     def initialize(@context : Context)
     end

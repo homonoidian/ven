@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   # Some evaluations leave a trace to lead the user to the
   # actual source of an error, if one occurs.
   class Trace

@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   # The base class for a node (in Ven, quote) visitor.
   abstract class Visitor
     # Maximum amount of nested `visit` calls. This prevents

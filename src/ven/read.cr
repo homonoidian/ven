@@ -57,7 +57,7 @@ module Ven
 
   # A reader based on Pratt's parsing algorithm.
   class Reader
-    include Component
+    include Suite
 
     # A list of keywords protected by the reader.
     KEYWORDS = %w(

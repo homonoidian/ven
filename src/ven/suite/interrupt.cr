@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   # The interrupt raised when a 'next' expression evaluates.
   class NextInterrupt < Exception
     getter args : Models

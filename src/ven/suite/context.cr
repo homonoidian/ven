@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   alias Scope = Hash(String, Model)
 
   # The context implements the scope semantics via a *scopes*

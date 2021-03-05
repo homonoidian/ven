@@ -37,7 +37,7 @@ help.
   AST nodes (called quotes in Ven), advancing one at a time.
 + *src/ven/eval* is, right now, the only evaluation machinery Ven has.
   After the reader produces a statement quote, *eval* evaluates it.
-+ *src/ven/component/context* is, roughly speaking, the context all
++ *src/ven/suite/context* is, roughly speaking, the context all
   of this happens in.
 
 ### Contributing

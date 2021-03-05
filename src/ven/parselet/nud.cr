@@ -1,6 +1,6 @@
 module Ven
   module Parselet
-    include Component
+    include Suite
 
     # Null-denotated token parser works with tokens that are
     # not preceded by a quote.

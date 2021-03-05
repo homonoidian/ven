@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   # The location (*file*name and *line* number) of a `Quote`.
   struct QTag
     getter file : String

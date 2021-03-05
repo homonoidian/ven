@@ -3,7 +3,7 @@ module Ven
   # different parts of Ven. It is also used as an inter-file
   # medium.
   class World
-    include Component
+    include Suite
 
     getter reader, machine, context
 
@@ -22,7 +22,7 @@ module Ven
 
       @reader = Reader.new
       @machine = Machine.new
-      @context = Component::Context.new
+      @context = Suite::Context.new
 
       @reader.world = self
       @machine.world = self
@@ -143,7 +143,7 @@ module Ven
     end
 
     # Loads given *extensions* into the context of this world.
-    def load(*extensions : Component::Extension.class)
+    def load(*extensions : Suite::Extension.class)
       extensions.each do |extension|
         extension.new(@context).load
       end

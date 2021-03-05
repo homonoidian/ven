@@ -1,6 +1,6 @@
 require "big"
 
-module Ven::Component
+module Ven::Suite
   # Model casting (aka internal conversion) will raise this
   # exception on failure (e.g. if a string cannot be parsed
   # into a number).
@@ -96,7 +96,7 @@ module Ven::Component
 
   # The parent of all `Model`s represented by a Crystal struct.
   abstract struct MStruct
-    Component.model_template?
+    Suite.model_template?
   end
 
   # A Ven value that has the Crystal type *T*.
@@ -183,7 +183,7 @@ module Ven::Component
   # The parent of all `Model`s represented by a Crystal class;
   # often Models that have no particular value.
   abstract class MClass
-    Component.model_template?
+    Suite.model_template?
   end
 
   # Ven's number data type.

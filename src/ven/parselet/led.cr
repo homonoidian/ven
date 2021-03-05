@@ -1,6 +1,6 @@
 module Ven
   module Parselet
-    include Component
+    include Suite
 
     # Left-denotated token parser works with a *token*, to the
     # *left* of which there is a quote of interest.

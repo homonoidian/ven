@@ -1,4 +1,4 @@
-module Ven::Component
+module Ven::Suite
   # The base class of all Ven-related exceptions.
   class VenError < Exception
   end

@@ -7,7 +7,7 @@ module Ven
   VERSION = "0.1.1-rev03"
 
   class CLI
-    include Component
+    include Suite
 
     # `BOOT` is a compile-time environment variable containing
     # the path to a boot module (the first to load & one which

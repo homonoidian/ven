@@ -1,5 +1,5 @@
 module Ven::Library
-  class Core < Component::Extension
+  class Core < Suite::Extension
     # XXX: Temporary. Remove!
     fun! "offset", str : Str, offset : Num do |m|
       begin

@@ -1,5 +1,5 @@
 module Ven::Library
-  class System < Component::Extension
+  class System < Suite::Extension
     FANCY = Fancyline.new
 
     fun! "put", str : Str do |machine|
