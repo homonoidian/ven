@@ -32,10 +32,9 @@ module Ven::Suite
           "consequtive visit calls")
       end
 
-      result = visit!(@last = quote)
+      visit!(@last = quote)
+    ensure
       @depth -= 1
-
-      result
     end
 
     # Same as `visit(quote)`, but iterates over *quotes*.
