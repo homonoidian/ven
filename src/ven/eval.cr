@@ -149,7 +149,10 @@ module Ven
     def visit!(q : QAccessField)
       head = visit(q.head)
 
-      field(head, q.path) || die("could not resolve #{q.path} for this value: #{head}")
+      field(head, q.path) ||
+        die(
+          "could not follow path '#{q.path.join(".")}' " \
+          "given this value: #{head}")
     end
 
     def visit!(q : QBinarySpread)

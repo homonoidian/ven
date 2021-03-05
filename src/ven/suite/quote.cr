@@ -131,14 +131,14 @@ module Ven::Suite
   # E.g.: a.("b").(foo-bar-baz ~ "2")
   struct DynamicFieldAccessor < FieldAccessor(Quote)
     def to_s(io)
-      io << ".(" << @field << ")"
+      io << "(<...>)"
     end
   end
 
   # E.g.: a.["b", "c"]
   struct MultiFieldAccessor < FieldAccessor(Array(DynamicFieldAccessor))
     def to_s(io)
-      io << ".[" << @field.join(", ") << "]"
+      io << "[<...>]"
     end
   end
 
