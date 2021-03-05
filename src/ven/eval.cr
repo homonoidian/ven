@@ -28,6 +28,18 @@ module Ven
       {{bool}} ? B_TRUE : B_FALSE
     end
 
+    # Sets *value*'s `truth` to true if *condition* was true.
+    # See `Model.truth?`.
+    private macro truthy(value, if condition)
+      if {{condition}}
+        %value = {{value}}
+        %value.truth = true
+        %value
+      else
+        B_FALSE
+      end
+    end
+
     # If *condition* is Crystal true, returns *left*; otherwise,
     # returns **Ven boolean** false. *condition* may be omitted;
     # in that case, *left* itself will be used as the condition.
@@ -190,7 +202,7 @@ module Ven
       @context.with_u([condition]) do
         suc, alt = q.suc, q.alt
 
-        if condition.true?
+        if condition.truth?
           visit(suc)
         elsif alt
           visit(alt)
@@ -205,7 +217,7 @@ module Ven
     end
 
     def visit!(q : QAssign)
-      @context.define(q.target, visit(q.value))
+      @context.define(q.target, visit(q.value), local: q.local)
     end
 
     def visit!(q : QBinaryAssign)
@@ -227,8 +239,7 @@ module Ven
       #   ensure y is [1, 2, 3];
       working = Vec.new([working]) if q.operator == "&"
 
-      @context.define(q.target,
-        binary(q.operator, previous, working))
+      @context.define(q.target, binary(q.operator, previous, working), local: false)
 
       original
     end
@@ -271,7 +282,7 @@ module Ven
     def visit!(q : QEnsure)
       value = visit(q.expression)
 
-      unless value.true?
+      unless value.truth?
         die("'ensure' got a falsey value")
       end
 
@@ -339,14 +350,6 @@ module Ven
       end
     end
 
-    def visit!(q : QQueue)
-      unless @context.has_queue?
-        die("use of 'queue' when no queue available")
-      end
-
-      @context.queue(visit(q.value))
-    end
-
     def visit!(q : QInfiniteLoop)
       loop { visit(q.body) }
     end
@@ -388,11 +391,11 @@ module Ven
         amount.numerator.times do
           loop_body_handler
         end
-      when .true?
+      when .truth?
         loop do
           loop_body_handler
 
-          unless visit(q.base).true?
+          unless visit(q.base).truth?
             break
           end
         end
@@ -402,7 +405,7 @@ module Ven
     end
 
     def visit!(q : QStepLoop)
-      while visit(q.base).true?
+      while visit(q.base).truth?
         loop_body_handler
 
         visit(q.step)
@@ -414,7 +417,7 @@ module Ven
     def visit!(q : QComplexLoop)
       visit(q.start)
 
-      while visit(q.base).true?
+      while visit(q.base).truth?
         # Evaluate pres (pre-statements):
         #  loop (a; b; c; d; e) ...
         #  start-^  ^  {^^}  ^
@@ -521,7 +524,7 @@ module Ven
 
     # Accesses *head*'s field *field*. Returns nil if there
     # is no such field.
-    def field(head : Model, field : String)
+    def field(head : Model, field : String) : Model?
       case field
       when "callable?"
         # 'callable?' is available on all models
@@ -567,16 +570,16 @@ module Ven
         die("typecheck failed for #{callee}: #{args.join(", ")}")
       end
 
-      @context.in(callee.params, args) do |scope|
+      @context.in(callee.params, args) do
         callee.namespace.each do |name, value|
-          scope[name] = visit(value)
+          @context[name] = visit(value)
         end
 
         if callee.slurpy
-          scope["rest"] = Vec.new(args[callee.arity...])
+          @context["rest"] = Vec.new(args[callee.arity...])
         end
 
-        MBoxInstance.new(callee, scope)
+        MBoxInstance.new(callee, @context.scope?)
       end
     end
 
@@ -598,7 +601,7 @@ module Ven
             end
           end
 
-          @context.in(callee.params, args) do |scope|
+          @context.in(callee.params, args) do
             if @context.traces.size > MAX_CALL_DEPTH
               die("too many calls: very deep or infinite recursion")
             end
@@ -615,7 +618,7 @@ module Ven
             # in reverse order and break out of the loop with
             # visited body's last expression.
 
-            scope["rest"] = Vec.new(args[callee.params.size...])
+            @context["rest"] = Vec.new(args[callee.params.size...])
 
             @context.with_u(args.reverse) do
               return visit(callee.body).last
@@ -782,11 +785,11 @@ module Ven
            {"is", Vec, Vec},
            {"is", MBox, _},
            {"is", MBoxInstance, _}
-        may_be left, if: left.eqv?(right)
+        truthy left, if: left.eqv?(right)
       when {"is", _, MType}
         to_bool left.of?(right)
       when {"is", Str, MRegex}
-        may_be Str.new($0), if: left.value =~ right.value
+        truthy Str.new($0), if: left.value =~ right.value
       when {"in", _, Vec}
         may_be right.value.each { |i| break i if left.eqv?(i) }
       when {"<", Num, Num}

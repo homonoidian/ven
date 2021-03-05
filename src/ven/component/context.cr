@@ -8,73 +8,87 @@ module Ven::Component
   class Context
     property traces
 
+    # Context's own scope type:
+    private alias CScope = Hash(String, CSEntry)
+
+    # Context scope entry's own type:
+    private alias CSEntry = { local: Bool, value: Model }
+
     def initialize
       @traces = [] of Trace
-      @scopes = [Scope.new]
+      @scopes = [CScope.new]
       @underscores = [] of Model
     end
 
     # Returns the latest trace.
-    def trace
+    private def trace
       @traces.last
     end
 
-    # Returns the innermost scope.
-    def scope
+    # Returns the localmost scope.
+    private def scope
       @scopes.last
     end
 
-    # Walks through the scopes, from the localmost to the
-    # globalmost, returning true if found a *$QUEUE* variable.
-    def has_queue?
-      @scopes.reverse_each do |scope|
-        unless scope["$QUEUE"]?.nil?
-          return true
-        end
-      end
+    # Converts a `Scope` into a `CScope`.
+    private def from_scope(it : Scope) : CScope
+      it.map { |k, v| { k, { local: true, value: v } } }.to_h
     end
 
-    # Appends a *value* to the queue.
-    # NOTE: does not check whether a queue exists.
-    def queue(value : Model)
-      @scopes.reverse_each do |scope|
-        if queue = scope["$QUEUE"]?
-          break queue.as(Vec).value << value
-        end
-      end
+    # Returns the localmost scope.
+    def scope? : Scope
+      scope.map { |k, v| {k, v[:value]} }.to_h
+    end
+
+    # Binds a new local variable *name* to *value*.
+    def []=(name : String, value : Model)
+      scope[name] = { local: true, value: value }
 
       value
     end
 
-    # Makes a scope entry for *name* with value *value* in the
-    # outermost scope *if it existed before* and in the innermost
-    # scope if it had not.
-    def define(name : String, value : Model)
-      scope[name] = value
+    # Defines a variable called *name* that will hold some
+    # *value*. It uses nonlocal lookup if *local* is false:
+    # this way, there will be an attempt to reassign 'the most
+    # global same-named variable' first.
+    def define(name : String, value : Model, local = true)
+      target = scope
+
+      @scopes.each do |subscope|
+        if (it = subscope[name]?) && !it[:local]
+          local = false
+
+          break target = subscope
+        end
+      end
+
+      target[name] = { local: local, value: value }
+
+      value
     end
 
-    # Tries to search for *name* in the closest scope possible.
+    # Retrieves a variable called *name*. It looks for it in
+    # the localmost scope first, then proceeds up to the
+    # parenting scopes.
     def fetch(name : String) : Model?
       @scopes.reverse_each do |scope|
-        if value = scope.fetch(name, false)
-          return value.as(Model)
-        end
+        scope[name]?.try { |it| return it[:value] }
       end
     end
 
     # Executes *block* in a new scope. This new scope is also
     # passed as an argument to the block. *names* and *values*
     # are names and values the new scope will be initialized with.
-    def in(names : Array(String), values : Models, &block : Scope ->)
-      yield (@scopes << Scope.zip names, values).last
+    def in(names : Array(String), values : Models, &block)
+      yield @scopes << from_scope Scope.zip(names, values)
     ensure
       @scopes.pop
     end
 
     # Executes *block* in a new scope. This new scope is also
     # passed as an argument to the block.
-    def in(&block : Scope ->)
-      yield (@scopes << Scope.new).last
+    def in(&block)
+      yield @scopes << CScope.new
     ensure
       @scopes.pop
     end

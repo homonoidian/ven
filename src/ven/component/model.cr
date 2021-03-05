@@ -21,6 +21,21 @@ module Ven::Component
 
   # :nodoc:
   macro model_template?
+    # Whether this model was yielded by a truthy expression.
+    @truth : Bool = false
+
+    # Returns whether this model was yielded by a truthy
+    # expression: `false is false` => false but is truthy,
+    # etc. Recomputes via `true?` right away.
+    def truth?
+      @truth || (@truth = true?)
+    end
+
+    # Temporarily assigns the truth to *truth*.
+    def truth=(truth : Bool)
+      @truth = truth
+    end
+
     # Converts (casts) this model into a `Num`.
     def to_num : Num
       raise ModelCastException.new("could not convert to num")
@@ -50,7 +65,7 @@ module Ven::Component
 
     # Returns whether this model is of the type *other*.
     def of?(other : MType) : Bool
-      return true if other.type == MAny
+      return true if other == MType::ANY
 
       other.type.is_a?(MClass.class) \
         ? self.class <= other.type.as(MClass.class)
@@ -320,20 +335,20 @@ module Ven::Component
     # Returns whether this parameter's constraint matches
     # the *other* model.
     def matches(other : Model)
-      if @constraint.is_a?(MType)
-        return other.of?(@constraint)
-      end
-
-      @constraint.eqv?(other)
+      other.of?(@constraint) || @constraint.eqv?(other)
     end
 
     # Returns whether this constraint is equal to the *other*
     # constraint.
     def ==(other : ConstrainedParameter)
-      # If we're given two type constraints, compare them
-      # directly (and not via `of?`).
-      if @constraint.is_a?(MType) && other.constraint.is_a?(MType)
-        return @constraint == other.constraint && anonymous? == other.anonymous?
+      return false unless @constraint.class == other.constraint.class
+
+      # Here, types are compared differently. We use type's
+      # own '==' instead of `of?`'s approach, and `of?` is
+      # used by `eqv?` and hence by `matches`.
+      if other.constraint.is_a?(MType)
+        return @constraint == other.constraint &&
+               anonymous?  == other.anonymous?
       end
 
       matches(other.constraint)

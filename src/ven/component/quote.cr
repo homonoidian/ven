@@ -105,7 +105,7 @@ module Ven::Component
   defquote(QBinary, operator : String, left : Quote, right : Quote)
   defquote(QCall, callee : Quote, args : Quotes)
 
-  defquote(QAssign, target : String, value : Quote)
+  defquote(QAssign, target : String, value : Quote, local : Bool)
   defquote(QBinaryAssign, operator : String, target : String, value : Quote)
 
   defquote(QIntoBool, value : Quote)

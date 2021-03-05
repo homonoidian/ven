@@ -18,7 +18,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
+      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#\)[^\n]*)/
     {% else %}
@@ -319,6 +319,7 @@ module Ven
     # base Ven.
     def prepare
       # Prefixes (NUDs):
+
       defnud("+", "-", "~", "&", "#", "NOT")
       defnud("'", Parselet::PQuote, precedence: ZERO)
       defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
@@ -337,10 +338,15 @@ module Ven
       defnud("&_", Parselet::PURef)
 
       # Infixes (LEDs):
-      defled("=", Parselet::PAssign, precedence: ASSIGNMENT)
+
+      defled("=", ":=",
+        common: Parselet::PAssign,
+        precedence: ASSIGNMENT)
+
       defled("+=", "-=", "*=", "/=", "~=", "&=",
         common: Parselet::PBinaryAssign,
         precedence: ASSIGNMENT)
+
       defled("?", Parselet::PIntoBool, precedence: ASSIGNMENT)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", "&", precedence: ADDITION)
@@ -351,6 +357,7 @@ module Ven
       defled(".", Parselet::PAccessField, precedence: FIELD)
 
       # Statements:
+
       defstmt("NUD", Parselet::PNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("BOX", Parselet::PBox)

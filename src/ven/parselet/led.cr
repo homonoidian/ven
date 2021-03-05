@@ -40,12 +40,15 @@ module Ven
       end
     end
 
-    # Parses an assignment into a QAssign: `x = 2`, etc.
+    # Parses an assignment expression into a QAssign:
+    # `foo := "bar"`, `foo = 123.456`, etc.
     class PAssign < Led
       def parse(parser, tag, left, token)
+        kind = token[:type]
+
         !left.is_a?(QSymbol) \
-          ? parser.die("left-hand side of '=' must be a symbol")
-          : QAssign.new(tag, left.value, parser.led)
+          ? parser.die("left-hand side of '#{kind}' must be a symbol")
+          : QAssign.new(tag, left.value, parser.led, local: kind == "=")
       end
     end
 
