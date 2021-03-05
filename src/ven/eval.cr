@@ -1,4 +1,4 @@
-require "./component/*"
+require "./suite/*"
 
 module Ven
   class Machine < Component::Visitor
