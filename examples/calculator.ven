@@ -29,19 +29,16 @@ fun read(source) given str {
 
   #) Matches *pattern* against offset source.
   fun match(pattern) given regex =
-    if source.offset(cursor) is pattern {
-      cursor += #&_;
-      _;
-    }
+    if source.offset(cursor) is pattern
+      cursor += #(return &_);
 
   #) Consumes exactly one token and returns the previous
   #) token.
-  fun consume {
-    previous = token;
-    token =
+  fun consume =
+    token = return token and
       if match(`[1-9]\d*`)
         ["NUMBER", _]
-      else if match(`[-+*/]`)
+      else if match(`[-+*/()]`)
         [&_, _]
       else if match(`[ ]+`)
         next
@@ -49,13 +46,9 @@ fun read(source) given str {
         ["EOF", "end-of-input"]
       else
         die("invalid lexeme");
-    previous
-  }
 
   #) `consume`s only if current token type is *type*.
-  fun consume(type) given str =
-    if token(0) is type
-      consume();
+  fun consume(type) given str = if token(0) is type consume();
 
   #) Parses a prefix expression.
   fun prefix =
@@ -65,6 +58,8 @@ fun read(source) given str {
       Pos(prefix())
     else if consume("-")
       Neg(prefix())
+    else if consume("(")
+      return infix(0) and consume(")")
     else
       die("invalid syntax in prefix position: " ~ token(0));
 

@@ -134,7 +134,7 @@ module Ven
     # any interrupt (e.g. `NextInterrupt`) that was not captured.
     def visit(quote : Quote) : Model
       @machine.visit(quote)
-    rescue interrupt : NextInterrupt
+    rescue interrupt : Interrupt
       @machine.die("#{interrupt} caught by the world")
     end
 

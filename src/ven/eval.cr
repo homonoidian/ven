@@ -493,6 +493,20 @@ module Ven
       raise NextInterrupt.new(q.scope, args)
     end
 
+    def visit!(q : QReturnStatement)
+      value = visit(q.value)
+
+      raise ReturnInterrupt.new(value)
+    end
+
+    def visit!(q : QReturnExpression)
+      unless @context.in_fun?
+        die("expression-level 'return' outside a function")
+      end
+
+      @context.define "$RETURNS", visit(q.value)
+    end
+
     def visit!(q : QBox)
       constraints = constrained(q.params, by: q.given)
 
@@ -628,6 +642,17 @@ module Ven
       end
     end
 
+    # Generic slurpy & non-slurpy MConcreteFunction callee body
+    # that handles '$RETURNS' et al.
+    private macro visit_callee_body
+      %last = visit(callee.body).last
+
+      return \
+        (%returns = fetch "$RETURNS") == MType::ANY \
+          ? %last
+          : %returns
+    end
+
     # Calls an `MConcreteFunction` with *args*, checking their
     # types if *typecheck* is true. *generic* determines the
     # behavior of 'next': if set to true, 'next' would not be
@@ -651,10 +676,17 @@ module Ven
               die("too many calls: very deep or infinite recursion")
             end
 
+            # $RETURNS is an internal local variable that will
+            # hold whatever this function wanted to return (e.g.
+            # via an expression-level return.)
+            # NOTE: a statement-level return will override
+            # any expression-level return.
+            @context.define("$RETURNS", MType::ANY, internal: true)
+
             # If this is **not** a slurpy, break out of the loop
             # with the visited body's last expression:
             unless callee.slurpy
-              return visit(callee.body).last
+              visit_callee_body
             end
 
             # If this is a slurpy, though, make the 'rest'
@@ -666,7 +698,7 @@ module Ven
             @context["rest"] = Vec.new(args[callee.params.size...])
 
             @context.with_u(args.reverse) do
-              return visit(callee.body).last
+              visit_callee_body
             end
           end
         end
@@ -680,6 +712,8 @@ module Ven
         end
 
         raise interrupt
+      rescue interrupt : ReturnInterrupt
+        return interrupt.value
       end
     end
 

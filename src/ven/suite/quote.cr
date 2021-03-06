@@ -181,6 +181,8 @@ module Ven::Suite
   defquote(QDistinct, pieces : Array(String))
 
   defquote(QNext, scope : String?, args : Quotes)
+  defquote(QReturnStatement, value : Quote)
+  defquote(QReturnExpression, value : Quote)
 
   defquote(QBox,
     name : String,

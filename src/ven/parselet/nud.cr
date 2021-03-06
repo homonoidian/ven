@@ -410,7 +410,7 @@ module Ven
     # accept them: `box Foo(a, b) given num`, etc. Boxes can
     # have blocks (namespaces), which may contain solely
     # assignments (`PAssign`s):
-    # ```
+    # ```ven
     #   box Foo {
     #     x = 0;
     #     y = x;
@@ -452,6 +452,28 @@ module Ven
           end
 
         QBox.new(tag, name, params, given, namespace.to_h)
+      end
+    end
+
+    # Parses a statement-level 'return': `return 1`, etc.:
+    # ```ven
+    # {
+    #   return 1;
+    # }
+    # ```
+    class PReturnStatement < Nud
+      def parse(parser, tag, token)
+        QReturnStatement.new(tag, parser.led)
+      end
+    end
+
+    # Parses an expression-level 'return': `foo = return 1`,
+    # `(return foo)`, etc.
+    class PReturnExpression < Nud
+      def parse(parser, tag, token)
+        value = parser.led(Precedence::IDENTITY.value)
+
+        QReturnExpression.new(tag, value)
       end
     end
   end

@@ -9,10 +9,10 @@ module Ven::Suite
     property traces
 
     # Context's own scope type:
-    private alias CScope = Hash(String, CSEntry)
+    alias CScope = Hash(String, CSEntry)
 
     # Context scope entry's own type:
-    private alias CSEntry = { local: Bool, value: Model }
+    alias CSEntry = { local: Bool, value: Model, internal: Bool }
 
     def initialize
       @traces = [] of Trace
@@ -25,44 +25,57 @@ module Ven::Suite
       @traces.last
     end
 
+    # Creates a `CSEntry`.
+    private def entry(value, local = true, internal = false) : CSEntry
+      { local: local, value: value, internal: internal }
+    end
+
+    # Converts a *source* `Scope` into a `CScope`.
+    private def from_scope(source : Scope) : CScope
+      source.transform_values { |value| entry(value) }
+    end
+
+    # Converts a *source* `CScope` into a `Scope`.
+    private def into_scope(source : CScope) : Scope
+      source.transform_values(&.[:value])
+    end
+
     # Returns the localmost scope.
-    private def scope
+    private def scope : CScope
       @scopes.last
     end
 
-    # Converts a `Scope` into a `CScope`.
-    private def from_scope(it : Scope) : CScope
-      it.map { |k, v| { k, { local: true, value: v } } }.to_h
-    end
-
-    # Returns the localmost scope.
+    # Returns the localmost scope as a `Scope`.
     def scope? : Scope
-      scope.map { |k, v| {k, v[:value]} }.to_h
+      into_scope(scope)
     end
 
-    # Binds a new local symbol *name* to *value*.
+    # Binds a new local symbol *name* to *value*. Returns
+    # *value* back.
     def []=(name : String, value : Model)
-      scope[name] = { local: true, value: value }
+      scope[name] = entry(value)
 
       value
     end
 
-    # Defines a symbol called *name* that will hold some
-    # *value*. It uses nonlocal lookup if *local* is false:
-    # this way, there will be an attempt to reassign 'the most
-    # global same-named symbol' first.
-    def define(name : String, value : Model, local = true)
+    # Defines a symbol called *name* that will hold a *value*.
+    # If same-named symbol with *local* set to false already
+    # exists (global prior to local!), redefines this symbol
+    # to henceforth hold *value*.
+    def define(name : String, value : Model, local = true, internal = false)
       target = scope
 
-      @scopes.each do |subscope|
-        if (it = subscope[name]?) && !it[:local]
-          local = false
-
-          break target = subscope
+      @scopes.each do |nonlocal|
+        if (existing = nonlocal[name]?) && !existing[:local]
+          break begin
+            local = false
+            target = nonlocal
+            internal = existing[:internal]
+          end
         end
       end
 
-      target[name] = { local: local, value: value }
+      target[name] = entry(value, local, internal)
 
       value
     end
@@ -91,6 +104,12 @@ module Ven::Suite
       yield @scopes << CScope.new
     ensure
       @scopes.pop
+    end
+
+    # Returns whether the evaluation is currently in a function.
+    def in_fun? : Bool
+      # XXX: change to something more reliable.
+      scope.has_key?("$RETURNS")
     end
 
     # Records the evaluation of *block* as *trace* and properly

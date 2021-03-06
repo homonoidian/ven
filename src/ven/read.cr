@@ -63,8 +63,8 @@ module Ven
     # A list of keywords protected by the reader.
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
-      given loop next queue ensure
-      expose distinct box and or)
+      given loop next queue ensure expose
+      distinct box and or return)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -322,11 +322,13 @@ module Ven
       # Prefixes (NUDs):
 
       defnud("+", "-", "~", "&", "#", "NOT")
-      defnud("'", Parselet::PQuote, precedence: ZERO)
-      defnud("IF", Parselet::PIf, precedence: CONDITIONAL)
+
+      defnud("'", Parselet::PQuote)
+      defnud("IF", Parselet::PIf)
       defnud("NEXT", Parselet::PNext)
-      defnud("QUEUE", Parselet::PQueue, precedence: ZERO)
-      defnud("ENSURE", Parselet::PEnsure, precedence: ZERO)
+      defnud("RETURN", Parselet::PReturnExpression)
+      defnud("QUEUE", Parselet::PQueue)
+      defnud("ENSURE", Parselet::PEnsure)
       defnud("SYMBOL", Parselet::PSymbol)
       defnud("NUMBER", Parselet::PNumber)
       defnud("STRING", Parselet::PString)
@@ -366,6 +368,7 @@ module Ven
       defstmt("LOOP", Parselet::PLoop)
       defstmt("EXPOSE", Parselet::PExpose)
       defstmt("DISTINCT", Parselet::PDistinct)
+      defstmt("RETURN", Parselet::PReturnStatement)
 
       self
     end
