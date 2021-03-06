@@ -34,16 +34,23 @@ module Ven
       {{bool}} ? B_TRUE : B_FALSE
     end
 
-    # Sets *value*'s `truth` to true if *condition* was true.
-    # See `Model.truth?`.
+    # Sets *value*'s `truth` to true and returns the value
+    # back if *condition* was true. Otherwise, returns `B_FALSE`.
+    #  See `Model.truth?`.
     private macro truthy(value, if condition)
       if {{condition}}
-        %value = {{value}}
-        %value.truth = true
-        %value
+        truthy {{value}}
       else
         B_FALSE
       end
+    end
+
+    # Sets *value*'s `truth` to true and returns the value
+    # back. See `Model.truth?`.
+    private macro truthy(value)
+      %value = {{value}}
+      %value.truth = true
+      %value
     end
 
     # If *condition* is Crystal true, returns *left*; otherwise,
@@ -817,6 +824,12 @@ module Ven
     # and/or *right* are not of types *operator* can work with.
     def compute(operator, left : Model, right : Model)
       case {operator, left, right}
+      when {"and", _, _}
+        truthy right, if: !(left.is_bool_false? || right.is_bool_false?)
+      when {"or", _, _}
+        left.is_bool_false? \
+          ? truthy right, if: !right.is_bool_false?
+          : truthy left
       when {"is", MBool, MBool},
            {"is", Num, Num},
            {"is", Str, Str},

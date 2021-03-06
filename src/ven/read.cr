@@ -46,6 +46,7 @@ module Ven
     ZERO
     ASSIGNMENT
     CONDITIONAL
+    JUNCTION
     IDENTITY
     ADDITION
     PRODUCT
@@ -63,7 +64,7 @@ module Ven
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
       given loop next queue ensure
-      expose distinct box)
+      expose distinct box and or)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -348,6 +349,7 @@ module Ven
         precedence: ASSIGNMENT)
 
       defled("?", Parselet::PIntoBool, precedence: ASSIGNMENT)
+      defled("AND", "OR", precedence: JUNCTION)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", "&", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)

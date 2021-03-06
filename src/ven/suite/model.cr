@@ -57,6 +57,11 @@ module Ven::Suite
       MBool.new(inverse ? !true? : true?)
     end
 
+    # Returns whether this is a false `MBool`.
+    def is_bool_false? : Bool
+      false
+    end
+
     # Returns a field's value for this model (or nil if the
     # field of interest does not exist).
     def field(name : String) : Model?
@@ -119,6 +124,10 @@ module Ven::Suite
   struct MBool < MValue(Bool)
     def to_num
       Num.new(@value ? 1 : 0)
+    end
+
+    def is_bool_false?
+      !@value
     end
 
     def true?
