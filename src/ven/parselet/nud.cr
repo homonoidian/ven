@@ -209,15 +209,19 @@ module Ven
       def self.parameters(parser : Reader)
         this = parser.repeat(")", ",", unit: -> { parameter(parser) })
 
-        this.count("*") > 1 \
-          ? parser.die("more than one '*' in function parameters")
-          : this
+        if this.count("*") > 1
+          parser.die("more than one '*' in function parameters")
+        elsif this.count("$") > 1
+          parser.die("no support for multiple contexts yet")
+        end
+
+        this
       end
 
-      # Reads a parameter (symbol or '*'). Does not check
-      # whether there is one or multiple '*'s.
+      # Reads a parameter (symbol, '*' or '$'). **Does not**
+      # check whether there is one or multiple '*'s.
       macro parameter(parser)
-        {{parser}}.expect("*", "SYMBOL")[:lexeme]
+        {{parser}}.expect("*", "$", "SYMBOL")[:lexeme]
       end
     end
 

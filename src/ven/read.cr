@@ -18,7 +18,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
+      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&$]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#\)[^\n]*)/
     {% else %}
@@ -197,9 +197,7 @@ module Ven
     # Parses a led expression with precedence *level*.
     def led(level = Precedence::ZERO.value) : Quote
       unless is_nud?
-        kind = is_stmt? ? "statement" : "led"
-
-        die("found a #{kind} where a nud was expected")
+        die("strange expression instead of a nud")
       end
 
       left = @nud[(@word[:type])].parse(self, tag?, word!)

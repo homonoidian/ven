@@ -4,12 +4,8 @@ module Ven::Suite
   class Trace
     getter tag : QTag
     getter name : String
-    getter file : String
-    getter line : UInt32
 
     def initialize(@tag, @name)
-      @file = tag.file
-      @line = tag.line
     end
 
     # Returns the string representation of this Trace. Can
@@ -21,7 +17,7 @@ module Ven::Suite
         .bright
         .toggle(highlight)
 
-      io << hi_name << " (" << @file << ":" << @line << ")"
+      io << hi_name << " (" << @tag.file << ":" << @tag.line << ")"
     end
   end
 

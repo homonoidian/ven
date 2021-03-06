@@ -133,9 +133,13 @@ module Ven
     # Visits a *quote* in the context of this world. Dies on
     # any interrupt (e.g. `NextInterrupt`) that was not captured.
     def visit(quote : Quote) : Model
-      @machine.visit(quote)
-    rescue interrupt : Interrupt
-      @machine.die("#{interrupt} caught by the world")
+      @machine.last = quote
+
+      begin
+        @machine.visit!(quote)
+      rescue interrupt : Interrupt
+        @machine.die("#{interrupt} caught by the world")
+      end
     end
 
     # Loads given *extensions* into the context of this world.

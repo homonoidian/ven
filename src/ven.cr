@@ -68,15 +68,19 @@ module Ven
     # *code_spaces* is the number of spaces before each source
     # code excerpt.
     def format_traces(traces : Traces, root_spaces = 2, code_spaces = 4)
-      result = traces.map do |trace|
-        if File.exists?(trace.file)
-          lines = File.read_lines(trace.file)
-          erring = lines[trace.line - 1].lstrip(" ")
-          excerpt = "\n#{" " * code_spaces}#{trace.line}| #{erring}"
-        end
+      result =
+        traces.map do |trace|
+          file = trace.tag.file
+          line = trace.tag.line
 
-        "#{" " * root_spaces}in #{trace}#{excerpt}"
-      end
+          if File.exists?(file)
+            lines = File.read_lines(file)
+            erring = lines[line - 1].lstrip(" ")
+            excerpt = "\n#{" " * code_spaces}#{line}| #{erring}"
+          end
+
+          "#{" " * root_spaces}in #{trace}#{excerpt}"
+        end
 
       result.join("\n")
     end

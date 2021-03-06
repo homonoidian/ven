@@ -4,19 +4,16 @@ module Ven::Suite
     # Maximum amount of nested `visit` calls. This prevents
     # the Crystal 'very deep recursion' error with thousands
     # of entries jumpscaring a user. Since we're a visitor, we
-    # have to handle recursion depth errors **well**. Release
-    # builds allow higher visit depth.
+    # have to handle recursion depth errors **well**. The
+    # number will change, as any significant interpreter update
+    # generally **decreases** it.
     #
     # WHAT: per one *meaningful* visit the Ven infrastructure
-    # may make over 10 internal calls; this expodes the call
-    # stack very quickly, causing Ven itself to blow up
-    # eventually. We prevent this by having a `MAX_VISIT_DEPTH`.
-    MAX_VISIT_DEPTH =
-      {% if flag?(:release) %}
-        4096
-      {% else %}
-        2048
-      {% end %}
+    # may make over 10 (much more in reality) internal calls;
+    # this expodes the call stack very quickly, causing Ven
+    # itself to blow up. We prevent this by having a
+    # `MAX_VISIT_DEPTH`.
+    MAX_VISIT_DEPTH = 2048
 
     setter last : Quote = QVoid.new
 
@@ -28,8 +25,8 @@ module Ven::Suite
     def visit(quote : Quote)
       if (@depth += 1) > MAX_VISIT_DEPTH
         raise InternalError.new(
-          "max visit depth exceeded: got more than #{MAX_VISIT_DEPTH} " \
-          "consequtive visit calls")
+          "maximum evaluation depth exceeded: got >#{MAX_VISIT_DEPTH} " \
+          "nested evaluation calls, close to stack overflow")
       end
 
       visit!(@last = quote)

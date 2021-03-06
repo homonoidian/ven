@@ -1,3 +1,5 @@
+require "./model"
+
 module Ven::Suite
   alias Scope = Hash(String, Model)
 
@@ -26,13 +28,13 @@ module Ven::Suite
     end
 
     # Creates a `CSEntry`.
-    private def entry(value, local = true, internal = false) : CSEntry
-      { local: local, value: value, internal: internal }
+    private macro entry(value, local = true, internal = false)
+      { local: {{local}}, value: {{value}}, internal: {{internal}} }
     end
 
     # Converts a *source* `Scope` into a `CScope`.
-    private def from_scope(source : Scope) : CScope
-      source.transform_values { |value| entry(value) }
+    private def from_scope(source : Scope, local = true) : CScope
+      source.transform_values { |value| entry(value, local) }
     end
 
     # Converts a *source* `CScope` into a `Scope`.
@@ -60,12 +62,12 @@ module Ven::Suite
 
     # Defines a symbol called *name* that will hold a *value*.
     # If same-named symbol with *local* set to false already
-    # exists (global prior to local!), redefines this symbol
+    # exists (local prior to global), redefines this symbol
     # to henceforth hold *value*.
     def define(name : String, value : Model, local = true, internal = false)
       target = scope
 
-      @scopes.each do |nonlocal|
+      @scopes.reverse_each do |nonlocal|
         if (existing = nonlocal[name]?) && !existing[:local]
           break begin
             local = false
@@ -89,21 +91,31 @@ module Ven::Suite
       end
     end
 
-    # Executes *block* in a new scope. This new scope is also
-    # passed as an argument to the block. *names* and *values*
-    # are names and values the new scope will be initialized with.
+    # Executes *block* in a new scope. *names* and *values*
+    # are names and values the new scope will be initialized
+    # with.
     def in(names : Array(String), values : Models, &block)
       yield @scopes << from_scope Scope.zip(names, values)
     ensure
       @scopes.pop
     end
 
-    # Executes *block* in a new scope. This new scope is also
-    # passed as an argument to the block.
+    # Executes *block* in a new empty scope.
     def in(&block)
       yield @scopes << CScope.new
     ensure
       @scopes.pop
+    end
+
+    # Pushes a *scope* onto the scopes stack. Makes all
+    # symbols' local be *local*.
+    def inject(scope : Scope, local = true)
+      @scopes << from_scope(scope, local)
+    end
+
+    # Pops a scope from the scopes stack and returns it.
+    def uninject : Scope
+      into_scope(@scopes.pop)
     end
 
     # Returns whether the evaluation is currently in a function.

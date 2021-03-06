@@ -4,14 +4,8 @@ module Ven
   class Machine < Suite::Visitor
     include Suite
 
-    # Maximum call depth (see `call`). Release builds allow
-    # deeper call nesting.
-    MAX_CALL_DEPTH =
-      {% if flag?(:release) %}
-        1024
-      {% else %}
-        512
-      {% end %}
+    # Maximum call depth (see `call`).
+    MAX_CALL_DEPTH = 512
 
     # Ven booleans are structs (copy on use). There is no
     # need for the `.new`s everywhere (?)
@@ -658,6 +652,16 @@ module Ven
     # behavior of 'next': if set to true, 'next' would not be
     # captured.
     def call(callee : MConcreteFunction, args : Models, typecheck = true, generic = false) : Model
+      if contextual = (callee.params.first? == "$")
+        instance = args.first
+
+        unless instance.is_a?(MBoxInstance)
+          die("cannot contextualize #{callee} within #{instance}")
+        end
+
+        @context.inject(instance.scope, local: false)
+      end
+
       loop do
         begin
           if typecheck
@@ -715,6 +719,8 @@ module Ven
       rescue interrupt : ReturnInterrupt
         return interrupt.value
       end
+    ensure
+      instance.as(MBoxInstance).scope = @context.uninject if contextual
     end
 
     # Calls an `MGenericFunction` with *args*.

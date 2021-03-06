@@ -531,8 +531,8 @@ module Ven::Suite
   # An instance of a Ven box. Provides access to instance box's
   # scope through fields.
   class MBoxInstance < MClass
-    getter scope : Scope
     getter parent : MBox
+    property scope : Scope
 
     def initialize(@parent, @scope)
     end
