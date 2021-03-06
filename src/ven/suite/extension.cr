@@ -8,7 +8,7 @@ module Ven::Suite
     def initialize(@context : Context)
     end
 
-    # Defines a Ven variable. *name* is a String, and *value*
+    # Defines a Ven symbol. *name* is a String, and *value*
     # is a `Model`.
     # ```
     #   defvar("PI", Num.new(3.14))

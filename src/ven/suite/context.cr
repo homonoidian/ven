@@ -40,17 +40,17 @@ module Ven::Suite
       scope.map { |k, v| {k, v[:value]} }.to_h
     end
 
-    # Binds a new local variable *name* to *value*.
+    # Binds a new local symbol *name* to *value*.
     def []=(name : String, value : Model)
       scope[name] = { local: true, value: value }
 
       value
     end
 
-    # Defines a variable called *name* that will hold some
+    # Defines a symbol called *name* that will hold some
     # *value*. It uses nonlocal lookup if *local* is false:
     # this way, there will be an attempt to reassign 'the most
-    # global same-named variable' first.
+    # global same-named symbol' first.
     def define(name : String, value : Model, local = true)
       target = scope
 
@@ -67,7 +67,7 @@ module Ven::Suite
       value
     end
 
-    # Retrieves a variable called *name*. It looks for it in
+    # Retrieves a symbol called *name*. It looks for it in
     # the localmost scope first, then proceeds up to the
     # parenting scopes.
     def fetch(name : String) : Model?

@@ -80,6 +80,11 @@ module Ven
       end
     end
 
+    # Calls `Context.fetch` with *name* and dies if not found.
+    def fetch(name : String)
+      @context.fetch(name) || die("symbol '#{name}' not found")
+    end
+
     # Dies of runtime error with *message*. Constructs a
     # traceback where the top entry is the outermost call,
     # and the bottom entry the caller of death itself.
@@ -97,7 +102,7 @@ module Ven
     end
 
     def visit!(q : QSymbol)
-      @context.fetch(q.value) || die("could not find '#{q.value}' in current scope")
+      fetch(q.value)
     end
 
     def visit!(q : QNumber)
@@ -140,6 +145,22 @@ module Ven
 
     def visit!(q : QIntoBool)
       visit(q.value).to_bool
+    end
+
+    def visit!(q : QReturnDecrement)
+      target = fetch(q.target)
+      result = binary("-", target, Num.new 1)
+      @context.define(q.target, result)
+
+      target
+    end
+
+    def visit!(q : QReturnIncrement)
+      target = fetch(q.target)
+      result = binary("+", target, Num.new 1)
+      @context.define(q.target, result)
+
+      target
     end
 
     def visit!(q : QQuote)
@@ -230,11 +251,9 @@ module Ven
     end
 
     def visit!(q : QBinaryAssign)
-      unless previous = @context.fetch(q.target)
-        die("'#{q.target}' has to be set to something first")
-      end
+      previous = fetch(q.target)
 
-      # We need two copies of the given value: one we'll work
+      # We need two copies of the operand value: one we'll work
       # with ourselves, the other we'll give back to the user.
       original = visit(q.value)
       working = original.dup
@@ -248,6 +267,7 @@ module Ven
       #   ensure y is [1, 2, 3];
       working = Vec.new([working]) if q.operator == "&"
 
+      # XXX: binary assignment is never local (?)
       @context.define(q.target, binary(q.operator, previous, working), local: false)
 
       original
@@ -318,7 +338,7 @@ module Ven
 
             route = route.field
 
-            # Try searching for a variable called *route*.
+            # Try searching for a symbol called *route*.
             callee = @context.fetch(route)
 
             unless callee && callee.callable?
@@ -481,19 +501,28 @@ module Ven
     end
 
     # Resolves a `DynamicFieldAccessor` for *head*. The *field*
-    # of the DynamicFieldAccessor must evaluate to `Str`.
-    # `QSymbol`s, though, follow a different evaluation model:
-    # if symbol is an existing variable, the value of this
-    # variable is used as the field's name; if it is not, the
-    # symbol itself is used as the field's name. A similar
-    # rule applies to nested `QAccessField`s.
+    # of the DynamicFieldAccessor must evaluate to `Str`. Symbols
+    # are interpreted differently: if a symbol is defined, its
+    # value is used as a field's name; if it isn't it itself
+    # is used as a field's name:
+    #  ```ven
+    #  box Foo(a, b);
+    #
+    #  foo = Foo(3, 4);
+    #
+    #  #) 'a' is not defined at this point:
+    #  ensure foo.(a) is 3;
+    #
+    #  #) Now it is:
+    #  ensure { a = "b"; foo.(a) } is 4;
+    #  ```
     def field(head, accessor : DynamicFieldAccessor)
       case field = accessor.field
       when QSymbol # a freestanding symbol
         unless @context.fetch(field.value)
           return field(head, field.value)
         end
-      when QAccessField # a nested field access
+      when QAccessField # nested field access
         if (nfa_head = field.head).is_a?(QSymbol)
           if value = field(head, nfa_head.value)
             return field(value, field.path)
@@ -622,7 +651,7 @@ module Ven
             end
 
             # If this is a slurpy, though, make the 'rest'
-            # variable contain the remaining arguments, push
+            # symbol contain the remaining arguments, push
             # **all** (XXX) arguments to the underscores stack
             # in reverse order and break out of the loop with
             # visited body's last expression.
