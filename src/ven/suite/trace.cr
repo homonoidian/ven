@@ -4,12 +4,24 @@ module Ven::Suite
   class Trace
     getter tag : QTag
     getter name : String
+    getter file : String
+    getter line : UInt32
 
     def initialize(@tag, @name)
+      @file = tag.file
+      @line = tag.line
     end
 
-    def to_s(io)
-      io << "'" << @name << "' " << "(" << @tag.file << ":" << @tag.line << ")"
+    # Returns the string representation of this Trace. Can
+    # highlight (brighten) the `name` of this trace if
+    # *highlight* is true.
+    def to_s(io : IO, highlight = true)
+      hi_name = @name
+        .colorize
+        .bright
+        .toggle(highlight)
+
+      io << hi_name << " (" << @file << ":" << @line << ")"
     end
   end
 

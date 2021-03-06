@@ -105,8 +105,8 @@ module Ven
           module_[:distincts].each do |f_reader|
             puts "<expose(): visit using '#{f_reader}'>" if @verbose
 
-            # Can't use Reader.new.read since it will reset, but
-            # it's actually just a wrapper around `.module`.
+            # Can't use Reader.new.read since it will reset,
+            # but it's just a nicer syntax for `.module`.
             f_reader.module do |quote|
               visit(quote)
             end
@@ -130,16 +130,12 @@ module Ven
       origin
     end
 
-    # Visits a quote in the context of this world. Dies on any
-    # interrupt (e.g. `NextInterrupt`) that was not captured.
-    def visit(quote : Quote)
-      @machine.last = quote
-
-      begin
-        @machine.visit!(quote)
-      rescue interrupt : NextInterrupt
-        @machine.die("#{interrupt} caught by the world")
-      end
+    # Visits a *quote* in the context of this world. Dies on
+    # any interrupt (e.g. `NextInterrupt`) that was not captured.
+    def visit(quote : Quote) : Model
+      @machine.visit(quote)
+    rescue interrupt : NextInterrupt
+      @machine.die("#{interrupt} caught by the world")
     end
 
     # Loads given *extensions* into the context of this world.

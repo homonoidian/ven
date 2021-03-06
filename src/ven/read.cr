@@ -243,8 +243,8 @@ module Ven
     end
 
     # Performs a module-level parse (zero or more statements
-    # followed by EOF).
-    def module(&block : Quote -> _)
+    # followed by EOF). Each statement is yielded to *block*.
+    def module(&block)
       until word!("EOF")
         last = yield statement
       end

@@ -69,15 +69,13 @@ module Ven
     # code excerpt.
     def format_traces(traces : Traces, root_spaces = 2, code_spaces = 4)
       result = traces.map do |trace|
-        file = trace.tag.file
-        line = trace.tag.line
-
-        if File.exists?(file)
-          source = File.read(file).lines[line - 1].lstrip(" ")
-          excerpt = "\n#{" " * code_spaces}#{line}| #{source}"
+        if File.exists?(trace.file)
+          lines = File.read_lines(trace.file)
+          erring = lines[trace.line - 1].lstrip(" ")
+          excerpt = "\n#{" " * code_spaces}#{trace.line}| #{erring}"
         end
 
-        "#{" " * root_spaces}from #{trace}#{excerpt}"
+        "#{" " * root_spaces}in #{trace}#{excerpt}"
       end
 
       result.join("\n")

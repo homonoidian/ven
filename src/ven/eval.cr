@@ -338,7 +338,7 @@ module Ven
 
               break head = callee
             else
-              @context.tracing({q.tag, "<call to #{route}>"}) do
+              @context.tracing({q.tag, callee.to_s}) do
                 value = call(callee, [head])
               end
             end
@@ -354,7 +354,7 @@ module Ven
         die("this callee is not callable: #{head}")
       end
 
-      @context.tracing({q.tag, "<call to #{head}>"}) do
+      @context.tracing({q.tag, head.to_s}) do
         call(head, args)
       end
     end
