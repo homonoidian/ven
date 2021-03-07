@@ -20,7 +20,7 @@ module Ven
       @boot = BOOT ? Path[BOOT.not_nil!] : Path[{{__DIR__}}] / ".." / "std"
 
       unless Dir.exists?(@boot)
-        error("boot error", "BOOT directory does not exist: #{@boot}")
+        error("boot error", "BOOT directory does not exist: #{@boot}", quit: true)
       end
 
       @world = World.new(@boot)
