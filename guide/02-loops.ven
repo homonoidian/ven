@@ -1,0 +1,59 @@
+expose std;
+
+
+#) There are two general kinds of `loop` statements: headless
+#) (unconditional) loop and conditional loop. A loop's condition
+#) is put inside parentheses:
+#)  --> loop <loop body>
+#)  --> loop (<condition>) <loop body>
+#)
+#) There are two ways to form a loop's body: with a single
+#) expression, or with a block:
+#)   --> loop <condition?> say("Hi!")
+#)   --> loop <condition?> { say("Hi!"); ... }
+#)
+
+
+#) HEADLESS (UNCONDITIONAL) LOOP:
+
+
+#) Commented out because, well, it is infinite.
+#) loop ask("...").say();
+
+
+#) CONDITIONAL LOOP:
+
+
+#) [1] Repeat the body N times:
+
+loop (10)
+  say("Hi!");
+
+
+#) [2] Loop while some condition is true:
+
+i = 0;
+
+loop (i++ < 10)
+  say("i = " ~ i);
+
+
+#) [3] Initialize a variable and loop while a condition
+#)     is true:
+
+loop (i = 0; i++ < 10)
+  say("i = " ~ i);
+
+
+#) [4] Initialize a variable, check if a condition is true,
+#)     evaluate the body, evaluate a step expression, repeat.
+
+loop (i = 0; i < 10; i++)
+  say("i = " ~ i);
+
+
+#) [5] Same as [4], but with pre-expressions (they evaluate
+#)     right before the body is evaluated)
+
+loop (i = 0; i < 10; say("[pre-expression]"); i++)
+  say("i = " ~ i)
