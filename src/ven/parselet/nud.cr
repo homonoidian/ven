@@ -174,6 +174,15 @@ module Ven
     # Parses a 'fun' statement into a QFun.
     class PFun < Nud
       def parse(parser, tag, token)
+        context =
+          if parser.word!("<")
+            parser.before ">", -> do
+              # Parses with the lowest precedence (FIELD), as
+              # '>' is also a binary operator.
+              parser.led(Precedence::FIELD.value)
+            end
+          end
+
         name = parser.expect("SYMBOL")[:lexeme]
 
         params = parser.word!("(") \
@@ -194,6 +203,9 @@ module Ven
           parser.die("empty function body illegal")
         elsif params.empty? && !slurpy && !given.empty?
           parser.die("zero-arity functions cannot have a 'given'")
+        elsif context
+          params.unshift("$")
+          given.unshift(context)
         end
 
         QFun.new(tag, name, params, body, given, slurpy)

@@ -384,15 +384,17 @@ module Ven::Suite
     getter name : String
     getter body : Quotes
     getter arity : UInt8
-    getter params : Array(String)
+    getter takes : Array(String)
     getter slurpy : Bool
     getter priority : Int32
+    getter contextual : Bool
     getter constraints : ConstrainedParameters
 
     def initialize(@tag, @name, @constraints, @body, @slurpy)
+      @takes = @constraints.reject(&.anonymous?).map(&.name)
+      @arity = @takes.size.to_u8
       @priority = priority?
-      @params = @constraints.reject(&.anonymous?).map(&.name)
-      @arity = @params.size.to_u8
+      @contextual = @takes.first? == "$"
     end
 
     def field(name)
@@ -401,8 +403,8 @@ module Ven::Suite
         Str.new(@name)
       when "arity"
         Num.new(@arity.to_i)
-      when "params"
-        Vec.new(@params.map { |it| Str.new(it) })
+      when "takes"
+        Vec.new(@takes.map { |it| Str.new(it) })
       when "priority"
         Num.new(@priority)
       when "slurpy?"
@@ -458,7 +460,9 @@ module Ven::Suite
         end
       end
 
-      (@variants << variant).sort! { |a, b| b <=> a }
+      (@variants << variant).sort! do |a, b|
+        b <=> a
+      end
 
       variant
     end

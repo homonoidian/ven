@@ -555,8 +555,7 @@ module Ven
     end
 
     # Resolves a `MultiFieldAccessor` for *head*. Returns a
-    # `Vec` of the gathered values, or nil if some were not
-    # found.
+    # `Vec` of gathered values, or nil if some were not found.
     def field(head, accessor : MultiFieldAccessor)
       values =
         accessor.field.map do |field|
@@ -652,18 +651,18 @@ module Ven
     # behavior of 'next': if set to true, 'next' would not be
     # captured.
     def call(callee : MConcreteFunction, args : Models, typecheck = true, generic = false) : Model
-      if contextual = (callee.params.first? == "$")
-        instance = args.first
-
-        unless instance.is_a?(MBoxInstance)
-          die("cannot contextualize #{callee} within #{instance}")
-        end
-
-        @context.inject(instance.scope, local: false)
-      end
-
       loop do
         begin
+          if callee.contextual
+            if (instance = args.first?).nil?
+              die("#{callee} expected the first argument to be context")
+            elsif !instance.is_a?(MBoxInstance)
+              die("cannot contextualize #{callee} within #{instance}")
+            end
+
+            @context.inject(instance.scope, local: false)
+          end
+
           if typecheck
             unless callee.slurpy || callee.arity == args.size
               die("#{callee} did not receive the correct amount of " \
@@ -675,7 +674,7 @@ module Ven
             end
           end
 
-          @context.in(callee.params, args) do
+          @context.in(callee.takes, args) do
             if @context.traces.size > MAX_CALL_DEPTH
               die("too many calls: very deep or infinite recursion")
             end
@@ -698,8 +697,7 @@ module Ven
             # **all** (XXX) arguments to the underscores stack
             # in reverse order and break out of the loop with
             # visited body's last expression.
-
-            @context["rest"] = Vec.new(args[callee.params.size...])
+            @context["rest"] = Vec.new(args[callee.takes.size...])
 
             @context.with_u(args.reverse) do
               visit_callee_body
@@ -718,9 +716,11 @@ module Ven
         raise interrupt
       rescue interrupt : ReturnInterrupt
         return interrupt.value
+      ensure
+        if instance.is_a?(MBoxInstance)
+          instance.as(MBoxInstance).scope = @context.uninject
+        end
       end
-    ensure
-      instance.as(MBoxInstance).scope = @context.uninject if contextual
     end
 
     # Calls an `MGenericFunction` with *args*.
@@ -732,7 +732,7 @@ module Ven
           callee.variants.each do |variant|
             suitable =
               (variant.slurpy && args.size >= variant.arity) ||
-              (variant.params.size == args.size)
+              (variant.arity == args.size)
 
             if suitable && typecheck(variant.constraints, args)
               return call(variant, args, typecheck: false, generic: true)
