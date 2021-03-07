@@ -47,6 +47,11 @@ module Ven::Library
       end
     end
 
+    # Returns whether a file exists at *path*.
+    fun! "exists?", path : Str do |machine|
+      MBool.new File.exists?(path.value)
+    end
+
     # Writes one character *char* into the file at *address*.
     fun! "put", address : Num, char : Str do |machine|
       unless (value = char.value).size == 1
@@ -81,6 +86,7 @@ module Ven::Library
       under "sys" do
         defun("open")
         defun("close")
+        defun("exists?")
         defun("put")
         defun("get")
       end

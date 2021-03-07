@@ -1,11 +1,12 @@
 module Ven::Library
   class Core < Suite::Extension
-    # XXX: Temporary. Remove!
-    fun! "offset", str : Str, offset : Num do |m|
+    fun! "slice", str : Str, starts : Num, ends : Num do |m|
+      left, right = starts.value.numerator, ends.value.numerator
+
       begin
-        Str.new(str.value[offset.value.to_i32...])
+        Str.new(str.value[left..right])
       rescue OverflowError | IndexError
-        m.die("invalid offset #{offset} for this value: #{str}")
+        m.die("invalid slice(#{starts}, #{ends}) for this value: #{str}")
       end
     end
 
@@ -15,7 +16,7 @@ module Ven::Library
 
     def load
       defun "die"
-      defun "offset"
+      defun "slice"
 
       defvar "any", MType::ANY
 

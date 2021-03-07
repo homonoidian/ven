@@ -15,10 +15,20 @@ fun read(address) given num {
   (return contents) and sys.close(address)
 }
 
+#) `read`s *address* and returns the *lineno*-th line of of
+#) the data read.
+fun read(address, lineno) given num =
+  read(address).split("\n")(lineno);
+
 #) Reads and returns the contents of the file located at some
 #) *location*.
 fun read(location) given str =
   read(sys.open(location, "r"));
+
+#) `read`s at *location* and returns the *lineno*-th line of
+#) the data read.
+fun read(location, lineno) given str, num =
+  read(location).split("\n")(lineno);
 
 #) Writes *contents* to an opened file at address *address*.
 fun write(address, contents) given num, str {
@@ -28,15 +38,15 @@ fun write(address, contents) given num, str {
   (return contents) and sys.close(address);
 }
 
-#) Writes *contents* to the file at located at some *location*.
+#) Appends *contents* to the file at located at some *location*.
 fun write(location, contents) given str =
-  write(sys.open(location, "a"), contents);
+  write(sys.open(location, if sys.exists?(location) "a" else "w"), contents);
 
-#) Writes *entity* to the STDOUT.
+#) Appends *entity* to the STDOUT.
 fun put(entity) given str =
   write(_STDOUT, entity);
 
-#) Writes *entity* plus a trailing newline to the STDOUT.
+#) Appends *entity* plus a trailing newline to the STDOUT.
 fun say(entity) given str =
   return entity and put(entity ~ "\n");
 
