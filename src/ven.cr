@@ -4,7 +4,7 @@ require "option_parser"
 require "./ven/**"
 
 module Ven
-  VERSION = "0.1.1-rev04"
+  VERSION = "0.1.1-rev05"
 
   class CLI
     include Suite
