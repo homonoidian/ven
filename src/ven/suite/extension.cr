@@ -92,6 +92,43 @@ module Ven::Suite
       end
     end
 
+    # Defines a new namespace *name*, and evaluates the *block*
+    # in it.
+    # ```
+    #   fun! boo do |m|
+    #     m.die("Boo!")
+    #   end
+    #
+    #   def load
+    #     under "foo" do
+    #       defun("boo")
+    #       defvar("ZERO", Num.new 0)
+    #     end
+    #   end
+    # ```
+    # In Ven:
+    # ```ven
+    #   ensure foo.ZERO is 0; #) passes
+    #   foo.boo(); #) dies with "Boo!"
+    # ```
+    macro under(name, &block)
+      @context.inject(Scope.new, local: false)
+
+      {{yield}}
+
+      # Create a fictious box. It will be the parent of our
+      # MBoxInstance.
+      %parent = MBox.new(QTag.void, {{name}},
+        ConstrainedParameters.new,
+        {} of String => Quote)
+
+      # Now we can use the uninjected namespace as the instance's
+      # namespace.
+      %instance = MBoxInstance.new(%parent, @context.uninject)
+
+      defvar({{name}}, %instance)
+    end
+
     # `load` is called when this extension is 'included'.
     # It is thus a reasonable place to define all top-level
     # things, i.e., the entities this extension exports.

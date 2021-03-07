@@ -1,30 +1,75 @@
 distinct std.io;
 
-#) Prints the arguments to the standard output. Stringifies
-#) each argument and adds a newline to its end. Returns a
-#) vector of the arguments if there were multiple, or the
-#) argument if there was only one.
-fun say(*) {
-  args = |{ put(&_ ~ "\n"); _ }|: rest;
+_STDIN  = "/dev/stdin";
+_STDOUT = "/dev/stdout";
+_STDERR = "/dev/stderr";
 
-  if length(args) is 1 {
-    args(0)
-  } else {
-    args
-  }
+#) Reads and returns the contents of an opened file at address
+#) *address*.
+fun read(address) given num {
+  contents = "";
+
+  loop (char = sys.get(address))
+    contents ~= char;
+
+  (return contents) and sys.close(address)
 }
 
-#) Prints one argument, followed by whitespace, and waits for
-#) the user to input something. Does the same for every other
-#) argument. Returns a vector of these inputs if there were
-#) multiple arguments, or the input itself if there was only
-#) one argument.
-fun ask(*) {
-  responses = |get(_ ~ " ")| rest;
+#) Reads and returns the contents of the file located at some
+#) *location*.
+fun read(location) given str =
+  read(sys.open(location, "r"));
 
-  if length(responses) is 1 {
-    responses(0)
-  } else {
-    responses
-  }
+#) Writes *contents* to an opened file at address *address*.
+fun write(address, contents) given num, str {
+  loop (i = 0; i < #contents; current = contents(i); i += 1)
+    sys.put(address, current);
+
+  (return contents) and sys.close(address);
 }
+
+#) Writes *contents* to the file at located at some *location*.
+fun write(location, contents) given str =
+  write(sys.open(location, "a"), contents);
+
+#) Writes *entity* to the STDOUT.
+fun put(entity) given str =
+  write(_STDOUT, entity);
+
+#) Writes *entity* plus a trailing newline to the STDOUT.
+fun say(entity) given str =
+  return entity and put(entity ~ "\n");
+
+#) `say`s the stringified *entity* to the STDOUT. Returns
+#) the entity back, unchanged.
+fun say(entity) =
+  return entity and say(~entity);
+
+#) `say`s each argument to the STDOUT. Returns a vector of
+#) arguments it received.
+fun say(*) =
+  |say(_)|: rest;
+
+#) Queries a line from the standard input and returns it.
+#) Chomps the trailing newline. Dies on EOF.
+fun ask {
+  line = "";
+
+  loop (stdin = sys.open(_STDIN, "r"); char = sys.get(stdin); line ~= char) {
+    if char is "\n" {
+      return sys.close(stdin) and line
+    }
+  }
+
+  die("got end-of-file")
+}
+
+#) Prompts the user a *question* plus a trailing whitespace,
+#) and returns the user's answer.
+fun ask(question) given str =
+  put(question ~ " ") and ask();
+
+#) Prompts the user multiple questions plus trailing whitespaces,
+#) and returns a vector of the user's answers.
+fun ask(*) =
+  |ask(~_)| rest;

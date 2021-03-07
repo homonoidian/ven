@@ -7,6 +7,11 @@ module Ven::Suite
     def initialize(@file, @line)
     end
 
+    # Returns a void tag.
+    def self.void
+      new("<void>", 1_u32)
+    end
+
     # Returns whether this tag is equal to the *other* tag.
     def ==(other : QTag)
       @file == other.file && @line == other.line
@@ -68,7 +73,7 @@ module Ven::Suite
     getter tag
 
     def initialize
-      @tag = QTag.new("<dummy>", 1_u32)
+      @tag = QTag.void
     end
 
     def to_s(io)

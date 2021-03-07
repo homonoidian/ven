@@ -248,6 +248,10 @@ module Ven
     end
 
     def visit!(q : QAssign)
+      if @context.fetch(q.target).is_a?(MBuiltinFunction)
+        die("'#{q.target}' is read-only")
+      end
+
       @context.define(q.target, visit(q.value), local: q.local)
     end
 

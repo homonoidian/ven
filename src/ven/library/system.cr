@@ -1,34 +1,89 @@
+require "digest"
+
 module Ven::Library
+  # System
   class System < Suite::Extension
-    FANCY = Fancyline.new
+    SHA256 = OpenSSL::Digest::SHA256
 
-    fun! "put", str : Str do |machine|
-      print str.value
+    @files = Hash(BigInt, File).new
 
-      str
+    # Adds the file at *path* to the `@files` registry. The
+    # key is a SHA256 digest of *path*; it is returned, as
+    # a `BigInteger`. The file is opened with mode *mode*.
+    def register(path : String, mode : String) : BigInt
+      id = SHA256.hexdigest(path).to_big_i(16)
+
+      @files[id] = File.open(path, mode)
+
+      id
     end
 
-    fun! "get", prompt : Str do |machine|
-      begin
-        unless input = FANCY.readline(prompt.value, history: false)
-          machine.die("'get': end-of-input")
-        end
-      rescue Fancyline::Interrupt
-        machine.die("'get': interrupted")
+    # Ensures that *address* exists in `@files` and returns
+    # the file it addresses.
+    def existing(machine : Machine, address : Num)
+      unless file = @files[address.value.numerator]?
+        machine.die("no file with this address: #{address}")
       end
 
-      Str.new(input)
+      file
     end
 
-    # A temporary solution to measure time.
-    fun! "time" do |machine|
-      Num.new(Time.monotonic.nanoseconds)
+    # Registers the file at path *path* at an address, and
+    # returns this address.
+    fun! "open", path : Str, mode : Str do |machine|
+      begin
+        Num.new register(path.value, mode.value)
+      rescue e : Exception
+        machine.die(e.message.try(&.downcase) || "unknown failure")
+      end
+    end
+
+    # Closes the file at address *address*.
+    fun! "close", address : Num do |machine|
+      begin
+        MBool.new (existing(machine, address).close || true)
+      rescue e : IO::Error
+        machine.die(e.message.try(&.downcase) || "unknown failure")
+      end
+    end
+
+    # Writes one character *char* into the file at *address*.
+    fun! "put", address : Num, char : Str do |machine|
+      unless (value = char.value).size == 1
+        machine.die("expected one character, got: #{char}")
+      end
+
+      begin
+        existing(machine, address).write(value.to_slice)
+      rescue e : IO::Error
+        machine.die(e.message.try(&.downcase) || "unknown failure")
+      end
+
+      MBool.new(true)
+    end
+
+    # Reads one character of the file at address *address*.
+    # Returns the character as a `Str`, or `MBool` false if
+    # there is nothing to get (e.g. EOF).
+    fun! "get", address : Num do |machine|
+      begin
+        unless char = existing(machine, address).read_char
+          return MBool.new(false)
+        end
+      rescue e : IO::Error
+        machine.die(e.message.try(&.downcase) || "unknown failure")
+      end
+
+      Str.new(char.to_s)
     end
 
     def load
-      defun "put"
-      defun "get"
-      defun "time"
+      under "sys" do
+        defun("open")
+        defun("close")
+        defun("put")
+        defun("get")
+      end
     end
   end
 end

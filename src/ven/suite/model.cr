@@ -205,7 +205,7 @@ module Ven::Suite
       @value = (CACHE[value] ||= value.to_big_d.to_big_r)
     end
 
-    def initialize(value : Int32 | BigDecimal)
+    def initialize(value : Int32 | BigInt | BigDecimal)
       @value = BigRational.new(value, 1)
     end
 
@@ -419,6 +419,13 @@ module Ven::Suite
     # (including anonymous parameters) multiplied by the amount
     # of them.
     def priority?
+      # Parameterless functions have the highest possible
+      # priority (the latter will yield zero if parameterless,
+      # which we do not want).
+      if @constraints.size == 0
+        return 256
+      end
+
       @constraints.map(&.weight.value).sum * @constraints.size
     end
 
