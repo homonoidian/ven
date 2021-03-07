@@ -9,14 +9,21 @@ module Ven
   class CLI
     include Suite
 
-    # `BOOT` is a compile-time environment variable containing
-    # the path to a boot module (the first to load & one which
-    # defines the internals.) Indeed, it is a directory that
-    # functions in the same way as origin modules do.
-    BOOT = Path[{{env("BOOT") || raise "unable to get 'BOOT'"}}]
+    # BOOT is a compile-time environment variable that can
+    # be passed to provide a boot directory. The boot directory
+    # will be the first place where Ven will search for a module.
+    BOOT = {{env("BOOT")}}
 
     def initialize
-      @world = World.new(BOOT)
+      # Default the boot directory to __DIR__/../std. __DIR__
+      # will hopefully be this 'src' folder.
+      @boot = BOOT ? Path[BOOT.not_nil!] : Path[{{__DIR__}}] / ".." / "std"
+
+      unless Dir.exists?(@boot)
+        error("boot error", "BOOT directory does not exist: #{@boot}")
+      end
+
+      @world = World.new(@boot)
 
       @world.load(Library::Core)
       @world.load(Library::System)
@@ -162,6 +169,10 @@ module Ven
 
         parser.on "--verbose-world", "Make world verbose (debug)" do
           @world.verbose = true
+        end
+
+        parser.on "--boot", "Print the boot directory" do
+          error(@boot.to_s)
         end
 
         parser.unknown_args do |args|
