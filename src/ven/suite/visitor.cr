@@ -22,21 +22,32 @@ module Ven::Suite
     # Remembers *quote* as the last visited node and hands it
     # off to `visit!`. Makes sure visit depth does not exceed
     # `MAX_VISIT_DEPTH`.
-    def visit(quote : Quote)
-      if (@depth += 1) > MAX_VISIT_DEPTH
-        raise InternalError.new(
-          "maximum evaluation depth exceeded: got >#{MAX_VISIT_DEPTH} " \
-          "nested evaluation calls, close to stack overflow")
-      end
+    macro visit(quote)
+      begin
+        if (@depth += 1) > MAX_VISIT_DEPTH
+          raise InternalError.new(
+            "maximum evaluation depth exceeded: got >#{MAX_VISIT_DEPTH} " \
+            "nested evaluation calls, close to stack overflow")
+        end
 
-      visit!(@last = quote)
-    ensure
-      @depth -= 1
+        %quote = {{quote}}
+
+        unless %quote.is_a?(Array)
+          @last = %quote
+        end
+
+        visit!(%quote)
+      ensure
+        @depth -= 1
+      end
     end
 
-    # Same as `visit(quote)`, but iterates over *quotes*.
-    def visit(quotes : Quotes)
-      quotes.map { |quote| visit(quote).as(Model) }
+    # Same as `visit(quote)`, but iterates over *quotes*. Also
+    # does not check whether the visit depth is exceeded.
+    def visit!(quotes : Quotes)
+      quotes.map do |quote|
+        visit!(@last = quote)
+      end
     end
 
     # Fallback visitor (subclass has no such visitor).
