@@ -45,16 +45,16 @@ module Ven::Suite
       took.reverse
     end
 
-    # Concatenates this Chunk's instructions with *other*'s
-    # instructions.
+    # Concatenates this Chunk's instructions with an Array of
+    # *other* instructions.
     def <<(other : Array(Instruction))
       @code += other
     end
 
-    # Includes an instruction into this chunk. *opcode* is
-    # the opcode of this instruction, and *argument* is its
-    # argument. Note that data offset is automatically computed
-    # for the argument.
+    # Adds a new instruction to this chunk. *opcode* is the
+    # opcode of this instruction, and *argument* is its argument.
+    # Note that the data offset for the argument is computed
+    # automatically.
     def add(line : UInt32, opcode : Symbol, argument : Data? = nil)
       unless argument.nil?
         offset = @data.index(&.== argument) || (@data << argument).size - 1
@@ -64,10 +64,10 @@ module Ven::Suite
     end
 
     # Resolves the argument of an *instruction* based on the
-    # data of this chunk. To resolve an argument means to
-    # return the value the instruction's data offset points
-    # to. Returns nil if the *instruction* has no data offset,
-    # or data is not long enough,
+    # data of this chunk. Returns nil if the *instruction*
+    # has no data offset, or data is not long enough, To resolve
+    # an argument means to return the value an instruction's
+    # data offset points to.
     def resolve(instruction : Instruction) : Data?
       if offset = instruction.offset
         @data[offset]?

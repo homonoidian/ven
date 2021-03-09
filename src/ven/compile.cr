@@ -16,12 +16,12 @@ module Ven
     # Appends an instruction to the current chunk. Assumes
     # `q` is defined and is a Quote.
     private macro emit(opcode, argument = nil)
-      @chunks.last.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
+      chunk.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
     end
 
-    # Evaluates the block 'between' *left* and *right*. Inside
-    # the block, *delta* is defined. It is a difference between
-    # *right* and *left*.
+    # Evaluates the block 'between' instruction indices *left*
+    # and *right*. Inside the block, *delta* is defined. It is
+    # a difference between the indices *right* and *left*.
     private macro between(left, right, &)
       delta = {{right}} - {{left}}
       %took = @chunks.last.take(delta)

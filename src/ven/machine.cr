@@ -20,21 +20,21 @@ module Ven
       raise RuntimeError.new(@chunk.file, fetch!.line, message)
     end
 
-    # Returns the instruction at IP. If there is no instruction
-    # left, returns nil.
+    # Returns the instruction at the IP. If there are no
+    # instructions left, returns nil.
     private macro fetch
       if @ip < @chunk.size
         @chunk[@ip]
       end
     end
 
-    # Returns the instruction at IP.
+    # Returns the instruction at the IP.
     private macro fetch!
       @chunk[@ip]
     end
 
     # Resolves the argument of the current instruction. *cast*
-    # is what type the resolved value should be.
+    # is what type the resolved value is ought to be.
     private macro argument(cast = String)
       @chunk.resolve(@chunk[@ip]).as({{cast}})
     end
@@ -51,12 +51,12 @@ module Ven
       @stack.pop
     end
 
-    # Pops *amount* models and returns an array of them,
-    # reversing this array. If a block is given, deconstructs
-    # this array and passes it to the block. The items of the
-    # array are **all** assumed to be of the type *type*.
-    # Alternatively, types for each item individually may be
-    # provided by giving *type* a tuple literal.
+    # Pops *amount* models and returns a **reversed** array
+    # of them. If a block is given, deconstructs this array
+    # and passes it to the block. The items of the array are
+    # **all** assumed to be of the type *type*. Alternatively,
+    # types for each item individually may be provided by
+    # giving *type* a tuple literal.
     private macro pop(amount, are type = Model, &block)
       %models = Models.new
 
@@ -68,11 +68,8 @@ module Ven
 
       {% if block %}
         {% for argument, index in block.args %}
-          {% if type.is_a?(TupleLiteral) %}
-            {{argument}} = %models[{{index}}].as({{type[index]}})
-          {% else %}
-            {{argument}} = %models[{{index}}].as({{type}})
-          {% end %}
+          {{argument}} = %models[{{index}}]
+            .as({{type.is_a?(TupleLiteral) ? type[index] : type}})
         {% end %}
 
         {{yield}}
@@ -124,8 +121,8 @@ module Ven
     # that map directly to Crystal's). Takes two operands from
     # the stack, of types *input*, and applies a binary *operator*
     # to their `.value`s. It then converts the result of the
-    # application into a desired type with *output*, and puts
-    # this result back onto the stack.
+    # application into the desired type with *output*, and
+    # puts this result back onto the stack.
     private macro binary(operator, input = Num, output = num)
       pop(2, {{input}}) do |left, right|
         put {{output}}(left.value {{operator.id}} right.value)
@@ -141,13 +138,13 @@ module Ven
         when :SYM
           put bool false
         when :NUM # -- a
-          put Num.new(argument)
+          put num argument
         when :STR # -- a
-          put Str.new(argument)
+          put str argument
         when :PCRE # -- a
           put MRegex.new(argument)
         when :VEC # -- a
-          put Vec.new(pop argument Int32)
+          put vec (pop argument Int32)
         when :TRUE # -- a
           put bool true
         when :FALSE # -- a
@@ -166,8 +163,8 @@ module Ven
           this = pop
 
           this.is_a?(Str | Vec) \
-            ? put Num.new(this.value.size)
-            : put Num.new(this.to_s.size)
+            ? put num this.value.size
+            : put num this.to_s.size
         when :NOM # a b -- a' b'
           left, right = pop 2
 
@@ -247,7 +244,7 @@ module Ven
             when {_, MType}
               put bool left.of?(right)
             when {Str, MRegex}
-              put truthy Str.new($0), if: left.value =~ right.value
+              put truthy str($0), if: left.value =~ right.value
             when {MBool | Num | Str | Vec, _}
               put truthy left, if: left.eqv?(right)
             end
@@ -307,9 +304,8 @@ module Ven
           if name.is_a?(Str) && name.value == "say"
             puts args.join("\n")
 
-            # Put back on the stack as Vec: say returns
-            # unchanged.
-            put Vec.new(args)
+            # Put back on the stack as a vec.
+            put vec args
           else
             die("this callee is not callable: #{name}")
           end

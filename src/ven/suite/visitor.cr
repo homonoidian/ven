@@ -9,8 +9,7 @@ module Ven::Suite
       visit!(@last = quote)
     end
 
-    # Same as `visit(quote)`, but iterates over *quotes*. Also
-    # does not check whether the visit depth is exceeded.
+    # Same as `visit(quote)`, but iterates over *quotes*.
     def visit(quotes : Quotes)
       quotes.map do |quote|
         visit(@last = quote).as(T)
