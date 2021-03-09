@@ -52,13 +52,20 @@ module Ven
       reader = Reader.new.reset
       compiler = Compiler.new(file)
 
-      lc = reader.read(file, source) do |statement|
-        compiler.visit(statement)
+      rt = Time.measure do
+        reader.read(file, source) do |statement|
+          compiler.visit(statement)
+        end
       end
 
       m = Machine.new([compiler.chunk])
 
-      m.start
+      mt = Time.measure do
+        m.start
+      end
+
+      puts "READ & COMPILE :: #{rt.microseconds}qs"
+      puts "EVAL :: #{mt.microseconds}qs"
     end
 
     def open(path : String)

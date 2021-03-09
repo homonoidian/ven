@@ -4,11 +4,11 @@ module Ven
   class Machine
     include Suite
 
-    # Instruction pointer (index of the current instruction,
+    # Instruction pointer (index of the current instruction
     # in `@chunk`).
     @ip : Int32 = 0
 
-    # The chunk in-execution.
+    # The chunk in execution.
     @chunk : Chunk
 
     def initialize(@chunks : Chunks)
@@ -132,8 +132,9 @@ module Ven
       end
     end
 
-    # Starts the evaluation loop, which begins to fetch and
-    # execute the instructions from the current chunk.
+    # Starts the evaluation loop, which begins to fetch the
+    # instructions from the current chunk and execute them,
+    # until there aren't left any.
     def start
       while this = fetch
         case this.opcode
@@ -288,13 +289,13 @@ module Ven
           if pop.is_bool_false?
             die("ensure: got a falsey value")
           end
-        when :JOIT # a -- [a' if a is true]
+        when :JOIT # a -- [a if a is not false]
           unless (it = pop).is_bool_false?
             put it
 
             next @ip += argument(Int32)
           end
-        when :JOIF # a -- [a' if a is false]
+        when :JOIF # a -- [a if a is false]
           if (it = pop).is_bool_false?
             put it
 

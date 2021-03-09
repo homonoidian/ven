@@ -1,7 +1,7 @@
 require "./suite/*"
 
 module Ven
-  class Compiler < Suite::Visitor(Suite::Chunks)
+  class Compiler < Suite::Visitor(Int32)
     include Suite
 
     def initialize(file : String)
@@ -14,7 +14,7 @@ module Ven
     end
 
     # Appends an instruction to the current chunk. Assumes
-    # `q` is defined and is a quote.
+    # `q` is defined and is a Quote.
     private macro emit(opcode, argument = nil)
       @chunks.last.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
     end
@@ -46,9 +46,7 @@ module Ven
     end
 
     def visit!(q : QVector)
-      q.items.each do |item|
-        visit(item)
-      end
+      visit(q.items)
 
       emit :VEC, q.items.size
     end
@@ -124,10 +122,7 @@ module Ven
 
     def visit!(q : QCall)
       visit(q.callee)
-
-      q.args.each do |argument|
-        visit(argument)
-      end
+      visit(q.args)
 
       emit :IVK, q.args.size
     end
