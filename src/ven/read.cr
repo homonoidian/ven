@@ -68,7 +68,7 @@ module Ven
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
-    property keywords, world
+    property keywords
 
     def initialize
       @keywords = KEYWORDS
@@ -82,7 +82,6 @@ module Ven
       @src = uninitialized String
       @file = uninitialized String
       @line = uninitialized UInt32
-      @world = uninitialized World
       reset
     end
 
@@ -360,7 +359,6 @@ module Ven
 
       # Statements:
 
-      defstmt("NUD", Parselet::PNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("BOX", Parselet::PBox)
       defstmt("LOOP", Parselet::PLoop)

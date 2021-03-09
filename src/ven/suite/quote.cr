@@ -1,5 +1,5 @@
 module Ven::Suite
-  # The location (*file*name and *line* number) of a `Quote`.
+  # The location (*file*name and *line*number) of a `Quote`.
   struct QTag
     getter file : String
     getter line : UInt32
@@ -19,8 +19,8 @@ module Ven::Suite
   end
 
   # The base class of all Ven AST nodes, which are called
-  # **quotes** in Ven. It is also a type accessible from Ven.
-  abstract class Quote < MClass
+  # **quotes** in Ven.
+  abstract class Quote
     macro inherited
       macro defquote!(*fields)
         getter tag : QTag
@@ -78,20 +78,6 @@ module Ven::Suite
 
     def to_s(io)
       io << "<void quote>"
-    end
-  end
-
-  # A thin compatibility layer between the `Reader` and the
-  # `Machine`.
-  class QModelCarrier < QVoid
-    getter model
-
-    def initialize(@model : Model)
-      super()
-    end
-
-    def to_s(io)
-      io << "<carrier for " << @model << ">"
     end
   end
 

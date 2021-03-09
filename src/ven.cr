@@ -4,30 +4,10 @@ require "option_parser"
 require "./ven/**"
 
 module Ven
-  VERSION = "0.1.1-rev05"
+  VERSION = "0.1.1-rev10"
 
   class CLI
     include Suite
-
-    # BOOT is a compile-time environment variable that can
-    # be passed to provide a boot directory. The boot directory
-    # will be the first place where Ven will search for a module.
-    BOOT = {{env("BOOT")}}
-
-    def initialize
-      # Default the boot directory to __DIR__/../std. __DIR__
-      # will hopefully be this 'src' folder.
-      @boot = BOOT ? Path[BOOT.not_nil!] : Path[{{__DIR__}}] / ".." / "std"
-
-      unless Dir.exists?(@boot)
-        error("boot error", "BOOT directory does not exist: #{@boot}", quit: true)
-      end
-
-      @world = World.new(@boot)
-
-      @world.load(Library::Core)
-      @world.load(Library::System)
-    end
 
     # Prints a *message* and quits with exit status 0.
     def error(message : String)
@@ -58,11 +38,9 @@ module Ven
       when ReadError
         error("read error", "#{message} (in #{this.file}:#{this.line}, near '#{this.lexeme}')")
       when RuntimeError
-        error("runtime error", "#{message}\n#{format_traces(this.trace)}")
+        error("runtime error", message)
       when InternalError
         error("internal error", message)
-      when WorldError
-        error("world error", message)
       end
 
       if quit
@@ -70,54 +48,25 @@ module Ven
       end
     end
 
-    # Returns a string of properly formatted *traces*.
-    # *root_spaces* is the number of spaces before each trace;
-    # *code_spaces* is the number of spaces before each source
-    # code excerpt.
-    def format_traces(traces : Traces, root_spaces = 2, code_spaces = 4)
-      result =
-        traces.map do |trace|
-          file = trace.tag.file
-          line = trace.tag.line
+    def process(file : String, source : String)
+      reader = Reader.new.reset
+      compiler = Compiler.new(file)
 
-          if File.exists?(file)
-            lines = File.read_lines(file)
-            erring = lines[line - 1].lstrip(" ")
-            excerpt = "\n#{" " * code_spaces}#{line}| #{erring}"
-          end
-
-          "#{" " * root_spaces}in #{trace}#{excerpt}"
-        end
-
-      result.join("\n")
-    end
-
-    # Evaluates *source* under the filename *filename*.
-    def eval(filename : String, source : String)
-      @world.feed(filename, source)
-    end
-
-    # Does the necessary negotiations with the world and runs
-    # the script/module *path*.
-    def open(path : String)
-      path = Path[path].normalize.expand(home: true)
-
-      if File.directory?(path)
-        @world << path
-        path = @world.origin(path)
-      elsif File.file?(path)
-        @world << path.parent
-      else
-        error("command-line error", "invalid option, file or directory: #{path}", quit: true)
+      lc = reader.read(file, source) do |statement|
+        compiler.visit(statement)
       end
 
-      # Now, gather all '.ven' files we know about except
-      # ourselves.
-      @world.gather(ignore: path.to_s)
+      m = Machine.new([compiler.chunk])
 
-      eval path.to_s, File.read(path)
-    rescue exception : VenError
-      error(exception)
+      m.start
+    end
+
+    def open(path : String)
+      unless File.exists?(path)
+        error("command-line error", "file not found: #{path}", quit: true)
+      end
+
+      process path, File.read(path)
     end
 
     # Starts a new read-eval-print loop.
@@ -126,9 +75,6 @@ module Ven
 
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
-
-      # First, gather all '.ven' files we know about.
-      @world.gather
 
       loop do
         begin
@@ -144,15 +90,15 @@ module Ven
         end
 
         begin
-          puts eval("<interactive>", source)
+          process("<interactive>", source)
         rescue exception : VenError
           error(exception, quit: false)
         end
       end
     end
 
-    # Parses the command-line arguments and dispatches further
-    # to `repl`, `open`, etc.
+    # Parses the command-line arguments and appropriately
+    # passes control to the other methods.
     def run
       OptionParser.parse do |parser|
         parser.banner = "Usage: #{PROGRAM_NAME} [options] [path/to/script.ven]"
@@ -165,14 +111,6 @@ module Ven
 
         parser.on "-h", "--help", "Print this message and exit" do
           error(parser.to_s)
-        end
-
-        parser.on "--verbose-world", "Make world verbose (debug)" do
-          @world.verbose = true
-        end
-
-        parser.on "--boot", "Print the boot directory" do
-          error(@boot.to_s)
         end
 
         parser.unknown_args do |args|

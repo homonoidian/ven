@@ -27,11 +27,8 @@ module Ven::Suite
   class RuntimeError < VenError
     getter file : String
     getter line : UInt32
-    getter trace : Traces
 
-    def initialize(tag : QTag, @message, @trace)
-      @file = tag.file
-      @line = tag.line
+    def initialize(@file, @line, @message)
     end
   end
 
@@ -41,11 +38,5 @@ module Ven::Suite
   # a standard Crystal error is raised, something is **very**
   # wrong.
   class InternalError < VenError
-  end
-
-  # An exception that is raised when there is a problem in the
-  # relationship between different files and modules, or in the
-  # relationship between the reader and the interpreter.
-  class WorldError < VenError
   end
 end
