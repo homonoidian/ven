@@ -124,7 +124,7 @@ module Ven
       visit(q.callee)
       visit(q.args)
 
-      emit :IVK, q.args.size
+      emit :INK, q.args.size
     end
 
     def visit!(q : QAssign)

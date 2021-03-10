@@ -3,13 +3,13 @@ require "big"
 module Ven::Suite
   # Model casting (aka internal conversion) will raise this
   # exception on failure (e.g. if a string cannot be parsed
-  # into a number).
+  # into a number.)
   class ModelCastException < Exception
   end
 
   # Model is the most generic Crystal type for Ven values.
   # All Ven-accessible entities must inherit either `MClass`
-  # or `MStruct`.
+  # or `MStruct`, which `Model` is a union of.
   alias Model = MClass | MStruct
 
   # :nodoc:
@@ -21,24 +21,9 @@ module Ven::Suite
 
   # :nodoc:
   macro model_template?
-    # Whether this model was yielded by a truthy expression.
-    @truth : Bool = false
-
-    # Returns whether this model was yielded by a truthy
-    # expression: `false is false` => false but is truthy,
-    # etc. Recomputes via `true?` right away.
-    def truth?
-      @truth || (@truth = true?)
-    end
-
-    # Temporarily assigns the truth to *truth*.
-    def truth=(truth : Bool)
-      @truth = truth
-    end
-
     # Converts (casts) this model into a `Num`.
     def to_num : Num
-      raise ModelCastException.new("could not convert to num")
+      raise ModelCastException.new("could not convert to num: #{self}")
     end
 
     # Converts (casts) this model into a `Str`.
@@ -57,24 +42,28 @@ module Ven::Suite
       MBool.new(inverse ? !true? : true?)
     end
 
-    # Returns whether this is a false `MBool`.
-    def is_bool_false? : Bool
+    # Returns whether this model is a false `MBool`. Note
+    # that it is likely **not** the inverse of `true?`.
+    def false? : Bool
       false
     end
 
-    # Returns a field's value for this model (or nil if the
-    # field of interest does not exist).
+    # Returns a field's value for this model, or nil if this
+    # model has no such field.
     def field(name : String) : Model?
       nil
     end
 
     # Returns whether this model is of the type *other*.
     def of?(other : MType) : Bool
-      return true if other == MType::ANY
-
       other.type.is_a?(MClass.class) \
         ? self.class <= other.type.as(MClass.class)
         : self.class <= other.type.as(MStruct.class)
+    end
+
+    # :ditto:
+    def of?(other : MAny)
+      true
     end
 
     # :ditto:
@@ -106,9 +95,9 @@ module Ven::Suite
 
   # A Ven value that has the Crystal type *T*.
   abstract struct MValue(T) < MStruct
-    property value
+    getter value : T
 
-    def initialize(@value : T)
+    def initialize(@value)
     end
 
     def eqv?(other : MValue)
@@ -137,8 +126,10 @@ module Ven::Suite
 
   # Ven's string data type.
   struct MString < MValue(String)
-    # Returns this string parsed into a `Num`. If *parse* is
-    # false, returns the length of this string instead.
+    # Returns this string parsed into a `Num`. Alternatively,
+    # if *parse* is false, returns the length of this string.
+    # Raises a `ModelCastException` if this string could not
+    # be parsed into a number.
     def to_num(parse = true)
       Num.new(parse ? @value : @value.size)
     rescue InvalidBigDecimalException
@@ -160,13 +151,19 @@ module Ven::Suite
     def to_s(io)
       @value.dump(io)
     end
+
+    def [](index : Int)
+      Str.new(@value[index].to_s)
+    end
+
+    delegate :size, to: @value
   end
 
   # Ven's regex data type.
   struct MRegex < MStruct
-    property value
+    getter value : Regex
 
-    def initialize(@value : Regex)
+    def initialize(@value)
       @source = @value.to_s
     end
 
@@ -179,7 +176,7 @@ module Ven::Suite
     end
 
     def true?
-      # Any regex is true as any regex (even an empty one)
+      # Any regex is true, as any regex (even an empty one)
       # matches something.
       true
     end
@@ -197,19 +194,17 @@ module Ven::Suite
 
   # Ven's number data type.
   class MNumber < MClass
-    property value
+    getter value : BigDecimal
 
-    CACHE = {} of String => BigRational
-
-    def initialize(value : String)
-      @value = (CACHE[value] ||= value.to_big_d.to_big_r)
+    def initialize(source : String)
+      @value = source.to_big_d
     end
 
-    def initialize(value : Int32 | BigInt | BigDecimal)
-      @value = BigRational.new(value, 1)
+    def initialize(source : Int | Float)
+      @value = BigDecimal.new(source)
     end
 
-    def initialize(@value : BigRational)
+    def initialize(@value : BigDecimal)
     end
 
     def to_num
@@ -225,22 +220,22 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io <<
-        (@value.denominator == 1 \
-          ? @value.numerator
-          : @value.numerator / @value.denominator)
+      io << @value
     end
 
-    def -
-      Num.new(-@value)
+    # Mutably negates this number. Returns self.
+    def neg! : self
+      @value = -@value
+
+      self
     end
   end
 
   # Ven's vector data type.
   class MVector < MClass
-    property value
+    getter value = Models.new
 
-    def initialize(@value = Models.new)
+    def initialize(@value)
     end
 
     def initialize(value : Array(MClass) | Array(MStruct))
@@ -273,6 +268,8 @@ module Ven::Suite
     def to_s(io)
       io << "[" << @value.join(", ") << "]"
     end
+
+    delegate :[], :size, to: @value
   end
 
   # Ven's type data type. It represents other Ven data types.
@@ -280,8 +277,7 @@ module Ven::Suite
     getter name : String
     getter type : MStruct.class | MClass.class
 
-    # Pre-defined 'any' data type.
-    ANY = MType.new("any", MAny)
+    delegate :==, to: @name
 
     def initialize(@name, @type)
     end
@@ -289,15 +285,10 @@ module Ven::Suite
     def to_s(io)
       io << "type " << @name
     end
-
-    # Returns whether this type is equal to the *other* type.
-    def ==(other : MType)
-      @name == other.name
-    end
   end
 
-  # The type that represents anything. It has no value and
-  # cannot be directly interacted with in Crystal/Ven.
-  abstract class MAny < MClass
+  # The value that represents anything (in other words, the
+  # value that matches on anything.)
+  class MAny < MClass
   end
 end

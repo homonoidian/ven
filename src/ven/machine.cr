@@ -39,10 +39,22 @@ module Ven
       @chunk.resolve(@chunk[@ip]).as({{cast}})
     end
 
-    # Pushes *models* onto the stack.
-    private macro put(*models)
-      {% for model in models %}
-        @stack << ({{model}})
+    # Pushes *models* onto the stack if *condition* is true.
+    # Bool false is pushed otherwise. *condition* may be omitted;
+    # in that case, *models* will all just be pushed.
+    private macro put(*models, if condition = nil)
+      {% if condition %}
+        if {{condition}}
+          {% for model in models %}
+            @stack << ({{model}})
+          {% end %}
+        else
+          @stack << bool false
+        end
+      {% else %}
+        {% for model in models %}
+          @stack << ({{model}})
+        {% end %}
       {% end %}
     end
 
@@ -76,45 +88,29 @@ module Ven
       {% end %}
     end
 
-    # A shorthand for `Num.new(value)`.
+    # A shorthand for `Num.new`.
     private macro num(value)
       Num.new({{value}})
     end
 
-    # A shorthand for `Str.new(value)`.
+    # A shorthand for `Str.new`.
     private macro str(value)
       Str.new({{value}})
     end
 
-    # A shorthand for `Vec.new(value)`.
+    # A shorthand for `Vec.new`.
     private macro vec(value)
       Vec.new({{value}})
     end
 
-    # A shorthand for `MBool.new(value)`.
+    # A shorthand for `MBool.new`.
     private macro bool(value)
       MBool.new({{value}})
     end
 
-    # `may_be` is a `put` that pushes `bool` false if the *value*
-    # is Crystal falsey.
-    private macro may_be(value)
-      (%value = {{value}}) ? put %value : put bool false
-    end
-
-    # Sets *value*'s `truth` to true and returns the value
-    # back, but only if *condition* is true. If it is not,
-    # returns `bool` false. See `Model.truth?`.
-    private macro truthy(value, if condition)
-      {{condition}} ? truthy {{value}} : bool false
-    end
-
-    # Sets *value*'s `truth` to true and returns the value
-    # back. See `Model.truth?`.
-    private macro truthy(value)
-      %value = {{value}}
-      %value.truth = true
-      %value
+    # A shorthand for `MRegex.new`.
+    private macro regex(value)
+      MRegex.new({{value}})
     end
 
     # A short way of writing simple binary operations (those
@@ -135,141 +131,128 @@ module Ven
     def start
       while this = fetch
         case this.opcode
-        when :SYM
-          put bool false
-        when :NUM # -- a
-          put num argument
-        when :STR # -- a
-          put str argument
-        when :PCRE # -- a
-          put MRegex.new(argument)
-        when :VEC # -- a
-          put vec (pop argument Int32)
-        when :TRUE # -- a
-          put bool true
-        when :FALSE # -- a
-          put bool false
-        when :NEG # a -- a'
-          put -pop.to_num
-        when :TON # a -- a'
-          put pop.to_num
-        when :TOS # a -- a'
-          put pop.to_str
-        when :TOB # a -- a'
-          put pop.to_bool
-        when :TOIB # a -- a'
-          put pop.to_bool(inverse: true)
-        when :LEN # a -- a'
+        # -- false
+        when :SYM then put bool false
+        # -- (a : num)
+        when :NUM then put num argument
+        # -- (a : str)
+        when :STR then put str argument
+        # -- (a : regex)
+        when :PCRE then put regex argument
+        # -- (a : vec)
+        when :VEC then put vec (pop argument Int32)
+        # -- true
+        when :TRUE then put bool true
+        # -- false
+        when :FALSE then put bool false
+        # [NEGATE] (a : num) -- (a' : num)
+        when :NEG then put pop.to_num.neg!
+        # [TO NUM] (a : any) -- (a : num)
+        when :TON then put pop.to_num
+        # [TO STR] (a : any) -- (a : str)
+        when :TOS then put pop.to_str
+        # [TO BOOL] (a : any) -- (a : bool)
+        when :TOB then put pop.to_bool
+        # [TO INVERSE BOOL] (a : any) -- ('a : bool)
+        when :TOIB then put pop.to_bool(inverse: true)
+        # [LENGTH] (a : any) -- ('a : num)
+        when :LEN
           this = pop
 
           this.is_a?(Str | Vec) \
             ? put num this.value.size
             : put num this.to_s.size
-        when :NOM # a b -- a' b'
-          left, right = pop 2
-
-          begin
-            normalized =
+        # [NORMALIZE] (a : any) (b : any) -- 'a 'b
+        when :NOM
+          pop 2 do |left, right|
+            begin
               case operator = argument
               when "in" then case {left, right}
                 when {_, Str}
-                  {left.to_str, right}
+                  put left.to_str, right
                 when {_, Vec}
-                  {left, right}
+                  put left, right
                 end
               when "is" then case {left, right}
                 when {Vec, _}, {_, Vec}
-                  {left.to_vec, right.to_vec}
+                  put left.to_vec, right.to_vec
                 when {_, MRegex}
-                  {left.to_str, right}
+                  put left.to_str, right
                 when {Str, _}
-                  {left, right.to_str}
+                  put left, right.to_str
                 when {Num, _}
-                  {left, right.to_num}
+                  put left, right.to_num
                 when {MBool, _}, {_, MBool}
-                  {left.to_bool, right.to_bool}
+                  put left.to_bool, right.to_bool
                 end
               when "<", ">", "<=", ">="
-                {left.to_num, right.to_num}
+                put left.to_num, right.to_num
               when "+", "-", "*", "/"
-                {left.to_num, right.to_num}
+                put left.to_num, right.to_num
               when "~"
-                {left.to_str, right.to_str}
+                put left.to_str, right.to_str
               when "&"
-                {left.to_vec, right.to_vec}
+                put left.to_vec, right.to_vec
               when "x" then case {left, right}
                 when {_, Vec}, {_, Str}
-                  {right, left.to_num}
+                  put right, left.to_num
                 when {Vec, _}, {Str, _}
-                  {left, right.to_num}
+                  put left, right.to_num
                 else
-                  {left.to_vec, right.to_num}
+                  put left.to_vec, right.to_num
                 end
-              end
-          rescue e : ModelCastException
-            die("'#{operator}': cannot normalize #{left}, #{right}: #{e.message}")
-          end
-
-          # `normalized` is false or nil if normalization failed.
-          unless normalized
-            die("'#{operator}': could not normalize these operands: " \
-                "#{left}, #{right} (try changing the order)")
-          end
-
-          # Put them back on the stack.
-          put normalized[0], normalized[1]
-        when :CEQV # a b -- a'
-          found =
-            pop 2 do |left, right|
-              case right
-              when Vec
-                right.value.each do |item|
-                  break item if left.eqv?(item)
-                end
-              when Str
-                # If `right` is a Str, `left` is a Str too
-                # (see NOM).
-                left = left.as(Str)
-
-                right.value.chars.each do |char|
-                  break str(char.to_s) if left.value == char
-                end
-              end
+              end ||
+                die("'#{operator}': cannot normalize #{left}, #{right}" \
+                    "(try changing the order)")
+            rescue e : ModelCastException
+              die("'#{operator}': cannot normalize #{left}, #{right}" \
+                  "(#{e.message})")
             end
-
-          may_be found
-        when :EQU # a b -- a'
+          end
+        # [in CONTAINER EQUAL by VALUE] a (b : vec | str) -- a?
+        when :CEQV
+          pop 2 do |left, right|
+            case right
+            when Vec
+              put left, if: right.value.any? &.eqv?(left)
+            when Str
+              put left, if: right.value.includes?(left.as(Str).value)
+            end
+          end
+        # [EQUAL] a b -- a?
+        when :EQU
           pop 2 do |left, right|
             case {left, right}
             when {_, MType}
               put bool left.of?(right)
             when {Str, MRegex}
-              put truthy str($0), if: left.value =~ right.value
+              put str($0), if: left.value =~ right.value
             when {MBool | Num | Str | Vec, _}
-              put truthy left, if: left.eqv?(right)
+              put left, if: left.eqv?(right)
             end
           end
-        when :LTE # a b -- a'
-          binary(:<=, output: bool)
-        when :GTE # a b -- a'
-          binary(:>=, output: bool)
-        when :LT # a b -- a'
-          binary(:<, output: bool)
-        when :GT # a b -- a'
-          binary(:>, output: bool)
-        when :ADD # a b -- a'
-          binary(:+)
-        when :SUB # a b -- a'
-          binary(:-)
-        when :MUL # a b -- a'
-          binary(:*)
-        when :DIV # a b -- a'
-          binary(:/)
-        when :PEND # a b -- a'
-          binary(:+, input: Vec, output: vec)
-        when :CONCAT # a b -- a'
-          binary(:+, input: Str, output: str)
-        when :TIMES # a b -- a'
+        # [LESS THAN] (a : num) (b : num) -- (a' : bool)
+        when :LT then binary(:<, output: bool)
+        # [GREATER THAN] (a : num) (b : num) -- (a' : bool)
+        when :GT then binary(:>, output: bool)
+        # [LESS THAN EQUAL to] (a : num) (b : num) -- (a' : bool)
+        when :LTE then binary(:<=, output: bool)
+        # [GREATER THAN EQUAL to] (a : num) (b : num) -- (a' : bool)
+        when :GTE then binary(:>=, output: bool)
+        # (a : num) (b : num) -- (a' : num)
+        when :ADD then binary(:+)
+        # (a : num) (b : num) -- (a' : num)
+        when :SUB then binary(:-)
+        # (a : num) (b : num) -- (a' : num)
+        when :MUL then binary(:*)
+        # (a : num) (b : num) -- (a' : num)
+        when :DIV then binary(:/)
+        # (a : vec) (b : vec) -- (a' : vec)
+        when :PEND then binary(:+, input: Vec, output: vec)
+        # (a : str) (b : str) -- (a' : str)
+        when :CONCAT then binary(:+, input: Str, output: str)
+        # (a : any) (b : num) -- (a' : str | vec)
+        when :TIMES
           pop 2, {Model, Num} do |left, right|
             amount = right.value.to_big_i
 
@@ -282,32 +265,42 @@ module Ven
               put str left.value * amount
             end
           end
-        when :ENS # a --
-          if pop.is_bool_false?
-            die("ensure: got a falsey value")
-          end
-        when :JOIT # a -- [a if a is not false]
-          unless (it = pop).is_bool_false?
-            put it
+        # [ENSURE] a --
+        when :ENS then die("ensure: got a falsey value") if pop.false?
+        # [JUMP OVER IF TRUE] a -- a?
+        when :JOIT
+          unless (value = pop).false?
+            put value
 
             next @ip += argument(Int32)
           end
-        when :JOIF # a -- [a if a is false]
-          if (it = pop).is_bool_false?
-            put it
+        # [JUMP OVER IF FALSE] a -- a?
+        when :JOIF
+          if (value = pop).false?
+            put value
 
             next @ip += argument(Int32)
           end
-        when :IVK # a ... -- a'
+        when :INK
           args, name = pop(argument Int32), pop
 
-          if name.is_a?(Str) && name.value == "say"
+          if name.is_a?(Num) && name.value == 1
             puts args.join("\n")
-
-            # Put back on the stack as a vec.
-            put vec args
-          else
+          elsif !name.callable?
             die("this callee is not callable: #{name}")
+          elsif name.is_a?(Vec | Str)
+            found =
+              args.map do |index|
+                if !index.is_a?(Num)
+                  die("improper index value: #{index}")
+                elsif index.value >= name.size
+                  die("index out of bounds: #{index}")
+                end
+
+                name[index.value.to_i]
+              end
+
+            put (found.size == 1 ? found.first : vec found)
           end
         else
           raise InternalError.new("unknown opcode: #{this.opcode}")
