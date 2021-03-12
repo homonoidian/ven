@@ -48,7 +48,7 @@ module Ven
 
         !left.is_a?(QSymbol) \
           ? parser.die("left-hand side of '#{kind}' must be a symbol")
-          : QAssign.new(tag, left.value, parser.led, local: kind == "=")
+          : QAssign.new(tag, left.value, parser.led, kind == ":=")
       end
     end
 

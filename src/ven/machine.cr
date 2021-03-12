@@ -4,71 +4,98 @@ module Ven
   class Machine
     include Suite
 
-    # Instruction pointer (index of the current instruction
-    # in `@chunk`).
-    @ip : Int32 = 0
+    # The instruction pointers. There are many, because every
+    # function et al. requires its own instruction pointer.
+    @ips = [0]
 
-    # The chunk in execution.
-    @chunk : Chunk
-
-    def initialize(@chunks : Chunks)
-      @stack = Models.new
-      @chunk = @chunks.last
+    def initialize(@chunks : Chunks, @context : Context)
+      @stacks = [Models.new]
     end
 
+    # Returns the current chunk. The first chunk of `@chunks`
+    # is thought of as the current.
+    private macro chunk
+      @chunks.first
+    end
+
+    # Returns the current stack. The last stack of `@stacks`
+    # is thought of as the current.
+    private macro stack
+      @stacks.last
+    end
+
+    # Dies of runtime error with *message*, which should explain
+    # why the error happened.
     def die(message : String)
-      raise RuntimeError.new(@chunk.file, fetch!.line, message)
+      raise RuntimeError.new(chunk.file, fetch!.line, message)
     end
 
-    # Returns the instruction at the IP. If there are no
-    # instructions left, returns nil.
-    private macro fetch
-      if @ip < @chunk.size
-        @chunk[@ip]
+    # Returns the instruction at the current instruction pointer,
+    # or nil if there are no instructions left to fetch.
+    private macro fetch?
+      if (%ip = @ips.last) < chunk.size
+        chunk[%ip]
       end
     end
 
-    # Returns the instruction at the IP.
+    # Returns the instruction at the current instruction pointer.
+    # Raises if there is no instructions left to fetch.
     private macro fetch!
-      @chunk[@ip]
+      chunk[@ips.last]
+    end
+
+    # Increments the current instruction pointer.
+    private macro goto
+      @ips[-1] += 1
+    end
+
+    # Sets the current instruction pointer to *ip*.
+    private macro goto(ip)
+      @ips[-1] = {{ip}}
+    end
+
+    # Sets the instruction pointer to *ip* and `next`s. Must
+    # be called only inside a loop.
+    private macro goto!(index)
+      next goto({{index}})
     end
 
     # Resolves the argument of the current instruction. *cast*
-    # is what type the resolved value is ought to be.
+    # is what type the resolved value should be cast into.
     private macro argument(cast = String)
-      @chunk.resolve(@chunk[@ip]).as({{cast}})
+      chunk.resolve(fetch!).as({{cast}})
     end
 
     # Pushes *models* onto the stack if *condition* is true.
-    # Bool false is pushed otherwise. *condition* may be omitted;
-    # in that case, *models* will all just be pushed.
+    # Pushes `bool` false if it isn't. *condition* may be
+    # omitted.
     private macro put(*models, if condition = nil)
       {% if condition %}
         if {{condition}}
           {% for model in models %}
-            @stack << ({{model}})
+            stack << ({{model}})
           {% end %}
         else
-          @stack << bool false
+          stack << bool false
         end
       {% else %}
         {% for model in models %}
-          @stack << ({{model}})
+          stack << ({{model}})
         {% end %}
       {% end %}
     end
 
     # Pops a model from the stack.
     private macro pop
-      @stack.pop
+      stack.pop
     end
 
-    # Pops *amount* models and returns a **reversed** array
-    # of them. If a block is given, deconstructs this array
-    # and passes it to the block. The items of the array are
-    # **all** assumed to be of the type *type*. Alternatively,
-    # types for each item individually may be provided by
-    # giving *type* a tuple literal.
+    # Pops *amount* models from the stack and returns a **reversed**
+    # array of them. If a block is given, deconstructs this array
+    # and passes it to the block. The items of the array are **all**
+    # assumed to be of the type *type*. Alternatively, types for
+    # each item individually may be provided by giving *type* a
+    # tuple literal.
     private macro pop(amount, are type = Model, &block)
       %models = Models.new
 
@@ -113,48 +140,95 @@ module Ven
       MRegex.new({{value}})
     end
 
-    # A short way of writing simple binary operations (those
-    # that map directly to Crystal's). Takes two operands from
-    # the stack, of types *input*, and applies a binary *operator*
-    # to their `.value`s. It then converts the result of the
-    # application into the desired type with *output*, and
-    # puts this result back onto the stack.
+    # Does a `Context.fetch` call and dies if got nil.
+    private macro var(name)
+      @context.fetch(%symbol = {{name}}) || die("symbol not found: #{%symbol}")
+    end
+
+    # A shorthand for simple binary operations (those that map
+    # directly to Crystal's). Takes two operands from the stack,
+    # of types *input*, and applies the *operator* to their
+    # `.value`s. It then passes the result to *output*, and
+    # places the result of that onto the stack.
     private macro binary(operator, input = Num, output = num)
       pop(2, {{input}}) do |left, right|
         put {{output}}(left.value {{operator.id}} right.value)
       end
     end
 
+        # Performs a concrete (or concrete-like) invokation. Uses
+    # `next`, so requires a loop around itself. *args* is the
+    # arguments to the concrete, and *chunk* is the chunk that
+    # will be evaluated.
+    private macro invoke!(chunk, args = Models.new)
+      @stacks << {{args}}
+      @chunks.unshift({{chunk}})
+      @context.push
+
+      next @ips << 0
+    end
+
+    # Reverts the result of an invokation. Essentialy, an
+    # antagonist of `invoke!`. Bool *transfer* determines
+    # whether to transfer the child stack's last stackee
+    # to the parent's (e.g. return)
+    private macro uninvoke(transfer = false)
+      @ips.pop
+      %child = @stacks.pop
+      @chunks.shift
+      @context.pop
+
+      {% if transfer %}
+        if %stackee = %child.last?
+          put %stackee
+        end
+      {% else %}
+        true
+      {% end %}
+    end
+
     # Starts the evaluation loop, which begins to fetch the
     # instructions from the current chunk and execute them,
-    # until there aren't left any.
+    # until there aren't any left.
     def start
-      while this = fetch
+      while this = fetch?
         case this.opcode
         # -- false
-        when :SYM then put bool false
+        when :SYM
+          put var argument
         # -- (a : num)
-        when :NUM then put num argument
+        when :NUM
+          put num argument
         # -- (a : str)
-        when :STR then put str argument
+        when :STR
+          put str argument
         # -- (a : regex)
-        when :PCRE then put regex argument
+        when :PCRE
+          put regex argument
         # -- (a : vec)
-        when :VEC then put vec (pop argument Int32)
+        when :VEC
+          put vec (pop argument Int32)
         # -- true
-        when :TRUE then put bool true
+        when :TRUE
+          put bool true
         # -- false
-        when :FALSE then put bool false
+        when :FALSE
+          put bool false
         # [NEGATE] (a : num) -- (a' : num)
-        when :NEG then put pop.to_num.neg!
+        when :NEG
+          put pop.to_num.neg!
         # [TO NUM] (a : any) -- (a : num)
-        when :TON then put pop.to_num
+        when :TON
+          put pop.to_num
         # [TO STR] (a : any) -- (a : str)
-        when :TOS then put pop.to_str
+        when :TOS
+          put pop.to_str
         # [TO BOOL] (a : any) -- (a : bool)
-        when :TOB then put pop.to_bool
+        when :TOB
+          put pop.to_bool
         # [TO INVERSE BOOL] (a : any) -- ('a : bool)
-        when :TOIB then put pop.to_bool(inverse: true)
+        when :TOIB
+          put pop.to_bool(inverse: true)
         # [LENGTH] (a : any) -- ('a : num)
         when :LEN
           this = pop
@@ -232,25 +306,35 @@ module Ven
             end
           end
         # [LESS THAN] (a : num) (b : num) -- (a' : bool)
-        when :LT then binary(:<, output: bool)
+        when :LT
+          binary(:<, output: bool)
         # [GREATER THAN] (a : num) (b : num) -- (a' : bool)
-        when :GT then binary(:>, output: bool)
+        when :GT
+          binary(:>, output: bool)
         # [LESS THAN EQUAL to] (a : num) (b : num) -- (a' : bool)
-        when :LTE then binary(:<=, output: bool)
+        when :LTE
+          binary(:<=, output: bool)
         # [GREATER THAN EQUAL to] (a : num) (b : num) -- (a' : bool)
-        when :GTE then binary(:>=, output: bool)
+        when :GTE
+          binary(:>=, output: bool)
         # (a : num) (b : num) -- (a' : num)
-        when :ADD then binary(:+)
+        when :ADD
+          binary(:+)
         # (a : num) (b : num) -- (a' : num)
-        when :SUB then binary(:-)
+        when :SUB
+          binary(:-)
         # (a : num) (b : num) -- (a' : num)
-        when :MUL then binary(:*)
+        when :MUL
+          binary(:*)
         # (a : num) (b : num) -- (a' : num)
-        when :DIV then binary(:/)
+        when :DIV
+          binary(:/)
         # (a : vec) (b : vec) -- (a' : vec)
-        when :PEND then binary(:+, input: Vec, output: vec)
+        when :PEND
+          binary(:+, input: Vec, output: vec)
         # (a : str) (b : str) -- (a' : str)
-        when :CONCAT then binary(:+, input: Str, output: str)
+        when :CONCAT
+          binary(:+, input: Str, output: str)
         # (a : any) (b : num) -- (a' : str | vec)
         when :TIMES
           pop 2, {Model, Num} do |left, right|
@@ -266,48 +350,75 @@ module Ven
             end
           end
         # [ENSURE] a --
-        when :ENS then die("ensure: got a falsey value") if pop.false?
-        # [JUMP OVER IF TRUE] a -- a?
-        when :JOIT
+        when :ENS
+          die("ensure: got a falsey value") if pop.false?
+        # [GOTO] --
+        when :G
+          goto! (argument Int32)
+        # [GOTO IF TRUE] a -- a?
+        when :GIT
           unless (value = pop).false?
-            put value
-
-            next @ip += argument(Int32)
+            put value; goto! argument Int32
           end
-        # [JUMP OVER IF FALSE] a -- a?
-        when :JOIF
+        # [GOTO IF FALSE] a -- a?
+        when :GIF
           if (value = pop).false?
-            put value
-
-            next @ip += argument(Int32)
+            put value; goto! argument Int32
           end
-        when :INK
-          args, name = pop(argument Int32), pop
+        # a -- a
+        when :LOCAL
+          put @context.define(argument, pop)
+        # a -- a
+        when :GLOBAL
+          put @context.define(argument, pop, global: true)
+        # --
+        when :FUN
+          # The argument to FUN is a pointer to the chunk where
+          # the function's body & some metainfo can be found.
+          # Here, they are extracted to form an `MConcreteFunction`.
+          f_chunk = @chunks[argument Int32]
+          f_name = f_chunk.name
+          concrete = MConcreteFunction.new(f_chunk)
+          @context.define(f_name, concrete)
+        # a ...b -- a
+        when :CALL
+          args, callee = pop(argument Int32), pop
 
-          if name.is_a?(Num) && name.value == 1
-            puts args.join("\n")
-          elsif !name.callable?
-            die("this callee is not callable: #{name}")
-          elsif name.is_a?(Vec | Str)
-            found =
+          case callee
+          when Vec, Str
+            items =
               args.map do |index|
                 if !index.is_a?(Num)
-                  die("improper index value: #{index}")
-                elsif index.value >= name.size
-                  die("index out of bounds: #{index}")
+                  die("improper item index value: #{index}")
+                elsif index.value >= callee.size
+                  die("item index out of bounds: #{index}")
                 end
 
-                name[index.value.to_i]
+                callee[index.value.to_i]
               end
 
-            put (found.size == 1 ? found.first : vec found)
+            put (items.size == 1 ? items.first : vec items)
+          when MConcreteFunction
+            invoke!(callee.chunk, args)
+          else
+            die("this callee is not callable: #{callee}")
+          end
+        # a -- a$
+        when :RET
+          unless uninvoke(transfer: true)
+            die("void functions illegal")
           end
         else
           raise InternalError.new("unknown opcode: #{this.opcode}")
         end
 
-        @ip += 1
+        goto
       end
+    end
+
+    # Returns the result of this Machine's work.
+    def result?
+      stack.last?
     end
   end
 end

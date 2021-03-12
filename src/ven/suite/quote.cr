@@ -96,7 +96,7 @@ module Ven::Suite
   defquote(QBinary, operator : String, left : Quote, right : Quote)
   defquote(QCall, callee : Quote, args : Quotes)
 
-  defquote(QAssign, target : String, value : Quote, local : Bool)
+  defquote(QAssign, target : String, value : Quote, global : Bool)
   defquote(QBinaryAssign, operator : String, target : String, value : Quote)
 
   defquote(QIntoBool, value : Quote)
@@ -149,7 +149,7 @@ module Ven::Suite
   defquote(QIf, cond : Quote, suc : Quote, alt : Quote?)
 
   defquote(QFun,
-    name :  String,
+    name : String,
     params : Array(String),
     body : Quotes,
     given : Quotes,

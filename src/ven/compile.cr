@@ -1,32 +1,63 @@
 require "./suite/*"
 
 module Ven
-  class Compiler < Suite::Visitor(Int32)
+  # A compiler for a single Ven unit. Compiles the quotes it
+  # is given into a sequence of `Chunk`s.
+  # ```
+  # c = Ven::Compiler.new
+  # c.visit(Ven::Quote)
+  # c.visit(Ven::Quote)
+  # c.visit(Ven::Quote)
+  # puts c.compile
+  # ```
+  class Compiler < Suite::Visitor(Bool)
     include Suite
 
-    def initialize(file : String)
-      @chunks = [Chunk.new(file)]
+    getter file : String
+
+    def initialize(@file = "<unit>")
+      @chunks = [Chunk.new(@file, "<unit>")]
     end
 
-    # Returns the latest chunk.
-    def chunk
-      @chunks.last
+    # Returns the first chunk.
+    private macro lead
+      @chunks.first
     end
 
-    # Appends an instruction to the current chunk. Assumes
-    # `q` is defined and is a Quote.
+    # Inserts an instruction into the first chunk of `@chunks`.
+    # Assumes `q` is defined and is a Quote. Ensures *opcode*
+    # is not nil.
     private macro emit(opcode, argument = nil)
-      chunk.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
+      lead.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
     end
 
-    # Evaluates the block 'between' instruction indices *left*
-    # and *right*. Inside the block, *delta* is defined. It is
-    # a difference between the indices *right* and *left*.
-    private macro between(left, right, &)
-      delta = {{right}} - {{left}}
-      %took = @chunks.last.take(delta)
-      {{yield}}
-      @chunks.last << %took
+    # Declares a label called *name* in the lead chunk.
+    private macro label(name)
+      lead.label({{name}})
+    end
+
+    # Defines a new chunk called *name*. Evaluates the block
+    # within this new chunk. Returns the index that this chunk
+    # will have in `@chunks`.
+    private macro chunk(name, &)
+      @chunks.unshift Chunk.new(@file, {{name}})
+
+      begin
+        {{yield}}
+      ensure
+        @chunks << @chunks.shift
+      end
+
+      @chunks.size - 1
+    end
+
+    # Returns the chunks produced by this compiler.
+    def compile : Chunks
+      @chunks.each do |chunk|
+        chunk.delabel
+      end
+
+      @chunks
     end
 
     def visit!(q : QSymbol)
@@ -46,21 +77,13 @@ module Ven
     end
 
     def visit!(q : QVector)
-      visit(q.items)
+      visit q.items
 
       emit :VEC, q.items.size
     end
 
-    def visit!(q : QURef)
-      emit :UREF
-    end
-
-    def visit!(q : QUPop)
-      emit :UPOP
-    end
-
     def visit!(q : QUnary)
-      visit(q.operand)
+      visit q.operand
 
       opcode =
         case q.operator
@@ -77,74 +100,86 @@ module Ven
     end
 
     def visit!(q : QBinary)
-      left  = visit(q.left)
-      right = visit(q.right)
+      visit q.left
 
-      if q.operator == "and"
-        between(left, right) do |delta|
-          # Jump after `right` (delta) and JOIT (at
-          # delta + 1) to FALSE (at delta + 2) if left
-          # is false.
-          emit :JOIF, delta + 2
-        end
-
-        # Jump to the instr. after FALSE if right is true:
-        emit :JOIT, 2
+      if q.operator.in?("and", "or")
+        emit :GIF, :fail
+        visit q.right
+        emit :GIT, :end
+        label :fail
         emit :FALSE
-      elsif q.operator == "or"
-        between(left, right) do |delta|
-          emit :JOIT, delta + 2
-        end
-      else
-        opcode =
-          case q.operator
-          when "in" then :CEQV
-          when "is" then :EQU
-          when "<=" then :LTE
-          when ">=" then :GTE
-          when "<" then :LT
-          when ">" then :GT
-          when "+" then :ADD
-          when "-" then :SUB
-          when "*" then :MUL
-          when "/" then :DIV
-          when "&" then :PEND
-          when "~" then :CONCAT
-          when "x" then :TIMES
-          end
+        label :end
 
-        # Emit a normalization (NOM) call first:
-        emit :NOM, q.operator
-
-        emit opcode
+        return true
       end
+
+      visit q.right
+
+      opcode =
+        case q.operator
+        when "in" then :CEQV
+        when "is" then :EQU
+        when "<=" then :LTE
+        when ">=" then :GTE
+        when "<"  then :LT
+        when ">"  then :GT
+        when "+"  then :ADD
+        when "-"  then :SUB
+        when "*"  then :MUL
+        when "/"  then :DIV
+        when "&"  then :PEND
+        when "~"  then :CONCAT
+        when "x"  then :TIMES
+        end
+
+      # Emit a normalization (NOM) call first:
+      emit :NOM, q.operator
+
+      emit opcode
     end
 
     def visit!(q : QCall)
-      visit(q.callee)
-      visit(q.args)
+      visit q.callee
+      visit q.args
 
-      emit :INK, q.args.size
+      emit :CALL, q.args.size
     end
 
     def visit!(q : QAssign)
-      visit(q.value)
+      visit q.value
 
-      emit :SET, q.target
+      emit (q.global ? :GLOBAL : :LOCAL), q.target
     end
 
     def visit!(q : QEnsure)
-      visit(q.expression)
+      visit q.expression
 
       emit :ENS
     end
 
-    # A `Suite::Visitor.visit`, but returns the amount of
-    # instructions in the current chunk.
-    def visit(quote)
-      super(quote)
+    def visit!(q : QIf)
+      visit(q.cond)
+      emit :GIF, :alt
+      visit(q.suc)
+      emit :G, :end
+      label :alt
+      q.alt ? visit(q.alt.not_nil!) : emit :FALSE
+      label :end
+    end
 
-      chunk.size
+    def visit!(q : QFun)
+      index = chunk q.name do
+        # Assume the arguments are already on the stack.
+        q.params.each do |parameter|
+          emit :LOCAL, parameter
+        end
+
+        visit q.body
+
+        emit :RET
+      end
+
+      emit :FUN, index
     end
   end
 end

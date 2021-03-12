@@ -9,6 +9,10 @@ module Ven
   class CLI
     include Suite
 
+    def initialize
+      @context = Context.new
+    end
+
     # Prints a *message* and quits with exit status 0.
     def error(message : String)
       puts message
@@ -58,7 +62,13 @@ module Ven
         end
       end
 
-      m = Machine.new([compiler.chunk])
+      chunks = compiler.compile
+
+      chunks.each do |chunk|
+        puts chunk
+      end
+
+      m = Machine.new(chunks, @context)
 
       mt = Time.measure do
         m.start
@@ -66,6 +76,8 @@ module Ven
 
       puts "READ & COMPILE :: #{rt.microseconds}qs"
       puts "EVAL :: #{mt.microseconds}qs"
+
+      puts m.result?
     end
 
     def open(path : String)

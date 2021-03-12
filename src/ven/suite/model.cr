@@ -115,7 +115,7 @@ module Ven::Suite
       Num.new(@value ? 1 : 0)
     end
 
-    def is_bool_false?
+    def false?
       !@value
     end
 
@@ -290,5 +290,22 @@ module Ven::Suite
   # The value that represents anything (in other words, the
   # value that matches on anything.)
   class MAny < MClass
+  end
+
+  abstract class MFunction < MClass
+    def callable?
+      true
+    end
+  end
+
+  class MConcreteFunction < MFunction
+    getter chunk : Chunk
+
+    def initialize(@chunk)
+    end
+
+    def to_s(io)
+      io << "concrete " << @chunk.name
+    end
   end
 end
