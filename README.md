@@ -1,11 +1,9 @@
-Ven is a lightweight scripting language and (**beware!**) a
-hobby project. It provides a few curious features:
+**Ven bytecode compiler & virtual machine are being under active
+development on this branch. Ven of this branch is generally faster,
+has no stack limit etc., but has a lot less features.**
 
-- [x] Extremal cooperation between the parts of the implementation;
-- [x] Context and constant guesswork (compile-time and runtime alike);
-- [x] Brevity and clarity (disputable, of course);
-- [ ] Unity of interpretation and compilation;
-- [ ] Unrestricted access to the language's internals anywhere and at any point in time.
+Ven is a lightweight scripting language and (**beware!**) a
+hobby project.
 
 ### Building Ven
 
@@ -27,32 +25,6 @@ greatly decrease the executable's size.
 *On Windows*:
 
 :no_good: Try WSL.
-
-### The Ven Pipeline
-
-Right now, Ven code is interpreted using a simple (and slow,
-for what it does) node visitor.
-
-+ Core parsing (called *reading* in Ven) happens in *src/ven/read.cr*;
-parselets (units that read a definite entity, *quote*) are
-located in *src/ven/parselet/*. They make the core reader
-actually read something (see `prepare` in *src/ven/read.cr*)
-
-+ The visiting (evaluation) happens in *src/ven/eval.cr*.
-Evaluation is done statement-by-statement to support the
-tight integration between the reader and the evaluator:
-a statement is evaluated right after the reader reads it.
-
-+ *src/ven/world.cr* is the negotiation buffer between the
-reader and the interpreter. The reader and the interpreter
-both have access to World, and World has access to the reader
-and the interpreter. World also holds the Context
-(*src/ven/suite/context*). This means, for example, that the
-reader could create a runtime variable.
-
-There is a huge problem with recursion depth. With speed. With
-brevity and clarity, which are promised and declared but not
-really proven by action.
 
 ### Contributing
 
