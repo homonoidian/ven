@@ -15,7 +15,7 @@ module Ven
 
     getter file : String
 
-    def initialize(@file = "<unit>")
+    def initialize(@file = "<unknown>")
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
@@ -51,7 +51,8 @@ module Ven
       @chunks.size - 1
     end
 
-    # Returns the chunks produced by this compiler.
+    # Finishes the process of compilation and returns the
+    # resulting chunks.
     def compile : Chunks
       @chunks.each do |chunk|
         chunk.delabel
@@ -148,7 +149,7 @@ module Ven
     def visit!(q : QAssign)
       visit q.value
 
-      emit (q.global ? :GLOBAL : :LOCAL), q.target
+      emit (q.global ? :GLOBAL_PUT : :LOCAL_PUT), q.target
     end
 
     def visit!(q : QEnsure)
@@ -158,20 +159,50 @@ module Ven
     end
 
     def visit!(q : QIf)
-      visit(q.cond)
+      visit q.cond
       emit :GIF, :alt
-      visit(q.suc)
+      visit q.suc
       emit :G, :end
       label :alt
-      q.alt ? visit(q.alt.not_nil!) : emit :FALSE
+      q.alt ? visit q.alt.not_nil! : emit :FALSE
       label :end
     end
 
     def visit!(q : QFun)
-      index = chunk q.name do
-        # Assume the arguments are already on the stack.
-        q.params.each do |parameter|
+      repeat = false
+
+      q.params.zip?(q.given) do |_, given|
+        if !given && !repeat
+          emit :SYM, "any"
+        elsif !given
+          visit q.given.last
+        elsif repeat = true
+          visit given
+        end
+      end
+
+      offset = chunk q.name do
+        onymous = q.params.reject("*")
+
+        # Function guarantees :arity, :slurpy, :params and
+        # :given meta presency.
+        lead[:arity] = onymous.size
+        lead[:slurpy] = q.slurpy
+        lead[:params] = q.params
+        lead[:given] = q.params.size
+
+        # Assume the arguments are already on the stack, and
+        # the arity check was also done.
+        onymous.each do |parameter|
           emit :LOCAL, parameter
+        end
+
+        # Slurpies eat the remaining values on the stack. It
+        # must, however, be proven that the slurpie (`*`) is
+        # at the end of the function's parameters.
+        if q.slurpy
+          emit :REM_TO_VEC
+          emit :LOCAL, "rest"
         end
 
         visit q.body
@@ -179,7 +210,7 @@ module Ven
         emit :RET
       end
 
-      emit :FUN, index
+      emit :FUN, offset
     end
   end
 end

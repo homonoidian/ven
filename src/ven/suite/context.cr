@@ -16,6 +16,11 @@ module Ven::Suite
       %value
     end
 
+    # Defines a local variable, *name*, in the current scope.
+    def []=(name : String, value : Model)
+      set!(@scopes.last, name, false, value)
+    end
+
     # Defines an entry *name* with value *value*. Overrides
     # any existing entry with the same *name*. If *global* is
     # true, the new entry will be global: any other `define`,
@@ -44,6 +49,10 @@ module Ven::Suite
           return it[:value]
         end
       end
+    end
+
+    def use(extension : Extension)
+      extension.load(self)
     end
 
     # Pushes a new, child scope.

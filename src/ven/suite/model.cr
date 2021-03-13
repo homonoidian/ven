@@ -19,6 +19,18 @@ module Ven::Suite
   alias Str = MString
   alias Vec = MVector
 
+  # Different kinds of model weight. Model weight is, essentially,
+  # the evaluation priority a model has. Models with higher
+  # priorities must evaluate first.
+  enum MWeight
+    ANON_ANY = 1
+    ANY
+    ANON_TYPE
+    TYPE
+    ANON_VALUE
+    VALUE
+  end
+
   # :nodoc:
   macro model_template?
     # Converts (casts) this model into a `Num`.
@@ -86,6 +98,11 @@ module Ven::Suite
     def true? : Bool
       true
     end
+
+    # Returns the weight (see `MWeight`) of this model.
+    def weight : MWeight
+      MWeight::VALUE
+    end
   end
 
   # The parent of all `Model`s represented by a Crystal struct.
@@ -126,6 +143,8 @@ module Ven::Suite
 
   # Ven's string data type.
   struct MString < MValue(String)
+    delegate :size, to: @value
+
     # Returns this string parsed into a `Num`. Alternatively,
     # if *parse* is false, returns the length of this string.
     # Raises a `ModelCastException` if this string could not
@@ -155,8 +174,6 @@ module Ven::Suite
     def [](index : Int)
       Str.new(@value[index].to_s)
     end
-
-    delegate :size, to: @value
   end
 
   # Ven's regex data type.
@@ -196,8 +213,10 @@ module Ven::Suite
   class MNumber < MClass
     getter value : BigDecimal
 
+    @@cache = {} of String => BigDecimal
+
     def initialize(source : String)
-      @value = source.to_big_d
+      @value = @@cache[source]? || (@@cache[source] = source.to_big_d)
     end
 
     def initialize(source : Int | Float)
@@ -282,6 +301,10 @@ module Ven::Suite
     def initialize(@name, @type)
     end
 
+    def weight
+      MWeight::TYPE
+    end
+
     def to_s(io)
       io << "type " << @name
     end
@@ -290,22 +313,129 @@ module Ven::Suite
   # The value that represents anything (in other words, the
   # value that matches on anything.)
   class MAny < MClass
+    def eqv?(other)
+      true
+    end
+
+    def weight
+      MWeight::ANY
+    end
+
+    def to_s(io)
+      io << "any"
+    end
   end
 
+  # An abstract umbrella for functions.
   abstract class MFunction < MClass
     def callable?
       true
     end
   end
 
+  # Ven's most essential function type.
   class MConcreteFunction < MFunction
-    getter chunk : Chunk
+    getter code : Chunk
+    getter name : String
+    getter arity : Int32
+    getter types : Models
+    getter slurpy : Bool
+    getter params : Array(String)
 
-    def initialize(@chunk)
+    def initialize(@types, @code)
+      @name = @code.name
+      @arity = @code.meta[:arity].as(Int32)
+      @slurpy = @code.meta[:slurpy].as(Bool)
+      @params = @code.meta[:params].as(Array(String))
+    end
+
+    # Returns how specific this function is.
+    getter specificity : Int32 do
+      @params.zip(@types).map do |param, type|
+        weight = type.weight
+
+        # Anonymous parameters lose one weight point.
+        if anonymous?(param)
+          weight -= 1
+        end
+
+        weight.value
+      end.sum
     end
 
     def to_s(io)
-      io << "concrete " << @chunk.name
+      io << "concrete " << @name << "("
+
+      @params.zip(@types).each_with_index do |pair, index|
+        io << pair[0] << ": " << pair[1]
+
+        unless index == @params.size - 1
+          io << ", "
+        end
+      end
+
+      io << ")"
+    end
+
+    # Returns whether *param* is an anonymous parameter.
+    def anonymous?(param : String)
+      param.in?("*")
+    end
+
+    # Checks if this function's identity is equal to the *other*
+    # function's identity. For this method to return true,
+    # *other*'s specificity *and* types must be equal to this'.
+    def ==(other : MConcreteFunction)
+      return false unless specificity == other.specificity
+
+      types.zip(other.types) do |our, their|
+        return false unless our.eqv?(their)
+      end
+
+      true
+    end
+  end
+
+  # An abstract callable entity that supervises a list of
+  # concretes (aka variants) (see `MConcreteFunction`).
+  class MGenericFunction < MFunction
+    getter name : String
+
+    def initialize(@name)
+      @variants = [] of MConcreteFunction
+    end
+
+    delegate :[], :size, to: @variants
+
+    # Adds *variant* to the list of variants this generic
+    # supervises. Does not check if an identical variant
+    # already exists, nor does it overwrite one.
+    def add!(variant : MConcreteFunction) : self
+      (@variants << variant).sort! do |left, right|
+        right.specificity <=> left.specificity
+      end
+
+      self
+    end
+
+    # Adds *variant* to the list of variants this generic
+    # supervises. Checks if an identical *variant* already
+    # exists there and overwrites it with the *variant* if
+    # it does,
+    def add(variant : MConcreteFunction) : self
+      @variants.each_with_index do |existing, index|
+        if variant == existing
+          @variants[index] = variant
+
+          return self
+        end
+      end
+
+      add!(variant)
+    end
+
+    def to_s(io)
+      io << "generic " << @name << " with " << @variants.size << " variant(s)"
     end
   end
 end

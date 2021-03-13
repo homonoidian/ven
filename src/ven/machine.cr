@@ -56,8 +56,16 @@ module Ven
 
     # Sets the instruction pointer to *ip* and `next`s. Must
     # be called only inside a loop.
-    private macro goto!(index)
-      next goto({{index}})
+    private macro goto!(ip)
+      next goto({{ip}})
+    end
+
+    # A `next` that can be safely used in the Machine's
+    # evaluation loop.
+    private macro next!(value)
+      {{value}}
+
+      next goto
     end
 
     # Resolves the argument of the current instruction. *cast*
@@ -90,20 +98,23 @@ module Ven
       stack.pop
     end
 
-    # Pops *amount* models from the stack and returns a **reversed**
-    # array of them. If a block is given, deconstructs this array
-    # and passes it to the block. The items of the array are **all**
-    # assumed to be of the type *type*. Alternatively, types for
-    # each item individually may be provided by giving *type* a
-    # tuple literal.
-    private macro pop(amount, are type = Model, &block)
+    # Pops *amount* models from the stack and returns a reversed
+    # (if *reverse* is true) array of them. If a block is given,
+    # deconstructs this array and passes it to the block. The
+    # items of the array are **all** assumed to be of the type
+    # *type*. Alternatively, types for each item individually
+    # may be provided by giving *type* a tuple literal.
+    private macro pop(amount, are type = Model, reverse = true, &block)
       %models = Models.new
 
       {{amount}}.times do
         %models << pop
       end
 
-      %models.reverse!
+        %models
+        {% if reverse %}
+          .reverse!
+        {% end %}
 
       {% if block %}
         {% for argument, index in block.args %}
@@ -156,7 +167,7 @@ module Ven
       end
     end
 
-        # Performs a concrete (or concrete-like) invokation. Uses
+    # Performs a concrete (or concrete-like) invokation. Uses
     # `next`, so requires a loop around itself. *args* is the
     # arguments to the concrete, and *chunk* is the chunk that
     # will be evaluated.
@@ -171,7 +182,7 @@ module Ven
     # Reverts the result of an invokation. Essentialy, an
     # antagonist of `invoke!`. Bool *transfer* determines
     # whether to transfer the child stack's last stackee
-    # to the parent's (e.g. return)
+    # to the parent stack (e.g. return)
     private macro uninvoke(transfer = false)
       @ips.pop
       %child = @stacks.pop
@@ -187,13 +198,25 @@ module Ven
       {% end %}
     end
 
+    # Typechecks *args* against *types*. Uses both `of?` and
+    # `eqv?` to do this.
+    def typecheck(types : Models, args : Models) : Bool
+      types.zip(args).each do |type, arg|
+        unless arg.of?(type) || type.eqv?(arg)
+          return false
+        end
+      end
+
+      true
+    end
+
     # Starts the evaluation loop, which begins to fetch the
     # instructions from the current chunk and execute them,
     # until there aren't any left.
     def start
       while this = fetch?
         case this.opcode
-        # -- false
+        # -- a
         when :SYM
           put var argument
         # -- (a : num)
@@ -243,45 +266,47 @@ module Ven
               case operator = argument
               when "in" then case {left, right}
                 when {_, Str}
-                  put left.to_str, right
+                  next! put left.to_str, right
                 when {_, Vec}
-                  put left, right
+                  next! put left, right
                 end
               when "is" then case {left, right}
+                when {_, MType}, {_, MAny}
+                  next! put left, right
                 when {Vec, _}, {_, Vec}
-                  put left.to_vec, right.to_vec
+                  next! put left.to_vec, right.to_vec
                 when {_, MRegex}
-                  put left.to_str, right
+                  next! put left.to_str, right
                 when {Str, _}
-                  put left, right.to_str
+                  next! put left, right.to_str
                 when {Num, _}
-                  put left, right.to_num
+                  next! put left, right.to_num
                 when {MBool, _}, {_, MBool}
-                  put left.to_bool, right.to_bool
+                  next! put left.to_bool, right.to_bool
                 end
               when "<", ">", "<=", ">="
-                put left.to_num, right.to_num
+                next! put left.to_num, right.to_num
               when "+", "-", "*", "/"
-                put left.to_num, right.to_num
+                next! put left.to_num, right.to_num
               when "~"
-                put left.to_str, right.to_str
+                next! put left.to_str, right.to_str
               when "&"
-                put left.to_vec, right.to_vec
+                next! put left.to_vec, right.to_vec
               when "x" then case {left, right}
                 when {_, Vec}, {_, Str}
-                  put right, left.to_num
+                  next! put right, left.to_num
                 when {Vec, _}, {Str, _}
-                  put left, right.to_num
+                  next! put left, right.to_num
                 else
-                  put left.to_vec, right.to_num
+                  next! put left.to_vec, right.to_num
                 end
-              end ||
-                die("'#{operator}': cannot normalize #{left}, #{right}" \
-                    "(try changing the order)")
+              end
             rescue e : ModelCastException
-              die("'#{operator}': cannot normalize #{left}, #{right}" \
-                  "(#{e.message})")
+              # fallthrough
             end
+
+            die("'#{operator}': cannot normalize #{left}, #{right} " \
+                 "(#{e.try(&.message) || "try changing the order"})")
           end
         # [in CONTAINER EQUAL by VALUE] a (b : vec | str) -- a?
         when :CEQV
@@ -297,11 +322,14 @@ module Ven
         when :EQU
           pop 2 do |left, right|
             case {left, right}
-            when {_, MType}
+            when {_, MType}, {_, MAny}
               put bool left.of?(right)
             when {Str, MRegex}
               put str($0), if: left.value =~ right.value
-            when {MBool | Num | Str | Vec, _}
+            when {MBool, MBool}
+              # A fallback for scenarios like this: false is false.
+              put bool left.eqv?(right)
+            else
               put left, if: left.eqv?(right)
             end
           end
@@ -365,45 +393,92 @@ module Ven
           if (value = pop).false?
             put value; goto! argument Int32
           end
-        # a -- a
+        # a --
         when :LOCAL
+          @context.define(argument, pop)
+        # a --
+        when :GLOBAL
+          @context.define(argument, pop, global: true)
+        # a -- a
+        when :LOCAL_PUT
           put @context.define(argument, pop)
         # a -- a
-        when :GLOBAL
+        when :GLOBAL_PUT
           put @context.define(argument, pop, global: true)
-        # --
+        # [REMAINING TO VEC] * -- (a : vec)
+        when :REM_TO_VEC
+          put vec (pop stack.size, reverse: false)
+        # ...types --
         when :FUN
-          # The argument to FUN is a pointer to the chunk where
-          # the function's body & some metainfo can be found.
-          # Here, they are extracted to form an `MConcreteFunction`.
-          f_chunk = @chunks[argument Int32]
-          f_name = f_chunk.name
-          concrete = MConcreteFunction.new(f_chunk)
-          @context.define(f_name, concrete)
+          code = @chunks[argument Int32]
+          name = code.name
+          given = code.meta[:given].as(Int32)
+          types = pop given
+          defee = MConcreteFunction.new(types, code)
+
+          case existing = @context.fetch(name)
+          when MGenericFunction
+            next! existing.add(defee)
+          when MConcreteFunction
+            if existing != defee
+              defee = MGenericFunction
+                .new(name)
+                .add!(existing)
+                .add!(defee)
+            end
+          end
+
+          @context.define(name, defee)
         # a ...b -- a
         when :CALL
           args, callee = pop(argument Int32), pop
 
           case callee
           when Vec, Str
-            items =
-              args.map do |index|
-                if !index.is_a?(Num)
-                  die("improper item index value: #{index}")
-                elsif index.value >= callee.size
-                  die("item index out of bounds: #{index}")
-                end
-
-                callee[index.value.to_i]
+            items = args.map do |index|
+              if !index.is_a?(Num)
+                die("improper item index value: #{index}")
+              elsif index.value >= callee.size
+                die("item index out of bounds: #{index}")
               end
 
+              callee[index.value.to_i]
+            end
+
             put (items.size == 1 ? items.first : vec items)
-          when MConcreteFunction
-            invoke!(callee.chunk, args)
+          when MFunction
+            index, found, current = -1, false, callee
+
+            until found
+              if callee.is_a?(MGenericFunction)
+                break if index >= callee.size
+
+                # Go to the next variant right away:
+                current = callee[index += 1]
+              end
+
+              if current.is_a?(MConcreteFunction)
+                count = args.size
+                arity = current.arity
+                slurpy = current.slurpy
+                found =
+                  ((slurpy && count >= arity) ||
+                   (!slurpy && count == arity)) &&
+                  typecheck(current.types, args)
+
+                break if !found && index == -1
+              end
+            end
+
+            unless found
+              die("improper arguments for #{callee}: #{args.join(", ")}")
+            end
+
+            invoke!(current.as(MConcreteFunction).code, args.reverse!)
           else
-            die("this callee is not callable: #{callee}")
+            die("illegal callee: #{callee}")
           end
-        # a -- a$
+        # a --> a
         when :RET
           unless uninvoke(transfer: true)
             die("void functions illegal")

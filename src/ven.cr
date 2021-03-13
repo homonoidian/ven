@@ -11,6 +11,8 @@ module Ven
 
     def initialize
       @context = Context.new
+
+      @context.use(Library::Internal.new)
     end
 
     # Prints a *message* and quits with exit status 0.
@@ -42,7 +44,7 @@ module Ven
       when ReadError
         error("read error", "#{message} (in #{this.file}:#{this.line}, near '#{this.lexeme}')")
       when RuntimeError
-        error("runtime error", message)
+        error("runtime error", "#{message} (on line #{this.line})")
       when InternalError
         error("internal error", message)
       end
@@ -85,7 +87,11 @@ module Ven
         error("command-line error", "file not found: #{path}", quit: true)
       end
 
-      process path, File.read(path)
+      begin
+        process path, File.read(path)
+      rescue e : VenError
+        error(e)
+      end
     end
 
     # Starts a new read-eval-print loop.
