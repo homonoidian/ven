@@ -1,15 +1,22 @@
 module Ven::Suite
+  # Represents a unique label.
+  class Label
+    def to_s(io)
+      io << hash
+    end
+  end
+
   # Represents a single instruction.
   struct Instruction
     getter line : UInt32
-    getter label : Symbol?
+    getter label : Label?
     getter offset : Int32?
     getter opcode : Symbol
 
     def initialize(@opcode, argument : Nil, @line)
     end
 
-    def initialize(@opcode, argument : Symbol, @line)
+    def initialize(@opcode, argument : Label, @line)
       @label = argument
     end
 
@@ -43,7 +50,7 @@ module Ven::Suite
       @data = [] of Data
       @code = [] of Instruction
       @meta = {} of Symbol => Meta
-      @label = {} of Symbol => Int32
+      @label = {} of Label => Int32
     end
 
     delegate :[], :size, to: @code
@@ -71,18 +78,18 @@ module Ven::Suite
     end
 
     # Appends a new `Instruction` to the list of this chunk's
-    # instructions. *label* is the label this instruction
+    # instructions. *label* is the `Label` this instruction
     # references. Returns true.
-    def add(line : UInt32, opcode : Symbol, label : Symbol)
+    def add(line : UInt32, opcode : Symbol, label : Label)
       @code << Instruction.new(opcode, label, line)
 
       true
     end
 
-    # Declares a new label, *name*, at the emission offset.
+    # Declares a new `Label`, *label*, at the emission offset.
     # Returns true.
-    def label(name : Symbol)
-      @label[name] = @code.size
+    def label(label : Label)
+      @label[label] = @code.size
 
       true
     end

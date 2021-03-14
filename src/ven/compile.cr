@@ -36,6 +36,11 @@ module Ven
       lead.label({{name}})
     end
 
+    # Returns a unique label.
+    private macro label?
+      Label.new
+    end
+
     # Defines a new chunk called *name*. Evaluates the block
     # within this new chunk. Returns the index that this chunk
     # will have in `@chunks`.
@@ -120,26 +125,50 @@ module Ven
       emit opcode
     end
 
+    def visit!(q : QReturnIncrement)
+      emit :SYM, q.target
+      emit :DUP
+      emit :TON
+      emit :INC
+      emit :LOCAL, q.target
+    end
+
+    def visit!(q : QReturnDecrement)
+      emit :SYM, q.target
+      emit :DUP
+      emit :TON
+      emit :DEC
+      emit :LOCAL, q.target
+    end
+
     def visit!(q : QBinary)
       visit q.left
 
       if q.operator.in?("and", "or")
-        emit :GIF, :fail
+        fail = label?
+        end_ = label?
+
+        if q.operator == "and"
+          emit :GIF, fail
+        elsif q.operator == "or"
+          emit :GIT, end_
+        end
+
         visit q.right
-        emit :GIT, :end
-        label :fail
+        emit :GIT, end_
+
+        label fail
         emit :FALSE
-        label :end
 
-        return true
+        label end_
+      else
+        visit q.right
+
+        # Emit a normalization (NOM) call first:
+        emit :NOM, q.operator
+
+        emit binary_opcode?(q.operator)
       end
-
-      visit q.right
-
-      # Emit a normalization (NOM) call first:
-      emit :NOM, q.operator
-
-      emit binary_opcode?(q.operator)
     end
 
     def visit!(q : QBinaryAssign)
@@ -182,13 +211,24 @@ module Ven
     end
 
     def visit!(q : QIf)
+      fail = label?
+      end_ = label?
+
       visit q.cond
-      emit :GIF, :alt
+      emit :GIF, fail
+
       visit q.suc
-      emit :G, :end
-      label :alt
-      q.alt ? visit q.alt.not_nil! : emit :FALSE
-      label :end
+      emit :G, end_
+
+      label fail
+
+      if alt = q.alt
+        visit alt
+      else
+        emit :FALSE
+      end
+
+      label end_
     end
 
     def visit!(q : QFun)

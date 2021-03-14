@@ -374,9 +374,15 @@ module Ven
         # (a : num) (b : num) -- (a' : num)
         when :ADD
           binary(:+)
+        # (a : num) -- (a' : num)
+        when :INC
+          put num pop.as(Num).value + 1
         # (a : num) (b : num) -- (a' : num)
         when :SUB
           binary(:-)
+        # (a : num) -- (a' : num)
+        when :DEC
+          put num pop.as(Num).value - 1
         # (a : num) (b : num) -- (a' : num)
         when :MUL
           binary(:*)
