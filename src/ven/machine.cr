@@ -446,7 +446,7 @@ module Ven
         when :FUN
           code = @chunks[argument Int32]
           name = code.name
-          given = code.meta[:given].as(Int32)
+          given = code.meta.as(FunMeta).given
           types = pop given
           defee = MConcreteFunction.new(types, code)
 

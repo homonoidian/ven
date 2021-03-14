@@ -44,8 +44,11 @@ module Ven
     # Defines a new chunk called *name*. Evaluates the block
     # within this new chunk. Returns the index that this chunk
     # will have in `@chunks`.
-    private macro chunk(name, &)
-      @chunks.unshift Chunk.new(@file, {{name}})
+    private macro chunk(name, meta = nil, &)
+      @chunks.unshift Chunk.new(@file, {{name}},
+        {% if meta %}
+          meta = {{meta}}
+        {% end %})
 
       begin
         {{yield}}
@@ -244,18 +247,16 @@ module Ven
         end
       end
 
-      offset = chunk q.name do
-        onymous = q.params.reject("*")
+      offset = chunk q.name, meta: FunMeta.new do
+        params = q.params
+        onymous = params.reject("*")
+        meta.given = params.size
+        meta.arity = onymous.size
+        meta.slurpy = q.slurpy
+        meta.params = params
 
-        # Function guarantees :arity, :slurpy, :params and
-        # :given meta presency.
-        lead[:arity] = onymous.size
-        lead[:slurpy] = q.slurpy
-        lead[:params] = q.params
-        lead[:given] = q.params.size
-
-        # Assume the arguments are already on the stack, and
-        # the arity check was also done.
+        # Assume that the arguments are already on the stack
+        # and there was an arity check.
         onymous.each do |parameter|
           emit :LOCAL, parameter
         end

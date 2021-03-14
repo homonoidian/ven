@@ -3,7 +3,7 @@ fun fact(n) = n * fact(n - 1);
 
 fun fib(_) given 0 = 0;
 fun fib(_) given 1 = 1;
-fun fib(_) = fib(n - 1) + fib(n - 2);
+fun fib(n) = fib(n - 1) + fib(n - 2);
 
 #) fib(30);
 fact(10_000);

@@ -339,10 +339,12 @@ module Ven::Suite
     getter params : Array(String)
 
     def initialize(@types, @code)
+      meta = @code.meta.as(FunMeta)
+
       @name = @code.name
-      @arity = @code.meta[:arity].as(Int32)
-      @slurpy = @code.meta[:slurpy].as(Bool)
-      @params = @code.meta[:params].as(Array(String))
+      @arity = meta.arity
+      @slurpy = meta.slurpy
+      @params = meta.params
     end
 
     # Returns how specific this concrete is.

@@ -38,23 +38,20 @@ module Ven::Suite
   # A container for instructions and the data they reference.
   class Chunk
     private alias Data = String | Int32
-    private alias Meta = Array(String) | Data | Bool
 
     getter file : String
     getter name : String
     getter data : Array(Data)
     getter code : Array(Instruction)
-    getter meta : Hash(Symbol, Meta)
+    getter meta : Meta
 
-    def initialize(@file, @name)
+    def initialize(@file, @name, @meta = VoidMeta.new)
       @data = [] of Data
       @code = [] of Instruction
-      @meta = {} of Symbol => Meta
       @label = {} of Label => Int32
     end
 
     delegate :[], :size, to: @code
-    delegate :[]=, to: @meta
 
     # Appends a new `Instruction` to the list of this chunk's
     # instructions. If this chunk's data already includes the
