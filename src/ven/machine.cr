@@ -21,7 +21,7 @@ module Ven
     # Returns the current stack. The last stack of `@stacks`
     # is thought of as the current.
     private macro stack
-      @stacks.last
+      @stacks[-1]
     end
 
     # Dies of runtime error with *message*, which should explain
@@ -244,6 +244,12 @@ module Ven
         # [MOVE LAST TWO UP] a1 a2 a3 -- a3 a1 a2
         when :UP2
           stack.swap(-3, -1)
+        # a --
+        when :POP
+          stack.pop
+        # ... --
+        when :POP_ALL
+          stack.clear
         # -- a
         when :SYM
           put var argument
@@ -265,6 +271,9 @@ module Ven
         # -- false
         when :FALSE
           put bool false
+        # ... -- false?
+        when :FALSE_IF_EMPTY
+          put bool false if stack.empty?
         # [NEGATE] (a : num) -- (a' : num)
         when :NEG
           put pop.to_num.neg!
@@ -417,13 +426,19 @@ module Ven
         # [GOTO] --
         when :G
           goto! (argument Int32)
-        # [GOTO IF TRUE] a -- a?
+        # [GOTO IF TRUE] a --
         when :GIT
+          goto! argument Int32 unless pop.false?
+        # [GOTO IF FALSE] a --
+        when :GIF
+          goto! argument Int32 if pop.false?
+        # [GOTO IF TRUE POP] a -- a?
+        when :GITP
           unless (value = pop).false?
             put value; goto! argument Int32
           end
-        # [GOTO IF FALSE] a -- a?
-        when :GIF
+        # [GOTO IF FALSE POP] a -- a?
+        when :GIFP
           if (value = pop).false?
             put value; goto! argument Int32
           end

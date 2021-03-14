@@ -152,13 +152,13 @@ module Ven
         end_ = label?
 
         if q.operator == "and"
-          emit :GIF, fail
+          emit :GIFP, fail
         elsif q.operator == "or"
-          emit :GIT, end_
+          emit :GITP, end_
         end
 
         visit q.right
-        emit :GIT, end_
+        emit :GITP, end_
 
         label fail
         emit :FALSE
@@ -218,7 +218,7 @@ module Ven
       end_ = label?
 
       visit q.cond
-      emit :GIF, fail
+      emit :GIFP, fail
 
       visit q.suc
       emit :G, end_
@@ -275,6 +275,77 @@ module Ven
       end
 
       emit :FUN, offset
+    end
+
+    def visit!(q : QInfiniteLoop)
+      start = label?
+      label start
+      visit q.body
+
+      # Pop all values left from the body. This prevents
+      # billions of loop iterations flooding the stack.
+      emit :POP_ALL
+
+      emit :G, start
+    end
+
+    def visit!(q : QBaseLoop)
+      start = label?
+      end_ = label?
+
+      label start
+
+      # Loops return the value produced by the last iteration,
+      # if there was at least one, or false (which is returned
+      # by the q.base, causing the loop to end). GIF pops the
+      # base, leaving only the result of the last iteration
+
+      visit q.base
+      emit :GIF, end_
+      emit :POP_ALL
+      visit q.body
+      emit :G, start
+
+      label end_
+      emit :FALSE_IF_EMPTY
+    end
+
+    def visit!(q : QStepLoop)
+      start = label?
+      end_ = label?
+
+      label start
+      visit q.base
+      emit :GIF, end_
+      emit :POP_ALL
+      visit q.body
+      visit q.step
+      emit :POP
+      emit :G, start
+
+      label end_
+      emit :FALSE_IF_EMPTY
+    end
+
+    def visit!(q : QComplexLoop)
+      start = label?
+      end_ = label?
+
+      visit q.start
+
+      label start
+      visit q.pres
+      emit :POP_ALL
+      visit q.base
+      emit :GIF, end_
+      emit :POP_ALL
+      visit q.body
+      visit q.step
+      emit :POP
+      emit :G, start
+
+      label end_
+      emit :FALSE_IF_EMPTY
     end
   end
 end

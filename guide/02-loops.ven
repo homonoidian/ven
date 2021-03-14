@@ -1,4 +1,4 @@
-expose std;
+#)expose std;
 
 
 #) There are two general kinds of `loop` statements: headless
@@ -23,14 +23,7 @@ expose std;
 
 #) CONDITIONAL LOOP:
 
-
-#) [1] Repeat the body N times:
-
-loop (10)
-  say("Hi!");
-
-
-#) [2] Loop while some condition is true:
+#) [1] Loop while some condition is true:
 
 i = 0;
 
@@ -38,21 +31,21 @@ loop (i++ < 10)
   say("i = " ~ i);
 
 
-#) [3] Initialize a variable and loop while a condition
-#)     is true:
+#) [2] Check if condition is true, evaluate the body, evaluate
+#)     a step expression, repeat.
 
-loop (i = 0; i++ < 10)
+loop (i < 10; i += 1)
   say("i = " ~ i);
 
 
-#) [4] Initialize a variable, check if a condition is true,
+#) [3] Initialize a variable, check if a condition is true,
 #)     evaluate the body, evaluate a step expression, repeat.
 
 loop (i = 0; i < 10; i++)
   say("i = " ~ i);
 
 
-#) [5] Same as [4], but with pre-expressions (they evaluate
+#) [4] Same as [3], but with pre-expressions (they evaluate
 #)     right before the body is evaluated)
 
 loop (i = 0; i < 10; say("[pre-expression]"); i++)

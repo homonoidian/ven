@@ -70,14 +70,14 @@ module Ven
 
       m = Machine.new(chunks, @context)
 
-      mt = Time.measure do
-        m.start
-      end
-
       if @quiet == 0
         chunks.each_with_index do |chunk, index|
           puts "(#{index}) #{chunk}\n"
         end
+      end
+
+      mt = Time.measure do
+        m.start
       end
 
       if @quiet <= 1
