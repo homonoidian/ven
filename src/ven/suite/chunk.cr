@@ -53,6 +53,11 @@ module Ven::Suite
 
     delegate :[], :size, to: @code
 
+    # Returns the latest line number in use.
+    def line?
+      @code[-1]?.try(&.line) || 1_u32
+    end
+
     # Appends a new `Instruction` to the list of this chunk's
     # instructions. If this chunk's data already includes the
     # *argument*, the existing value is referenced. Otherwise,

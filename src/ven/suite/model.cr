@@ -361,6 +361,21 @@ module Ven::Suite
       end.sum
     end
 
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "arity"
+        Num.new(@arity)
+      when "slurpy"
+        MBool.new(@slurpy)
+      when "params"
+        Vec.new(params.map { |param| Str.new(param) })
+      when "specificity"
+        Num.new(specificity)
+      end
+    end
+
     def to_s(io)
       io << "concrete " << @name << "("
 
@@ -407,9 +422,22 @@ module Ven::Suite
     end
 
     # Returns how specific this builtin is. Note that in builtins
-    # all arguments have the weight of `MWeight::VALUE`.
+    # all arguments have the weight of `MWeight::ANY`.
     getter specificity do
-      MWeight::VALUE.value * @arity
+      MWeight::ANY.value * @arity
+    end
+
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "arity"
+        Num.new(@arity)
+      when "specificity"
+        Num.new(specificity)
+      else
+
+      end
     end
 
     # Returns whether this builtin's identity is equal to the
@@ -459,6 +487,15 @@ module Ven::Suite
       end
 
       add!(variant)
+    end
+
+    def field(name)
+      case name
+      when "name"
+        Str.new(@name)
+      when "variants"
+        Vec.new(@variants)
+      end
     end
 
     def to_s(io)

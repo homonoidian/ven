@@ -31,6 +31,11 @@ module Ven
       lead.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
     end
 
+    # Safely emits an instruction without access to a `Quote`.
+    private macro emit!(opcode, argument = nil)
+      lead.add(lead.line?, {{opcode}}.not_nil!, {{argument}})
+    end
+
     # Declares a label called *name* in the lead chunk.
     private macro label(name)
       lead.label({{name}})
@@ -89,6 +94,48 @@ module Ven
       end
     end
 
+    # Emits code that will access field via *accessor*. *opcode*
+    # is the working opcode.
+    private def field(accessor : SingleFieldAccessor, opcode = :FIELD)
+      emit! :STR, accessor.field
+      emit! opcode if opcode
+    end
+
+    # :ditto:
+    private def field(accessor : DynamicFieldAccessor, opcode = :FIELD)
+      field = accessor.field
+
+      if field.is_a?(QSymbol)
+        emit! :SYM_OR_TOS, field.value
+      else
+        visit field
+      end
+
+      emit! opcode if opcode
+    end
+
+    # Emits code that will access field via *accessor*. *opcode*
+    # is ignored.
+    private def field(accessor : MultiFieldAccessor, opcode = :FIELD)
+      amount = accessor.field.size
+
+      accessor.field.each_with_index do |part, index|
+        unless index == 0
+          emit! :UP
+        end
+
+        # Duplicates the head, which must at first be present
+        # prior the call to `field`.
+        unless index == accessor.field.size - 1
+          emit! :DUP
+        end
+
+        field(part, opcode)
+      end
+
+      emit! :VEC, amount
+    end
+
     def visit!(q : QSymbol)
       emit :SYM, q.value
     end
@@ -128,22 +175,6 @@ module Ven
       emit opcode
     end
 
-    def visit!(q : QReturnIncrement)
-      emit :SYM, q.target
-      emit :DUP
-      emit :TON
-      emit :INC
-      emit :LOCAL, q.target
-    end
-
-    def visit!(q : QReturnDecrement)
-      emit :SYM, q.target
-      emit :DUP
-      emit :TON
-      emit :DEC
-      emit :LOCAL, q.target
-    end
-
     def visit!(q : QBinary)
       visit q.left
 
@@ -174,6 +205,19 @@ module Ven
       end
     end
 
+    def visit!(q : QCall)
+      visit q.callee
+      visit q.args
+
+      emit :CALL, q.args.size
+    end
+
+    def visit!(q : QAssign)
+      visit q.value
+
+      emit (q.global ? :GLOBAL_PUT : :LOCAL_PUT), q.target
+    end
+
     def visit!(q : QBinaryAssign)
       # STACK:
       emit :SYM, q.target
@@ -194,17 +238,33 @@ module Ven
       # STACK: value-dup
     end
 
-    def visit!(q : QCall)
-      visit q.callee
-      visit q.args
-
-      emit :CALL, q.args.size
+    def visit!(q : QIntoBool)
+      visit q.value
+      emit :TOB
     end
 
-    def visit!(q : QAssign)
-      visit q.value
+    def visit!(q : QReturnIncrement)
+      emit :SYM, q.target
+      emit :DUP
+      emit :TON
+      emit :INC
+      emit :LOCAL, q.target
+    end
 
-      emit (q.global ? :GLOBAL_PUT : :LOCAL_PUT), q.target
+    def visit!(q : QReturnDecrement)
+      emit :SYM, q.target
+      emit :DUP
+      emit :TON
+      emit :DEC
+      emit :LOCAL, q.target
+    end
+
+    def visit!(q : QAccessField)
+      visit q.head
+
+      q.path.each do |piece|
+        field piece
+      end
     end
 
     def visit!(q : QEnsure)

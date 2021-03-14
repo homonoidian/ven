@@ -253,6 +253,9 @@ module Ven
         # -- a
         when :SYM
           put var argument
+        # [SYMBOL OR symbol TO STRING] -- a
+        when :SYM_OR_TOS
+          put @context.fetch(it = argument) || str it
         # -- (a : num)
         when :NUM
           put num argument
@@ -413,9 +416,10 @@ module Ven
               die("'x': negative amount (#{amount})")
             end
 
-            case left
-            when Str
+            if left.is_a?(Str)
               put str left.value * amount
+            elsif left.is_a?(Vec) && left.value.size == 1
+              put vec Models.new(amount, left.value.first)
             else
               put vec Models.new(amount, left)
             end
@@ -501,9 +505,13 @@ module Ven
             count = args.size
             current = callee
 
-            while !found && (index += 1) <= (callee.as?(MGenericFunction).try(&.size) || 0)
+            until found
               if callee.is_a?(MGenericFunction)
-                current = callee[index]
+                # Break if we're at the end of the variant
+                # list.
+                break if index >= callee.size - 1
+
+                current = callee[index += 1]
               end
 
               if current.is_a?(MConcreteFunction)
@@ -517,6 +525,12 @@ module Ven
                 arity = current.arity
                 found = count == arity
               end
+
+              # If index is -1 at this point, we're certainly
+              # not an MGenericFunction. Thus, if found is false,
+              # the function that the user asked for was not
+              # found.
+              break if index == -1 && !found
             end
 
             if !found
@@ -533,6 +547,17 @@ module Ven
         when :RET
           unless uninvoke(transfer: true)
             die("void functions illegal")
+          end
+        # a b -- 'a
+        when :FIELD
+          pop 2 do |head, field|
+            if !field.is_a?(Str)
+              die("impoper field: #{field}")
+            elsif !(value = head.field field.value)
+              die("#{head}: no such field: #{field}")
+            end
+
+            put value
           end
         else
           raise InternalError.new("unknown opcode: #{this.opcode}")
