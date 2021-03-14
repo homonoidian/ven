@@ -126,6 +126,37 @@ module Ven::Suite
     end
   end
 
+  # Ven's number data type.
+  struct MNumber < MValue(BigDecimal)
+    @@cache = {} of String => BigDecimal
+
+    def initialize(@value : BigDecimal)
+    end
+
+    def initialize(source : String)
+      @value = @@cache[source]? || (@@cache[source] = source.to_big_d)
+    end
+
+    def initialize(source : Int | Float)
+      @value = BigDecimal.new(source)
+    end
+
+    def to_num
+      self
+    end
+
+    def true?
+      @value != 0
+    end
+
+    # Mutably negates this number. Returns self.
+    def neg! : self
+      @value = -@value
+
+      self
+    end
+  end
+
   # Ven's boolean data type.
   struct MBool < MValue(Bool)
     def to_num
@@ -168,7 +199,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      @value.dump(io)
+      @value.inspect(io)
     end
 
     def [](index : Int)
@@ -209,52 +240,11 @@ module Ven::Suite
     Suite.model_template?
   end
 
-  # Ven's number data type.
-  class MNumber < MClass
-    getter value : BigDecimal
-
-    @@cache = {} of String => BigDecimal
-
-    def initialize(source : String)
-      @value = @@cache[source]? || (@@cache[source] = source.to_big_d)
-    end
-
-    def initialize(source : Int | Float)
-      @value = BigDecimal.new(source)
-    end
-
-    def initialize(@value : BigDecimal)
-    end
-
-    def to_num
-      self
-    end
-
-    def eqv?(other : Num)
-      @value == other.value
-    end
-
-    def true?
-      @value != 0
-    end
-
-    def to_s(io)
-      io << @value
-    end
-
-    # Mutably negates this number. Returns self.
-    def neg! : self
-      @value = -@value
-
-      self
-    end
-  end
-
   # Ven's vector data type.
   class MVector < MClass
-    getter value = Models.new
+    getter value
 
-    def initialize(@value)
+    def initialize(@value = Models.new)
     end
 
     def initialize(value : Array(MClass) | Array(MStruct))

@@ -9,6 +9,8 @@ module Ven
   class CLI
     include Suite
 
+    @quiet = 0
+
     def initialize
       @context = Context.new
 
@@ -66,20 +68,26 @@ module Ven
 
       chunks = compiler.compile
 
-      chunks.each do |chunk|
-        puts chunk
-      end
-
       m = Machine.new(chunks, @context)
 
       mt = Time.measure do
         m.start
       end
 
-      puts "READ & COMPILE :: #{rt.microseconds}qs"
-      puts "EVAL :: #{mt.microseconds}qs"
+      if @quiet == 0
+        chunks.each_with_index do |chunk, index|
+          puts "(#{index}) #{chunk}\n"
+        end
+      end
 
-      puts m.result?
+      if @quiet <= 1
+        puts "READ & COMPILE :: #{rt.total_microseconds}qs"
+        puts "EVAL :: #{mt.total_microseconds}qs"
+      end
+
+      if @quiet == 0
+        puts m.result?
+      end
     end
 
     def open(path : String)
@@ -136,6 +144,14 @@ module Ven
 
         parser.on "-h", "--help", "Print this message and exit" do
           error(parser.to_s)
+        end
+
+        parser.on "-q", "(quietness) Print only the execution times" do
+          @quiet = 1
+        end
+
+        parser.on "-Q", "(quietness) Be absolutely quiet" do
+          @quiet = 2
         end
 
         parser.unknown_args do |args|

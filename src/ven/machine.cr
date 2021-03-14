@@ -101,28 +101,31 @@ module Ven
     # Pops *amount* models from the stack and returns a reversed
     # (if *reverse* is true) array of them. If a block is given,
     # deconstructs this array and passes it to the block. The
-    # items of the array are **all** assumed to be of the type
-    # *type*. Alternatively, types for each item individually
-    # may be provided by giving *type* a tuple literal.
-    private macro pop(amount, are type = Model, reverse = true, &block)
-      %models = Models.new
+    # items of the array are *all* assumed to be of the type
+    # *cast*. It is possible, though, to specify the type of
+    # each item individually by passing *cast* a tuple literal.
+    private macro pop(amount, are cast = Model, reverse = true, &block)
+      %made = Models.new(%amount = {{amount}})
 
-      {{amount}}.times do
-        %models << pop
+      %amount.times do
+        %made
+          {% if reverse %}
+            .unshift(pop)
+          {% else %}
+            .<<(pop)
+          {% end %}
       end
-
-        %models
-        {% if reverse %}
-          .reverse!
-        {% end %}
 
       {% if block %}
         {% for argument, index in block.args %}
-          {{argument}} = %models[{{index}}]
-            .as({{type.is_a?(TupleLiteral) ? type[index] : type}})
+          {% type = cast.is_a?(TupleLiteral) ? cast[index] : cast %}
+
+          {{argument}} = %made[{{index}}].as({{type}})
         {% end %}
 
         {{yield}}
+      {% else %}
+        %made
       {% end %}
     end
 
@@ -160,10 +163,15 @@ module Ven
     # directly to Crystal's). Takes two operands from the stack,
     # of types *input*, and applies the *operator* to their
     # `.value`s. It then passes the result to *output*, and
-    # places the result of that onto the stack.
+    # places the result of that onto the stack. Properly dies
+    # on division by zero.
     private macro binary(operator, input = Num, output = num)
       pop(2, {{input}}) do |left, right|
-        put {{output}}(left.value {{operator.id}} right.value)
+        begin
+          put {{output}}(left.value {{operator.id}} right.value)
+        rescue DivisionByZeroError
+          die("'{{operator.id}}': division by zero given #{left}, #{right}")
+        end
       end
     end
 
@@ -198,10 +206,15 @@ module Ven
       {% end %}
     end
 
-    # Typechecks *args* against *types*. Uses both `of?` and
-    # `eqv?` to do this.
+    # Typechecks (orelse `eqv?`s) *args* against *types*. Makes
+    # the lattermost type to cover the excess arguments, if any.
+    # **Will crash of memory error if *types* is empty.**
     def typecheck(types : Models, args : Models) : Bool
-      types.zip(args).each do |type, arg|
+      last = uninitialized Model
+
+      args.zip?(types) do |arg, type|
+        type ? (last = type) : (type = last)
+
         unless arg.of?(type) || type.eqv?(arg)
           return false
         end
@@ -295,10 +308,8 @@ module Ven
               when "x" then case {left, right}
                 when {_, Vec}, {_, Str}
                   next! put right, left.to_num
-                when {Vec, _}, {Str, _}
-                  next! put left, right.to_num
                 else
-                  next! put left.to_vec, right.to_num
+                  next! put left, right.to_num
                 end
               end
             rescue e : ModelCastException
@@ -368,13 +379,17 @@ module Ven
           pop 2, {Model, Num} do |left, right|
             amount = right.value.to_big_i
 
-            # There are two possibilities here (see NOM):
-            # either `left` is a Vec, or a Str.
             case left
-            when Vec
-              put vec left.value * amount
             when Str
-              put str left.value * amount
+              result = String.build(left.value.size * amount) do |value|
+                amount.times do
+                  value << left.value
+                end
+              end
+
+              put str result
+            else
+              put vec Models.new(amount, left)
             end
           end
         # [ENSURE] a --

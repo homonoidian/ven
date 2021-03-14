@@ -1,11 +1,9 @@
-expose std;
+fun fact(_) given 1 = 1;
+fun fact(n) = n * fact(n - 1);
 
-fun factorial(n) =
-  if (n < 1)
-    1
-  else
-    n * factorial(n - 1);
+fun fib(_) given 0 = 0;
+fun fib(_) given 1 = 1;
+fun fib(_) = fib(n - 1) + fib(n - 2);
 
-ask("What number?")
-  .factorial()
-  .say();
+#) fib(30);
+fact(10_000);

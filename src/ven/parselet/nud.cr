@@ -174,38 +174,26 @@ module Ven
     # Parses a 'fun' statement into a QFun.
     class PFun < Nud
       def parse(parser, tag, token)
-        context =
-          if parser.word!("<")
-            parser.before ">", -> do
-              # Parses with the lowest precedence (FIELD), as
-              # '>' is also a binary operator.
-              parser.led(Precedence::FIELD.value)
-            end
+        context = if parser.word!("<")
+          parser.before ">", -> do
+            # Parses with the lowest precedence (FIELD), as
+            # '>' is also a binary operator.
+            parser.led(Precedence::FIELD.value)
           end
+        end
 
         name = parser.expect("SYMBOL")[:lexeme]
-
-        params = parser.word!("(") \
-          ? PFun.parameters(parser)
-          : [] of String
-
-        given  = parser.word!("GIVEN") \
-          ? PFun.given(parser)
-          : Quotes.new
-
+        params = parser.word!("(") ? PFun.parameters(parser) : [] of String
+        given = parser.word!("GIVEN") ? PFun.given(parser) : Quotes.new
         slurpy = params.includes?("*")
-
-        body = parser.word!("=") \
-          ? [parser.led]
-          : block(parser)
+        body = parser.word!("=") ? [parser.led] : block(parser)
 
         if body.empty?
           parser.die("empty function body illegal")
         elsif params.empty? && !slurpy && !given.empty?
           parser.die("zero-arity functions cannot have a 'given'")
         elsif context
-          params.unshift("$")
-          given.unshift(context)
+          params.unshift("$"); given.unshift(context)
         end
 
         QFun.new(tag, name, params, body, given, slurpy)
@@ -216,13 +204,15 @@ module Ven
         parser.repeat(sep: ",", unit: -> { parser.led(Precedence::ASSIGNMENT.value) })
       end
 
-      # Parses a list of `parameter`s. Makes sure there are
-      # either no '*' or only one '*'.
+      # Parses a list of `parameter`s. Performs all (or most
+      # of) the required checks.
       def self.parameters(parser : Reader)
         this = parser.repeat(")", ",", unit: -> { parameter(parser) })
 
         if this.count("*") > 1
           parser.die("more than one '*' in function parameters")
+        elsif this.index("*").try(&.< this.size - 1)
+          parser.die("slurpie ('*') must be at the end of the parameter list")
         elsif this.count("$") > 1
           parser.die("no support for multiple contexts yet")
         end
@@ -230,10 +220,10 @@ module Ven
         this
       end
 
-      # Reads a parameter (symbol, '*' or '$'). **Does not**
-      # check whether there is one or multiple '*'s.
+      # Reads a parameter. **Does not** check whether there
+      # is one or multiple '*'s, etc.
       macro parameter(parser)
-        {{parser}}.expect("*", "$", "SYMBOL")[:lexeme]
+        {{parser}}.expect("*", "$", "_", "SYMBOL")[:lexeme]
       end
     end
 
