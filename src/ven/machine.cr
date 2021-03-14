@@ -453,7 +453,7 @@ module Ven
           case existing = @context.fetch(name)
           when MGenericFunction
             next! existing.add(defee)
-          when MConcreteFunction
+          when MFunction
             if existing != defee
               defee = MGenericFunction
                 .new(name)
@@ -481,34 +481,36 @@ module Ven
 
             put (items.size == 1 ? items.first : vec items)
           when MFunction
-            index, found, current = -1, false, callee
+            index = -1
+            found = false
+            count = args.size
+            current = callee
 
-            until found
+            while !found && (index += 1) <= (callee.as?(MGenericFunction).try(&.size) || 0)
               if callee.is_a?(MGenericFunction)
-                break if index >= callee.size
-
-                # Go to the next variant right away:
-                current = callee[index += 1]
+                current = callee[index]
               end
 
               if current.is_a?(MConcreteFunction)
-                count = args.size
                 arity = current.arity
                 slurpy = current.slurpy
                 found =
                   ((slurpy && count >= arity) ||
                    (!slurpy && count == arity)) &&
                   typecheck(current.types, args)
-
-                break if !found && index == -1
+              elsif current.is_a?(MBuiltinFunction)
+                arity = current.arity
+                found = count == arity
               end
             end
 
-            unless found
+            if !found
               die("improper arguments for #{callee}: #{args.join(", ")}")
+            elsif current.is_a?(MBuiltinFunction)
+              put current.callee.call(self, args)
+            elsif current.is_a?(MConcreteFunction)
+              invoke!(current.code, args.reverse!)
             end
-
-            invoke!(current.as(MConcreteFunction).code, args.reverse!)
           else
             die("illegal callee: #{callee}")
           end

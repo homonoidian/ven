@@ -316,14 +316,20 @@ module Ven::Suite
     end
   end
 
-  # An abstract umbrella for functions.
+  # An abstract umbrella for various kinds of functions.
   abstract class MFunction < MClass
+    # Returns the specificity of this function, which is 0
+    # by default.
+    getter specificity : Int32 do
+      0
+    end
+
     def callable?
       true
     end
   end
 
-  # Ven's most essential function type.
+  # Ven's most essential function model.
   class MConcreteFunction < MFunction
     getter code : Chunk
     getter name : String
@@ -339,8 +345,8 @@ module Ven::Suite
       @params = @code.meta[:params].as(Array(String))
     end
 
-    # Returns how specific this function is.
-    getter specificity : Int32 do
+    # Returns how specific this concrete is.
+    getter specificity do
       @params.zip(@types).map do |param, type|
         weight = type.weight
 
@@ -372,9 +378,10 @@ module Ven::Suite
       param.in?("*")
     end
 
-    # Checks if this function's identity is equal to the *other*
-    # function's identity. For this method to return true,
-    # *other*'s specificity *and* types must be equal to this'.
+    # Returns whether this concrete's identity is equal to
+    # the *other* concrete's identity. For this method to
+    # return true, *other*'s specificity *and* types must
+    # be equal to this'.
     def ==(other : MConcreteFunction)
       return false unless specificity == other.specificity
 
@@ -386,13 +393,41 @@ module Ven::Suite
     end
   end
 
+  # A model that brings Crystal's `Proc`s to Ven, allowing
+  # to define primitives. Supports supervisorship by an
+  # `MGenericFunction`.
+  class MBuiltinFunction < MFunction
+    getter name : String
+    getter arity : Int32
+    getter callee : Proc(Machine, Models, Model)
+
+    def initialize(@name, @arity, @callee)
+    end
+
+    # Returns how specific this builtin is. Note that in builtins
+    # all arguments have the weight of `MWeight::VALUE`.
+    getter specificity do
+      MWeight::VALUE.value * @arity
+    end
+
+    # Returns whether this builtin's identity is equal to the
+    # *other* builtin's identity.
+    def ==(other : MBuiltinFunction)
+      @name == other.name && @arity == other.arity
+    end
+
+    def to_s(io)
+      io << "builtin " << name
+    end
+  end
+
   # An abstract callable entity that supervises a list of
-  # concretes (aka variants) (see `MConcreteFunction`).
+  # `MFunction`s.
   class MGenericFunction < MFunction
     getter name : String
 
     def initialize(@name)
-      @variants = [] of MConcreteFunction
+      @variants = [] of MFunction
     end
 
     delegate :[], :size, to: @variants
@@ -400,7 +435,7 @@ module Ven::Suite
     # Adds *variant* to the list of variants this generic
     # supervises. Does not check if an identical variant
     # already exists, nor does it overwrite one.
-    def add!(variant : MConcreteFunction) : self
+    def add!(variant : MFunction) : self
       (@variants << variant).sort! do |left, right|
         right.specificity <=> left.specificity
       end
@@ -412,7 +447,7 @@ module Ven::Suite
     # supervises. Checks if an identical *variant* already
     # exists there and overwrites it with the *variant* if
     # it does,
-    def add(variant : MConcreteFunction) : self
+    def add(variant : MFunction) : self
       @variants.each_with_index do |existing, index|
         if variant == existing
           @variants[index] = variant

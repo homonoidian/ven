@@ -2,6 +2,12 @@ module Ven::Library
   include Suite
 
   extension Internal do
+    defun "say", value : Model do
+      puts value
+
+      MBool.new(true)
+    end
+
     defsym "any", MAny.new
     defsym "num", MType.new("num", Num)
     defsym "str", MType.new("str", Str)
