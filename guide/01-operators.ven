@@ -53,8 +53,8 @@ ensure #123 is 3; #) i.e. #123 => #~123 => #"123" => 3
 #) Unary 'not' returns the inverse boolean of whatever it
 #) is given:
 
-#)ensure not 0 is true;
-#)ensure not 1 is false;
+ensure not 0 is true;
+ensure not 1 is false;
 
 
 #) BINARY OPERATORS (take two values)
@@ -104,8 +104,8 @@ ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 ensure "a" x 10 is "aaaaaaaaaa";
 ensure 10 x "a" is "aaaaaaaaaa";
 
-ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+ensure [1] x 10 is [[1], [1], [1], [1], [1], [1], [1], [1], [1], [1]];
+ensure 10 x [1] is [1] x 10;
 
 
 #) 'is' checks for semantic identity:
@@ -135,20 +135,20 @@ ensure 3 >= 2;
 #) ASSIGNMENT
 #) =, (+, -, *, /)=, ~=, &=
 
-#)foo = 1;
-#)bar = "xyzzy";
-#)baz = [1, 2, 3];
-#)
-#)ensure (foo += 1) is 1;
-#)ensure foo is 2;
-#)
-#)ensure (bar ~= "s") is "s";
-#)ensure bar is "xyzzys";
-#)
-#)ensure (baz &= [4, 5, 6]) is [4, 5, 6];
-#)ensure baz is [1, 2, 3, [4, 5, 6]];
-#)
-#)a = 1;
-#)
-#)ensure (a ~= 2) is 2;
-#)ensure a is "12";
+foo = 1;
+bar = "xyzzy";
+baz = [1, 2, 3];
+
+ensure (foo += 1) is 1;
+ensure foo is 2;
+
+ensure (bar ~= "s") is "s";
+ensure bar is "xyzzys";
+
+ensure (baz &= [4, 5, 6]) is [4, 5, 6];
+ensure baz is [1, 2, 3, 4, 5, 6];
+
+a = 1;
+
+ensure (a ~= 2) is 2;
+ensure a is "12";

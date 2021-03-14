@@ -129,6 +129,12 @@ module Ven
       {% end %}
     end
 
+    # Returns the last value on the stack. Can be seen (but
+    # is not implemented as) as `put pop`.
+    private macro tap
+      stack.last
+    end
+
     # A shorthand for `Num.new`.
     private macro num(value)
       Num.new({{value}})
@@ -229,6 +235,15 @@ module Ven
     def start
       while this = fetch?
         case this.opcode
+        # [DUPLICATE] a -- a a
+        when :DUP
+          put stack.last
+        # [MOVE LAST ONE UP] a1 a2 -- a2 a1
+        when :UP
+          stack.swap(-2, -1)
+        # [MOVE LAST TWO UP] a1 a2 a3 -- a3 a1 a2
+        when :UP2
+          stack.swap(-3, -1)
         # -- a
         when :SYM
           put var argument
@@ -379,22 +394,20 @@ module Ven
           pop 2, {Model, Num} do |left, right|
             amount = right.value.to_big_i
 
+            if amount < 0
+              die("'x': negative amount (#{amount})")
+            end
+
             case left
             when Str
-              result = String.build(left.value.size * amount) do |value|
-                amount.times do
-                  value << left.value
-                end
-              end
-
-              put str result
+              put str left.value * amount
             else
               put vec Models.new(amount, left)
             end
           end
-        # [ENSURE] a --
+        # [ENSURE] a -- a
         when :ENS
-          die("ensure: got a falsey value") if pop.false?
+          die("ensure: got a falsey value") if tap.false?
         # [GOTO] --
         when :G
           goto! (argument Int32)
@@ -416,10 +429,10 @@ module Ven
           @context.define(argument, pop, global: true)
         # a -- a
         when :LOCAL_PUT
-          put @context.define(argument, pop)
+          @context.define(argument, tap)
         # a -- a
         when :GLOBAL_PUT
-          put @context.define(argument, pop, global: true)
+          put @context.define(argument, tap, global: true)
         # [REMAINING TO VEC] * -- (a : vec)
         when :REM_TO_VEC
           put vec (pop stack.size, reverse: false)

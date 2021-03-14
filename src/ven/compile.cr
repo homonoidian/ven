@@ -61,6 +61,26 @@ module Ven
       @chunks
     end
 
+    # Returns the opcode for a binary *operator*, or nil if
+    # *operator* is not one of the supported binary operators.
+    private def binary_opcode?(operator : String) : Symbol?
+      case operator
+      when "in" then :CEQV
+      when "is" then :EQU
+      when "<=" then :LTE
+      when ">=" then :GTE
+      when "<"  then :LT
+      when ">"  then :GT
+      when "+"  then :ADD
+      when "-"  then :SUB
+      when "*"  then :MUL
+      when "/"  then :DIV
+      when "&"  then :PEND
+      when "~"  then :CONCAT
+      when "x"  then :TIMES
+      end
+    end
+
     def visit!(q : QSymbol)
       emit :SYM, q.value
     end
@@ -116,27 +136,30 @@ module Ven
 
       visit q.right
 
-      opcode =
-        case q.operator
-        when "in" then :CEQV
-        when "is" then :EQU
-        when "<=" then :LTE
-        when ">=" then :GTE
-        when "<"  then :LT
-        when ">"  then :GT
-        when "+"  then :ADD
-        when "-"  then :SUB
-        when "*"  then :MUL
-        when "/"  then :DIV
-        when "&"  then :PEND
-        when "~"  then :CONCAT
-        when "x"  then :TIMES
-        end
-
       # Emit a normalization (NOM) call first:
       emit :NOM, q.operator
 
-      emit opcode
+      emit binary_opcode?(q.operator)
+    end
+
+    def visit!(q : QBinaryAssign)
+      # STACK:
+      emit :SYM, q.target
+      # STACK: target-value
+      visit q.value
+      # STACK: target-value value
+      emit :DUP
+      # STACK: target-value value value-dup
+      emit :UP2
+      # STACK: value-dup target-value value
+      emit :NOM, q.operator
+      # STACK: value-dup target-value value
+      emit :UP
+      # STACK: value-dup value target-value
+      emit binary_opcode?(q.operator)
+      # STACK: value-dup binary-result
+      emit :LOCAL, q.target
+      # STACK: value-dup
     end
 
     def visit!(q : QCall)
