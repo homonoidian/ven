@@ -17,6 +17,8 @@ module Ven
 
     def initialize(@file = "<unknown>")
       @chunks = [Chunk.new(@file, "<unit>")]
+      @optimized = [] of String
+      @funcname = [] of String
     end
 
     # Returns the first chunk.
@@ -137,7 +139,13 @@ module Ven
     end
 
     def visit!(q : QSymbol)
-      emit :SYM, q.value
+      if q.value.in?(@optimized)
+        emit :FAST_SYM, q.value
+      elsif q.value.in?(@funcname)
+        emit :FAST_SYM_TOP, q.value
+      else
+        emit :SYM, q.value
+      end
     end
 
     def visit!(q : QNumber)
@@ -156,6 +164,14 @@ module Ven
       visit q.items
 
       emit :VEC, q.items.size
+    end
+
+    def visit!(q : QUPop)
+      emit :UPOP
+    end
+
+    def visit!(q : QURef)
+      emit :UREF
     end
 
     def visit!(q : QUnary)
@@ -267,6 +283,24 @@ module Ven
       end
     end
 
+    def visit!(q : QLambdaSpread)
+      stop = label?
+      start = label?
+
+      visit q.operand
+      emit :TOV
+      emit :SETUP_MAP, stop
+
+      label start
+      emit :MAP_ITER
+      visit q.lambda
+      emit :TOV
+      emit :PEND
+      emit :G, start
+
+      label stop
+    end
+
     def visit!(q : QEnsure)
       visit q.expression
 
@@ -318,7 +352,7 @@ module Ven
         # Assume that the arguments are already on the stack
         # and there was an arity check.
         onymous.each do |parameter|
-          emit :LOCAL, parameter
+          emit :FAST_LOCAL, parameter
         end
 
         # Slurpies eat the remaining values on the stack. It
@@ -326,13 +360,20 @@ module Ven
         # at the end of the function's parameters.
         if q.slurpy
           emit :REM_TO_VEC
-          emit :LOCAL, "rest"
+          emit :FAST_LOCAL, "rest"
         end
+
+        @optimized += onymous
+        @funcname << q.name
 
         visit q.body
 
+        @optimized.pop(onymous.size)
+        @funcname.pop
+
         emit :RET
       end
+
 
       emit :FUN, offset
     end
@@ -358,7 +399,8 @@ module Ven
       # Loops return the value produced by the last iteration,
       # if there was at least one, or false (which is returned
       # by the q.base, causing the loop to end). GIF pops the
-      # base, leaving only the result of the last iteration
+      # base, leaving only the result of the last iteration,
+      # if any.
 
       visit q.base
       emit :GIF, end_

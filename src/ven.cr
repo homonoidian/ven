@@ -10,6 +10,8 @@ module Ven
     include Suite
 
     @quiet = 0
+    @debug = false
+    @timetable = false
 
     def initialize
       @context = Context.new
@@ -77,15 +79,22 @@ module Ven
       end
 
       mt = Time.measure do
-        m.start
+        m.start(@debug)
+      end
+
+      if @timetable
+        chunks.each do |chunk|
+          puts chunk.name
+
+          chunk.code.each do |instruction|
+            took = m.timetable[instruction.index]?.try(&.microseconds)
+
+            puts "#{took || "unknown"} qs\t#{instruction}"
+          end
+        end
       end
 
       if @quiet <= 1
-        puts "READ & COMPILE :: #{rt.total_microseconds}qs"
-        puts "EVAL :: #{mt.total_microseconds}qs"
-      end
-
-      if @quiet == 0
         puts m.result?
       end
     end
@@ -146,12 +155,20 @@ module Ven
           error(parser.to_s)
         end
 
-        parser.on "-q", "(quietness) Print only the execution times" do
+        parser.on "-q", "(quietness) Print only the result" do
           @quiet = 1
         end
 
         parser.on "-Q", "(quietness) Be absolutely quiet" do
           @quiet = 2
+        end
+
+        parser.on "-t", "Print timetable (instr.-s time) after eval" do
+          @timetable = true
+        end
+
+        parser.on "-d", "--debug", "Enable step-by-step mode" do
+          @debug = true
         end
 
         parser.unknown_args do |args|

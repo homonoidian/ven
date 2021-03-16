@@ -21,6 +21,14 @@ module Ven::Suite
       set!(@scopes.last, name, false, value)
     end
 
+    def [](name : String)
+      @scopes.last[name][:value]
+    end
+
+    def [](name : String, ord : Int32)
+      @scopes[ord][name][:value]
+    end
+
     # Defines an entry *name* with value *value*. Overrides
     # any existing entry with the same *name*. If *global* is
     # true, the new entry will be global: any other `define`,
@@ -44,6 +52,10 @@ module Ven::Suite
     # scope, and so on. Returns the fetched value if did find
     # one, or `nil` if did not.
     def fetch(name : String)
+      if it = @scopes.last[name]?
+        return it[:value]
+      end
+
       @scopes.reverse_each do |scope|
         if it = scope[name]?
           return it[:value]

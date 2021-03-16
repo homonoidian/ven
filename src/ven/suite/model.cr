@@ -251,6 +251,8 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
+    delegate :[], :size, to: @value
+
     # Returns the length of this vector.
     def to_num
       Num.new(@value.size)
@@ -277,8 +279,6 @@ module Ven::Suite
     def to_s(io)
       io << "[" << @value.join(", ") << "]"
     end
-
-    delegate :[], :size, to: @value
   end
 
   # Ven's type data type. It represents other Ven data types.
@@ -435,8 +435,6 @@ module Ven::Suite
         Num.new(@arity)
       when "specificity"
         Num.new(specificity)
-      else
-
       end
     end
 
