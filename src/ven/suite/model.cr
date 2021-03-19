@@ -339,7 +339,7 @@ module Ven::Suite
     getter params : Array(String)
 
     def initialize(@types, @code)
-      meta = @code.meta.as(FunMeta)
+      meta = @code.meta.as(Metadata::Function)
 
       @name = @code.name
       @arity = meta.arity

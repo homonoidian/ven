@@ -1,97 +1,71 @@
+require "big"
+
 module Ven::Suite
-  # Represents a unique label.
-  class Label
-    def to_s(io)
-      io << hash
-    end
-  end
-
-  # Represents a single instruction.
-  struct Instruction
-    getter line : UInt32
-    getter label : Label?
-    getter index : Int32
-    getter offset : Int32?
-    getter opcode : Symbol
-
-    def initialize(@opcode, argument : Nil, @line, @index = -1)
-    end
-
-    def initialize(@opcode, argument : Label, @line, @index = -1)
-      @label = argument
-    end
-
-    def initialize(@opcode, argument : Int32, @line, @index = -1)
-      @offset = argument
-    end
-
-    def to_s(io)
-      io << @index << "| (" << @line << ")" << " " << @opcode
-
-      if !@offset.nil?
-        io << " " << @offset
-      elsif !@label.nil?
-        io << " (unresolved label)" << @label
-      end
-    end
-  end
-
-  # A container for instructions and the data they reference.
+  # A chunk is a blob of instructions, static data and, in
+  # some cases, metadata.
   class Chunk
-    @@index = -1
-
-    private alias Data = String | Int32
+    # The various types of data this chunk can carry along.
+    alias Data = Int32 | String | BigDecimal | Entry
 
     getter file : String
     getter name : String
-    getter data : Array(Data)
-    getter code : Array(Instruction)
-    getter meta : Meta
+    getter meta : Metadata::Meta
+    getter data = [] of Data
+    getter code = [] of Instruction
 
-    def initialize(@file, @name, @meta = VoidMeta.new)
-      @data = [] of Data
-      @code = [] of Instruction
+    def initialize(@file, @name, @meta = Metadata::Empty.new)
+      @index = 0
       @label = {} of Label => Int32
     end
 
     delegate :[], :size, to: @code
 
-    # Returns the latest line number in use.
-    def line?
-      @code[-1]?.try(&.line) || 1_u32
-    end
+    # Appends an offset instruction to the list of this chunk's
+    # instructions.
+    #
+    # If this chunk's data already includes *data*, the existing
+    # value is referenced. Otherwise, *data* is appended to
+    # this chunk's data first, and only then referenced.
+    #
+    # Returns true.
+    def add(line : UInt32, opcode : Symbol, data : Data? = nil)
+      if data
+        existing = @data.index do |entity|
+          true if entity.class == data.class && entity == data
+        end
 
-    # Appends a new `Instruction` to the list of this chunk's
-    # instructions. If this chunk's data already includes the
-    # *argument*, the existing value is referenced. Otherwise,
-    # *argument* is appended to this chunk's data first, and
-    # only then referenced. *index* is the index in `@code`
-    # where the new instruction will be put. Returns true.
-    def add(line : UInt32, opcode : Symbol, argument : Data? = nil, index = nil)
-      unless argument.nil?
-        offset = @data.index(&.== argument) || (@data << argument).size - 1
+        offset = existing || (@data << data).size - 1
       end
 
-      # *offset* is nil if no *argument*
-      if index
-        @code[index] = Instruction.new(opcode, offset, line, @@index += 1)
-      else
-        @code << Instruction.new(opcode, offset, line, @@index += 1)
-      end
+      @code << Instruction.new(
+        @index,
+        opcode,
+        offset,
+        line)
+
+      @index += 1
 
       true
     end
 
-    # Appends a new `Instruction` to the list of this chunk's
-    # instructions. *label* is the `Label` this instruction
-    # references. Returns true.
+    # Appends a label instruction to the list of this chunk's
+    # instructions.
+    #
+    # Returns true.
     def add(line : UInt32, opcode : Symbol, label : Label)
-      @code << Instruction.new(opcode, label, line, @@index += 1)
+      @code << Instruction.new(
+        @index,
+        opcode,
+        label,
+        line)
+
+      @index += 1
 
       true
     end
 
-    # Declares a new `Label`, *label*, at the emission offset.
+    # Declares *label* at the emission offset.
+    #
     # Returns true.
     def label(label : Label)
       @label[label] = @code.size
@@ -99,42 +73,52 @@ module Ven::Suite
       true
     end
 
-    # Resolves the labels in this chunk. Returns true.
+    # Resolves all labels in this chunk.
+    #
+    # Returns true.
     def delabel
       @code.each_with_index do |instruction, index|
-        if label = instruction.label
-          unless anchor = @label[label]?
-            raise "label never declared: #{label}"
-          end
+        label = instruction.label || next
 
-          add(instruction.line, instruction.opcode, anchor, index)
+        unless anchor = @label[label]?
+          raise "this label was never declared: #{label}"
         end
+
+        @code[index] = Instruction.new(
+          instruction.index,
+          instruction.opcode,
+          anchor,
+          instruction.line)
       end
 
       true
     end
 
-    # Resolves the argument of an *instruction* using the data
-    # of this chunk. Returns nil if the *instruction* does not
-    # reference any data, or if the data it references does
-    # not exist.
-    def resolve(instruction : Instruction) : Data?
+    # Tries to resolve the argument of an *instruction* off
+    # this chunk's data.
+    #
+    # Returns the referencee if succeeded, or nil if did not.
+    def resolve(instruction : Instruction)
       if offset = instruction.offset
-        @data[offset]?
+        @data[offset]
       end
     end
 
-    def to_s(io)
-      io << @name << ":\n"
+    def to_s(instruction : Instruction, indent = 0)
+      String.build do |str|
+        str << " " * indent << instruction
+
+        if references = resolve(instruction)
+          str << " (" << references << ")"
+        end
+      end
+    end
+
+    def to_s(io, indent = 2)
+      io << @name << " [" << hash << "]:\n"
 
       @code.each do |instruction|
-        io << instruction
-
-        if data = resolve(instruction)
-          io << " ("; data.inspect(io); io << ")"
-        end
-
-        io << "\n"
+        io << to_s(instruction, indent) << "\n"
       end
     end
   end

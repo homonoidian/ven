@@ -14,9 +14,11 @@ module Ven
     @timetable = false
 
     def initialize
-      @context = Context.new
+      @context = Context::Machine.new
+      @ccontext = Context::Compiler.new
 
       @context.use(Library::Internal.new)
+      @ccontext.use(Library::Internal.new)
     end
 
     # Prints a *message* and quits with exit status 0.
@@ -47,6 +49,8 @@ module Ven
       case this
       when ReadError
         error("read error", "#{message} (in #{this.file}:#{this.line}, near '#{this.lexeme}')")
+      when CompileError
+        error("compile-time error", "#{message}\n#{trace(this.traces)}")
       when RuntimeError
         error("runtime error", "#{message} (on line #{this.line})")
       when InternalError
@@ -58,9 +62,14 @@ module Ven
       end
     end
 
+    # Formats an Array of `Trace`s.
+    def trace(traces : Traces) : String
+      traces.join("\n")
+    end
+
     def process(file : String, source : String)
       reader = Reader.new.reset
-      compiler = Compiler.new(file)
+      compiler = Compiler.new(@ccontext, file)
 
       rt = Time.measure do
         reader.read(file, source) do |statement|
@@ -83,14 +92,16 @@ module Ven
       end
 
       if @timetable
-        chunks.each do |chunk|
-          puts chunk.name
+        m.timetable.each do |c_id, instructions|
+          puts "[#{c_id}]:"
 
-          chunk.code.each do |instruction|
-            took = m.timetable[instruction.index]?.try(&.microseconds)
-
-            puts "#{took || "unknown"} qs\t#{instruction}"
+          instructions.each do |instruction, time|
+            took = "#{time.microseconds}qs"
+            puts "  #{took.ljust(10)} #{instruction}"
           end
+
+          total = instructions.values.sum.milliseconds
+          puts "(total: #{total}ms)"
         end
       end
 

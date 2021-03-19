@@ -1,68 +1,114 @@
-require "./model"
+module Ven::Suite::Context
+  # A subset of context for the compiler (see `Compiler`).
+  #
+  # The compiler uses context to determine the nesting of a
+  # symbol and/or check if a symbol exists.
+  class Compiler
+    private alias Scope = Hash(String, Bool)
 
-module Ven::Suite
-  class Context
-    private alias Scope = Hash(String, Entry)
-    private alias Entry = { global: Bool, value: Model }
+    getter scopes : Array(Scope)
+    getter traces = [] of Trace
 
     def initialize
       @scopes = [Scope.new]
     end
 
-    # Defines an `Entry` in *target*. Returns the *value* back.
-    private macro set!(target, name, global, value)
-      %value = {{value}}
-      {{target}}[{{name}}] = { global: {{global}}, value: %value }
-      %value
-    end
-
-    # Defines a local variable, *name*, in the current scope.
-    def []=(name : String, value : Model)
-      set!(@scopes.last, name, false, value)
-    end
-
-    def [](name : String)
-      @scopes.last[name][:value]
-    end
-
-    def [](name : String, ord : Int32)
-      @scopes[ord][name][:value]
-    end
-
-    # Defines an entry *name* with value *value*. Overrides
-    # any existing entry with the same *name*. If *global* is
-    # true, the new entry will be global: any other `define`,
-    # given the same *name*, will re-define the global variable
-    # instead of assigning/redefining a local one.
-    def define(name : String, value : Model, global = false)
-      target = @scopes.last
-
-      @scopes.reverse_each do |scope|
-        if scope[name]?.try(&.[:global])
-          global = true
-          target = scope
-        end
-      end
-
-      set!(target, name, global, value)
-    end
-
-    # Tries to fetch the value of *name* in the current scope,
-    # or in the parent scope, or in the parent of the parent
-    # scope, and so on. Returns the fetched value if did find
-    # one, or `nil` if did not.
-    def fetch(name : String)
-      if it = @scopes.last[name]?
-        return it[:value]
-      end
-
-      @scopes.reverse_each do |scope|
-        if it = scope[name]?
-          return it[:value]
+    # Returns the nesting of a *symbol*, if it exists.
+    def lookup(symbol : String)
+      @scopes.reverse_each.with_index do |scope, nesting|
+        if scope.has_key?(symbol)
+          # *nesting* is index from the end. We need index
+          # from the start.
+          return (@scopes.size - 1) - nesting
         end
       end
     end
 
+    # Declares that *symbol* exists in the local scope, and
+    # that it is a local variable.
+    def let(symbol : String)
+      @scopes[-1][symbol] = false
+    end
+
+    # Emulates a global lookup assignment to *symbol*.
+    #
+    # Returns the nesting of the scope *symbol* was assigned
+    # (or defined) in.
+    #
+    # *global* determines whether, if globality lookup found
+    # nothing, to define a global or local symbol.
+    def assign(symbol : String, global = false)
+      @scopes.each_with_index do |scope, nesting|
+        return nesting if scope.has_key?(symbol) && scope[symbol]
+      end
+
+      @scopes[-1][symbol] = global
+
+      @scopes.size - 1
+    end
+
+    # Traces the block during its execution.
+    def trace(tag : QTag, name : String)
+      @traces << Trace.new(tag, name)
+
+      yield
+    ensure
+      # Compile-time errors should dup the traces, so this
+      # being in `ensure` shouldn't be a problem.
+      @traces.pop
+    end
+
+    # Evaluates the block inside a child scope. Passes the
+    # nesting of the child scope to the block.
+    def child(& : Int32 ->)
+      @scopes << Scope.new
+
+      yield @scopes.size - 1
+    ensure
+      @scopes.pop
+    end
+
+    # Loads an *extension* into this context.
+    def use(extension : Extension)
+      extension.load(self)
+    end
+  end
+
+  # A subset of context for the virtual machine (see `Machine`).
+  class Machine
+    private alias Scope = Hash(String, Model)
+
+    getter scopes : Array(Scope)
+
+    def initialize
+      @scopes = [Scope.new]
+    end
+
+    def [](entry : String)
+      @scopes[-1][entry]
+    end
+
+    def [](entry : Entry)
+      @scopes[entry.nesting][entry.name]
+    end
+
+    def []?(entry : String)
+      @scopes[-1][entry]?
+    end
+
+    def []?(entry : Entry)
+      @scopes[entry.depth][entry.name]?
+    end
+
+    def []=(entry : String, value : Model)
+      @scopes[-1][entry] = value
+    end
+
+    def []=(entry : Entry, value : Model)
+      @scopes[entry.nesting][entry.name] = value
+    end
+
+    # Loads an *extension* into this context.
     def use(extension : Extension)
       extension.load(self)
     end

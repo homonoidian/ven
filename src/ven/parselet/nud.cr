@@ -64,7 +64,7 @@ module Ven
           parser.die("trailing '_' in number")
         end
 
-        QNumber.new(tag, value.delete('_'))
+        QNumber.new(tag, value.to_big_d)
       end
     end
 

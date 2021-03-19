@@ -22,8 +22,17 @@ module Ven::Suite
     end
   end
 
-  # The exception that is raised when the interpreter
-  # encounters a traceable semantic error.
+  # The exception that is raised when the compiler encounters
+  # a semantic error.
+  class CompileError < VenError
+    getter traces : Traces
+
+    def initialize(@traces, @message)
+    end
+  end
+
+  # The exception that is raised when the interpreter encounters
+  # a semantic error.
   class RuntimeError < VenError
     getter file : String
     getter line : UInt32

@@ -1,151 +1,97 @@
 require "./suite/*"
 
 module Ven
-  # A compiler for a single Ven unit. Compiles the quotes it
-  # is given into a sequence of `Chunk`s.
-  # ```
-  # c = Ven::Compiler.new
-  # c.visit(Ven::Quote)
-  # c.visit(Ven::Quote)
-  # c.visit(Ven::Quote)
-  # puts c.compile
-  # ```
+  # A visitor that transforms a tree of quotes into a linear
+  # sequence of instructions.
   class Compiler < Suite::Visitor(Bool)
     include Suite
 
-    getter file : String
-
-    def initialize(@file = "<unknown>")
+    def initialize(@context : Context::Compiler, @file = "<unknown>")
+      @cursor = 0
       @chunks = [Chunk.new(@file, "<unit>")]
-      @optimized = [] of String
-      @funcname = [] of String
     end
 
-    # Returns the first chunk.
+    # Raises a traceback-ed compile-time error. Ensures all
+    # traces are cleared afterwards.
+    def die(message : String)
+      traces = @context.traces.dup
+
+      unless traces.last?.try(&.name) == "<unit>"
+        traces << Trace.new(@last.tag, "<unit>")
+      end
+
+      raise CompileError.new(traces, message)
+    end
+
+    # Returns the chunk at cursor.
     private macro lead
-      @chunks.first
+      @chunks[@cursor]
     end
 
-    # Inserts an instruction into the first chunk of `@chunks`.
-    # Assumes `q` is defined and is a Quote. Ensures *opcode*
-    # is not nil.
-    private macro emit(opcode, argument = nil)
-      lead.add(q.tag.line, {{opcode}}.not_nil!, {{argument}})
-    end
-
-    # Safely emits an instruction without access to a `Quote`.
-    private macro emit!(opcode, argument = nil)
-      lead.add(lead.line?, {{opcode}}.not_nil!, {{argument}})
-    end
-
-    # Declares a label called *name* in the lead chunk.
+    # Declares a label in the lead chunk.
     private macro label(name)
       lead.label({{name}})
     end
 
-    # Returns a unique label.
+    # Requests a new, unique label.
     private macro label?
       Label.new
     end
 
-    # Defines a new chunk called *name*. Evaluates the block
-    # within this new chunk. Returns the index that this chunk
-    # will have in `@chunks`.
+    # Emits an instruction into the lead chunk.
+    #
+    # Ensures *opcode* is not nil.
+    private macro emit(opcode, argument = nil)
+      lead.add(@last.tag.line, {{opcode}}.not_nil!, {{argument}})
+    end
+
+    # Defines a new chunk, *name*, and evaluates the block
+    # within it.
+    #
+    # If *meta*, an instance of `Meta`, is given, it is exposed
+    # under the *meta* variable inside the block.
+    #
+    # Returns the chunk cursor for this new chunk.
     private macro chunk(name, meta = nil, &)
-      @chunks.unshift Chunk.new(@file, {{name}},
+      %chunk =
         {% if meta %}
-          meta = {{meta}}
-        {% end %})
+          Chunk.new(@file, {{name}}, meta = {{meta}})
+        {% else %}
+          Chunk.new(@file, {{name}})
+        {% end %}
+
+      @chunks << %chunk
+
+      # Make *%chunk* the lead chunk for the time the block
+      # executes. This makes `emit` emit instructions into
+      # it.
+      old, @cursor = @cursor, @chunks.size - 1
 
       begin
         {{yield}}
+
+        @cursor
       ensure
-        @chunks << @chunks.shift
-      end
-
-      @chunks.size - 1
-    end
-
-    # Finishes the process of compilation and returns the
-    # resulting chunks.
-    def compile : Chunks
-      @chunks.each do |chunk|
-        chunk.delabel
-      end
-
-      @chunks
-    end
-
-    # Returns the opcode for a binary *operator*, or nil if
-    # *operator* is not one of the supported binary operators.
-    private def binary_opcode?(operator : String) : Symbol?
-      case operator
-      when "in" then :CEQV
-      when "is" then :EQU
-      when "<=" then :LTE
-      when ">=" then :GTE
-      when "<"  then :LT
-      when ">"  then :GT
-      when "+"  then :ADD
-      when "-"  then :SUB
-      when "*"  then :MUL
-      when "/"  then :DIV
-      when "&"  then :PEND
-      when "~"  then :CONCAT
-      when "x"  then :TIMES
+        @cursor = old
       end
     end
 
-    # Emits code that will access field via *accessor*. *opcode*
-    # is the working opcode.
-    private def field(accessor : SingleFieldAccessor, opcode = :FIELD)
-      emit! :STR, accessor.field
-      emit! opcode if opcode
+    # Looks up or dies.
+    private macro lookup(name)
+      @context.lookup(%name = {{name}}) || die("symbol not found: #{%name}")
     end
 
-    # :ditto:
-    private def field(accessor : DynamicFieldAccessor, opcode = :FIELD)
-      field = accessor.field
-
-      if field.is_a?(QSymbol)
-        emit! :SYM_OR_TOS, field.value
-      else
-        visit field
-      end
-
-      emit! opcode if opcode
-    end
-
-    # Emits code that will access field via *accessor*. *opcode*
-    # is ignored.
-    private def field(accessor : MultiFieldAccessor, opcode = :FIELD)
-      amount = accessor.field.size
-
-      accessor.field.each_with_index do |part, index|
-        unless index == 0
-          emit! :UP
-        end
-
-        # Duplicates the head, which must at first be present
-        # prior the call to `field`.
-        unless index == accessor.field.size - 1
-          emit! :DUP
-        end
-
-        field(part, opcode)
-      end
-
-      emit! :VEC, amount
+    # A shorthand for `Entry.new(...)`.
+    private macro entry(name, nesting = nil)
+      {% if nesting %}
+        Entry.new({{name}}, {{nesting}})
+      {% else %}
+        Entry.new(%name = {{name}}, lookup %name)
+      {% end %}
     end
 
     def visit!(q : QSymbol)
-      if q.value.in?(@optimized)
-        emit :FAST_SYM, q.value
-      elsif q.value.in?(@funcname)
-        emit :FAST_SYM_TOP, q.value
-      else
-        emit :SYM, q.value
-      end
+      emit :SYM, entry(q.value)
     end
 
     def visit!(q : QNumber)
@@ -193,32 +139,15 @@ module Ven
 
     def visit!(q : QBinary)
       visit q.left
+      visit q.right
 
-      if q.operator.in?("and", "or")
-        fail = label?
-        end_ = label?
+      emit :BINARY, q.operator
+    end
 
-        if q.operator == "and"
-          emit :GIFP, fail
-        elsif q.operator == "or"
-          emit :GITP, end_
-        end
-
-        visit q.right
-        emit :GITP, end_
-
-        label fail
-        emit :FALSE
-
-        label end_
-      else
-        visit q.right
-
-        # Emit a normalization (NOM) call first:
-        emit :NOM, q.operator
-
-        emit binary_opcode?(q.operator)
-      end
+    def visit!(q : QAssign)
+      nesting = @context.assign(q.target, q.global)
+      visit q.value
+      emit :SET_TAP, entry(q.target, nesting)
     end
 
     def visit!(q : QCall)
@@ -228,59 +157,30 @@ module Ven
       emit :CALL, q.args.size
     end
 
-    def visit!(q : QAssign)
-      visit q.value
-
-      emit (q.global ? :GLOBAL_PUT : :LOCAL_PUT), q.target
-    end
-
-    def visit!(q : QBinaryAssign)
-      # STACK:
-      emit :SYM, q.target
-      # STACK: target-value
-      visit q.value
-      # STACK: target-value value
-      emit :DUP
-      # STACK: target-value value value-dup
-      emit :UP2
-      # STACK: value-dup target-value value
-      emit :NOM, q.operator
-      # STACK: value-dup target-value value
-      emit :UP
-      # STACK: value-dup value target-value
-      emit binary_opcode?(q.operator)
-      # STACK: value-dup binary-result
-      emit :LOCAL, q.target
-      # STACK: value-dup
-    end
-
     def visit!(q : QIntoBool)
       visit q.value
+
       emit :TOB
     end
 
     def visit!(q : QReturnIncrement)
-      emit :SYM, q.target
+      nesting = entry(q.target)
+
+      emit :SYM, nesting
       emit :DUP
       emit :TON
       emit :INC
-      emit :LOCAL, q.target
+      emit :SET, nesting
     end
 
     def visit!(q : QReturnDecrement)
-      emit :SYM, q.target
+      nesting = entry(q.target)
+
+      emit :SYM, nesting
       emit :DUP
       emit :TON
       emit :DEC
-      emit :LOCAL, q.target
-    end
-
-    def visit!(q : QAccessField)
-      visit q.head
-
-      q.path.each do |piece|
-        field piece
-      end
+      emit :SET, nesting
     end
 
     def visit!(q : QLambdaSpread)
@@ -330,10 +230,12 @@ module Ven
 
     def visit!(q : QFun)
       repeat = false
+      offset = uninitialized Int32
 
+      # Emit the 'given' values.
       q.params.zip?(q.given) do |_, given|
         if !given && !repeat
-          emit :SYM, "any"
+          emit :SYM, Entry.new("any", 0)
         elsif !given
           visit q.given.last
         elsif repeat = true
@@ -341,39 +243,40 @@ module Ven
         end
       end
 
-      offset = chunk q.name, meta: FunMeta.new do
-        params = q.params
-        onymous = params.reject("*")
-        meta.given = params.size
-        meta.arity = onymous.size
-        meta.slurpy = q.slurpy
-        meta.params = params
+      # Make the function visible.
+      @context.let(q.name)
 
-        # Assume that the arguments are already on the stack
-        # and there was an arity check.
-        onymous.each do |parameter|
-          emit :FAST_LOCAL, parameter
+      @context.trace(q.tag, q.name) do
+        @context.child do |nesting|
+          offset = chunk q.name, meta: Metadata::Function.new do
+            params = q.params
+            onymous = params.reject("*")
+
+            meta.given = params.size
+            meta.arity = onymous.size
+            meta.slurpy = q.slurpy
+            meta.params = params
+
+            onymous.each do |parameter|
+              @context.let(parameter)
+
+              emit :SET_POP, entry(parameter, nesting)
+            end
+
+            # Slurpies eat the rest of the stack's values. It
+            # must, however, be proven that the slurpie (`*`)
+            # is at the end of the function's parameters.
+            if q.slurpy
+              emit :REM_TO_VEC
+              emit :SET, entry("rest", nesting)
+            end
+
+            visit q.body
+
+            emit :RET
+          end
         end
-
-        # Slurpies eat the remaining values on the stack. It
-        # must, however, be proven that the slurpie (`*`) is
-        # at the end of the function's parameters.
-        if q.slurpy
-          emit :REM_TO_VEC
-          emit :FAST_LOCAL, "rest"
-        end
-
-        @optimized += onymous
-        @funcname << q.name
-
-        visit q.body
-
-        @optimized.pop(onymous.size)
-        @funcname.pop
-
-        emit :RET
       end
-
 
       emit :FUN, offset
     end
@@ -385,7 +288,7 @@ module Ven
 
       # Pop all values left from the body. This prevents
       # billions of loop iterations flooding the stack.
-      emit :POP_ALL
+      emit :CLEAR
 
       emit :G, start
     end
@@ -401,10 +304,9 @@ module Ven
       # by the q.base, causing the loop to end). GIF pops the
       # base, leaving only the result of the last iteration,
       # if any.
-
       visit q.base
       emit :GIF, end_
-      emit :POP_ALL
+      emit :CLEAR
       visit q.body
       emit :G, start
 
@@ -419,7 +321,7 @@ module Ven
       label start
       visit q.base
       emit :GIF, end_
-      emit :POP_ALL
+      emit :CLEAR
       visit q.body
       visit q.step
       emit :POP
@@ -437,10 +339,10 @@ module Ven
 
       label start
       visit q.pres
-      emit :POP_ALL
+      emit :CLEAR
       visit q.base
       emit :GIF, end_
-      emit :POP_ALL
+      emit :CLEAR
       visit q.body
       visit q.step
       emit :POP
@@ -448,6 +350,16 @@ module Ven
 
       label end_
       emit :FALSE_IF_EMPTY
+    end
+
+    # Finalizes the process of compilation. Returns the
+    # resulting chunks.
+    def compile : Chunks
+      @chunks.each do |chunk|
+        chunk.delabel
+      end
+
+      @chunks
     end
   end
 end

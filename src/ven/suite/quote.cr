@@ -83,8 +83,8 @@ module Ven::Suite
 
   defvalue(QSymbol)
   defvalue(QString)
-  defvalue(QNumber)
   defvalue(QRegex)
+  defquote(QNumber, value : BigDecimal)
 
   defquote(QQuote, quote : Quote)
   defquote(QVector, items : Quotes)
