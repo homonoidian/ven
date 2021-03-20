@@ -1,5 +1,5 @@
 module Ven::Suite::Context
-  # A subset of context for the compiler (see `Compiler`).
+  # A subset of context for the compiler (see `Ven::Compiler`).
   #
   # The compiler uses context to determine the nesting of a
   # symbol and/or check if a symbol exists.
@@ -25,7 +25,7 @@ module Ven::Suite::Context
     end
 
     # Declares that *symbol* exists in the local scope, and
-    # that it is a local variable.
+    # that it is local.
     def let(symbol : String)
       @scopes[-1][symbol] = false
     end
@@ -74,7 +74,7 @@ module Ven::Suite::Context
     end
   end
 
-  # A subset of context for the virtual machine (see `Machine`).
+  # A subset of context for the virtual machine (see `Ven::Machine`).
   class Machine
     private alias Scope = Hash(String, Model)
 
@@ -88,7 +88,7 @@ module Ven::Suite::Context
       @scopes[-1][entry]
     end
 
-    def [](entry : Entry)
+    def [](entry : DSymbol)
       @scopes[entry.nesting][entry.name]
     end
 
@@ -96,7 +96,7 @@ module Ven::Suite::Context
       @scopes[-1][entry]?
     end
 
-    def []?(entry : Entry)
+    def []?(entry : DSymbol)
       @scopes[entry.depth][entry.name]?
     end
 
@@ -104,7 +104,7 @@ module Ven::Suite::Context
       @scopes[-1][entry] = value
     end
 
-    def []=(entry : Entry, value : Model)
+    def []=(entry : DSymbol, value : Model)
       @scopes[entry.nesting][entry.name] = value
     end
 

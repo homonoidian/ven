@@ -103,6 +103,11 @@ module Ven::Suite
     def weight : MWeight
       MWeight::VALUE
     end
+
+    # Returns the length (#) of this model.
+    def length : Int32
+      0
+    end
   end
 
   # The parent of all `Model`s represented by a Crystal struct.
@@ -149,6 +154,10 @@ module Ven::Suite
       @value != 0
     end
 
+    def length
+      to_s.size
+    end
+
     # Mutably negates this number. Returns self.
     def neg! : self
       @value = -@value
@@ -174,8 +183,6 @@ module Ven::Suite
 
   # Ven's string data type.
   struct MString < MValue(String)
-    delegate :size, to: @value
-
     # Returns this string parsed into a `Num`. Alternatively,
     # if *parse* is false, returns the length of this string.
     # Raises a `ModelCastException` if this string could not
@@ -196,6 +203,10 @@ module Ven::Suite
 
     def true?
       @value.size != 0
+    end
+
+    def length
+      @value.size
     end
 
     def to_s(io)
@@ -229,6 +240,10 @@ module Ven::Suite
       true
     end
 
+    def length
+      @source.size
+    end
+
     def to_s(io)
       io << "`" << @source << "`"
     end
@@ -251,7 +266,7 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
-    delegate :[], :size, to: @value
+    delegate :[], :<<, to: @value
 
     # Returns the length of this vector.
     def to_num
@@ -274,6 +289,10 @@ module Ven::Suite
 
     def true?
       @value.size != 0
+    end
+
+    def length
+      @value.size
     end
 
     def to_s(io)
@@ -334,23 +353,17 @@ module Ven::Suite
     getter code : Chunk
     getter name : String
     getter arity : Int32
-    getter types : Models
+    getter given : Models
     getter slurpy : Bool
     getter params : Array(String)
 
-    def initialize(@types, @code)
-      meta = @code.meta.as(Metadata::Function)
-
-      @name = @code.name
-      @arity = meta.arity
-      @slurpy = meta.slurpy
-      @params = meta.params
+    def initialize(@name, @arity, @slurpy, @params, @given, @code)
     end
 
     # Returns how specific this concrete is.
     getter specificity do
-      @params.zip(@types).map do |param, type|
-        weight = type.weight
+      @params.zip(@given).map do |param, typee|
+        weight = typee.weight
 
         # Anonymous parameters lose one weight point.
         if anonymous?(param)
@@ -379,7 +392,7 @@ module Ven::Suite
     def to_s(io)
       io << "concrete " << @name << "("
 
-      @params.zip(@types).each_with_index do |pair, index|
+      @params.zip(@given).each_with_index do |pair, index|
         io << pair[0] << ": " << pair[1]
 
         unless index == @params.size - 1
@@ -397,12 +410,12 @@ module Ven::Suite
 
     # Returns whether this concrete's identity is equal to
     # the *other* concrete's identity. For this method to
-    # return true, *other*'s specificity *and* types must
+    # return true, *other*'s specificity *and* given must
     # be equal to this'.
     def ==(other : MConcreteFunction)
       return false unless specificity == other.specificity
 
-      types.zip(other.types) do |our, their|
+      @given.zip(other.given) do |our, their|
         return false unless our.eqv?(their)
       end
 
@@ -494,6 +507,10 @@ module Ven::Suite
       when "variants"
         Vec.new(@variants)
       end
+    end
+
+    def length
+      @variants.size
     end
 
     def to_s(io)

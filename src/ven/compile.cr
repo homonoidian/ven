@@ -1,9 +1,9 @@
 require "./suite/*"
 
 module Ven
-  # A visitor that transforms a tree of quotes into a linear
-  # sequence of instructions.
-  class Compiler < Suite::Visitor(Bool)
+  # Provides the facilities to compile Ven quotes into a linear
+  # sequence of Ven bytecode instructions.
+  class Compiler < Suite::Visitor
     include Suite
 
     def initialize(@context : Context::Compiler, @file = "<unknown>")
@@ -11,8 +11,7 @@ module Ven
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
-    # Raises a traceback-ed compile-time error. Ensures all
-    # traces are cleared afterwards.
+    # Raises a traceback-ed compile-time error.
     def die(message : String)
       traces = @context.traces.dup
 
@@ -23,14 +22,9 @@ module Ven
       raise CompileError.new(traces, message)
     end
 
-    # Returns the chunk at cursor.
+    # Returns the chunk under the cursor.
     private macro lead
       @chunks[@cursor]
-    end
-
-    # Declares a label in the lead chunk.
-    private macro label(name)
-      lead.label({{name}})
     end
 
     # Requests a new, unique label.
@@ -38,33 +32,27 @@ module Ven
       Label.new
     end
 
+    # Declares a label in the lead chunk.
+    private macro label(name)
+      lead.label({{name}})
+    end
+
     # Emits an instruction into the lead chunk.
     #
     # Ensures *opcode* is not nil.
     private macro emit(opcode, argument = nil)
-      lead.add(@last.tag.line, {{opcode}}.not_nil!, {{argument}})
+      lead.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
     end
 
-    # Defines a new chunk, *name*, and evaluates the block
+    # Makes a new chunk, *name*, and evaluates the block
     # within it.
     #
-    # If *meta*, an instance of `Meta`, is given, it is exposed
-    # under the *meta* variable inside the block.
-    #
-    # Returns the chunk cursor for this new chunk.
-    private macro chunk(name, meta = nil, &)
-      %chunk =
-        {% if meta %}
-          Chunk.new(@file, {{name}}, meta = {{meta}})
-        {% else %}
-          Chunk.new(@file, {{name}})
-        {% end %}
+    # Returns the chunk cursor for the new chunk.
+    private macro chunk(name, &)
+      @chunks << Chunk.new(@file, {{name}})
 
-      @chunks << %chunk
-
-      # Make *%chunk* the lead chunk for the time the block
-      # executes. This makes `emit` emit instructions into
-      # it.
+      # Make our chunk the lead chunk for the time the block
+      # executes. This allows `emit` to target it.
       old, @cursor = @cursor, @chunks.size - 1
 
       begin
@@ -76,22 +64,31 @@ module Ven
       end
     end
 
-    # Looks up or dies.
-    private macro lookup(name)
-      @context.lookup(%name = {{name}}) || die("symbol not found: #{%name}")
+    # Looks up a symbol or dies.
+    private macro lookup(symbol)
+      @context.lookup(%symbol = {{symbol}}) || die("symbol not found: #{%symbol}")
     end
 
-    # A shorthand for `Entry.new(...)`.
-    private macro entry(name, nesting = nil)
+    # A shorthand for `DSymbol.new(...)`.
+    private macro symbol(name, nesting = nil)
       {% if nesting %}
-        Entry.new({{name}}, {{nesting}})
+        DSymbol.new({{name}}, {{nesting}})
       {% else %}
-        Entry.new(%name = {{name}}, lookup %name)
+        DSymbol.new(%name = {{name}}, lookup %name)
       {% end %}
     end
 
+    # Assigns a *symbol*. Returns the resulting `DSymbol`.
+    private macro assign(symbol, global)
+      %symbol = {{symbol}}
+      %global = {{global}}
+      %nesting = @context.assign({{symbol}}, {{global}})
+
+      symbol(%symbol, %nesting)
+    end
+
     def visit!(q : QSymbol)
-      emit :SYM, entry(q.value)
+      emit :SYM, symbol(q.value)
     end
 
     def visit!(q : QNumber)
@@ -102,14 +99,8 @@ module Ven
       emit :STR, q.value
     end
 
-    def visit!(q : QRegex)
-      emit :PCRE, q.value
-    end
-
     def visit!(q : QVector)
-      visit q.items
-
-      emit :VEC, q.items.size
+      emit :VEC, visit(q.items)
     end
 
     def visit!(q : QUPop)
@@ -129,113 +120,96 @@ module Ven
         when "-" then :NEG
         when "~" then :TOS
         when "#" then :LEN
+        when "&" then :TOV
         when "not" then :TOIB
-        when "&"
-          return emit :VEC, 1
         end
 
       emit opcode
     end
 
     def visit!(q : QBinary)
-      visit q.left
-      visit q.right
+      visit([q.left, q.right])
 
       emit :BINARY, q.operator
     end
 
     def visit!(q : QAssign)
-      nesting = @context.assign(q.target, q.global)
-      visit q.value
-      emit :SET_TAP, entry(q.target, nesting)
+      visit(q.value)
+
+      emit :TAP_ASSIGN, assign(q.target, q.global)
     end
 
     def visit!(q : QCall)
-      visit q.callee
-      visit q.args
+      visit(q.callee)
 
-      emit :CALL, q.args.size
+      emit :CALL, visit(q.args)
     end
 
     def visit!(q : QIntoBool)
-      visit q.value
+      visit(q.value)
 
       emit :TOB
     end
 
     def visit!(q : QReturnIncrement)
-      nesting = entry(q.target)
+      symbol = symbol(q.target)
 
-      emit :SYM, nesting
+      emit :SYM, symbol
       emit :DUP
       emit :TON
       emit :INC
-      emit :SET, nesting
+      emit :SET, symbol
     end
 
     def visit!(q : QReturnDecrement)
-      nesting = entry(q.target)
+      symbol = symbol(q.target)
 
-      emit :SYM, nesting
+      emit :SYM, symbol
       emit :DUP
       emit :TON
       emit :DEC
-      emit :SET, nesting
+      emit :SET, symbol
+    end
+
+    def visit!(q : QBinarySpread)
+      visit(q.operand)
+      emit :TOV
+      emit :REDUCE, q.operator
     end
 
     def visit!(q : QLambdaSpread)
       stop = label?
       start = label?
 
-      visit q.operand
-      emit :TOV
-      emit :SETUP_MAP, stop
+      emit :VEC, 0
+      visit(q.operand)
+      emit :MAP_SETUP
 
       label start
-      emit :MAP_ITER
-      visit q.lambda
-      emit :TOV
-      emit :PEND
-      emit :G, start
+      emit :MAP_ITER, stop
+      visit(q.lambda)
+      emit :MAP_APPEND
+      emit :J, start
 
       label stop
+      emit :POP
     end
 
     def visit!(q : QEnsure)
-      visit q.expression
+      visit(q.expression)
 
       emit :ENS
-    end
-
-    def visit!(q : QIf)
-      fail = label?
-      end_ = label?
-
-      visit q.cond
-      emit :GIFP, fail
-
-      visit q.suc
-      emit :G, end_
-
-      label fail
-
-      if alt = q.alt
-        visit alt
-      else
-        emit :FALSE
-      end
-
-      label end_
     end
 
     def visit!(q : QFun)
       repeat = false
       offset = uninitialized Int32
+      function = DFunction.new(q.name)
 
       # Emit the 'given' values.
       q.params.zip?(q.given) do |_, given|
         if !given && !repeat
-          emit :SYM, Entry.new("any", 0)
+          emit :SYM, symbol("any", 0)
         elsif !given
           visit q.given.last
         elsif repeat = true
@@ -248,19 +222,19 @@ module Ven
 
       @context.trace(q.tag, q.name) do
         @context.child do |nesting|
-          offset = chunk q.name, meta: Metadata::Function.new do
+          function.chunk = chunk q.name do
             params = q.params
             onymous = params.reject("*")
 
-            meta.given = params.size
-            meta.arity = onymous.size
-            meta.slurpy = q.slurpy
-            meta.params = params
+            function.given = params.size
+            function.arity = onymous.size
+            function.slurpy = q.slurpy
+            function.params = params
 
             onymous.each do |parameter|
               @context.let(parameter)
 
-              emit :SET_POP, entry(parameter, nesting)
+              emit :POP_ASSIGN, symbol(parameter, nesting)
             end
 
             # Slurpies eat the rest of the stack's values. It
@@ -268,7 +242,7 @@ module Ven
             # is at the end of the function's parameters.
             if q.slurpy
               emit :REM_TO_VEC
-              emit :SET, entry("rest", nesting)
+              emit :POP_ASSIGN, symbol("rest", nesting)
             end
 
             visit q.body
@@ -278,78 +252,7 @@ module Ven
         end
       end
 
-      emit :FUN, offset
-    end
-
-    def visit!(q : QInfiniteLoop)
-      start = label?
-      label start
-      visit q.body
-
-      # Pop all values left from the body. This prevents
-      # billions of loop iterations flooding the stack.
-      emit :CLEAR
-
-      emit :G, start
-    end
-
-    def visit!(q : QBaseLoop)
-      start = label?
-      end_ = label?
-
-      label start
-
-      # Loops return the value produced by the last iteration,
-      # if there was at least one, or false (which is returned
-      # by the q.base, causing the loop to end). GIF pops the
-      # base, leaving only the result of the last iteration,
-      # if any.
-      visit q.base
-      emit :GIF, end_
-      emit :CLEAR
-      visit q.body
-      emit :G, start
-
-      label end_
-      emit :FALSE_IF_EMPTY
-    end
-
-    def visit!(q : QStepLoop)
-      start = label?
-      end_ = label?
-
-      label start
-      visit q.base
-      emit :GIF, end_
-      emit :CLEAR
-      visit q.body
-      visit q.step
-      emit :POP
-      emit :G, start
-
-      label end_
-      emit :FALSE_IF_EMPTY
-    end
-
-    def visit!(q : QComplexLoop)
-      start = label?
-      end_ = label?
-
-      visit q.start
-
-      label start
-      visit q.pres
-      emit :CLEAR
-      visit q.base
-      emit :GIF, end_
-      emit :CLEAR
-      visit q.body
-      visit q.step
-      emit :POP
-      emit :G, start
-
-      label end_
-      emit :FALSE_IF_EMPTY
+      emit :FUN, function
     end
 
     # Finalizes the process of compilation. Returns the

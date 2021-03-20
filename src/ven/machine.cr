@@ -4,16 +4,19 @@ module Ven
   class Machine
     include Suite
 
-    # The timetable consists of chunk identities mapped to hashes
-    # of instructions mapped to some `Time::Span`s. Each of these
-    # `Time::Span`s is the time it took to execute that particular
-    # instruction.
-    alias Timetable = Hash(UInt64, Hash(Instruction, Time::Span))
+    # Fancyline used by the debugger.
+    @@fancy = Fancyline.new
+
+    alias Timetable = Hash(UInt64, Hash(Instruction, IData))
+    alias IData = {Int32, Time::Span}
 
     getter timetable : Timetable
 
-    # Fancyline used by the debugger.
-    @@fancy = Fancyline.new
+    property inspect : Bool
+    property measure : Bool
+
+    @inspect = false
+    @measure = false
 
     def initialize(@chunks : Chunks, @context : Context::Machine)
       @frames = [Frame.new]
@@ -24,6 +27,30 @@ module Ven
     # why the error happened.
     def die(message : String)
       raise RuntimeError.new(chunk.file, fetch.line, message)
+    end
+
+    # Records the *instruction* in the timetable.
+    #
+    # Returns true.
+    def record!(instruction : Instruction, duration : Time::Span)
+      id = chunk.hash
+
+      if !@timetable[id]?
+        @timetable[id] = {} of Instruction => IData
+      end
+
+      if !@timetable[id][instruction]?
+        @timetable[id][instruction] = { 1, duration }
+      else
+        existing = @timetable[id][instruction]
+
+        @timetable[id][instruction] = {
+          existing[0] + 1,
+          existing[1] + duration
+        }
+      end
+
+      true
     end
 
     # Returns the current frame.
@@ -41,10 +68,15 @@ module Ven
       frame.stack
     end
 
-    # Returns the current timetable.
-    # private macro timetable
-    #   chunk.timetable
-    # end
+    # Returns the current control stack.
+    private macro control
+      frame.control
+    end
+
+    # Returns the current underscores stack.
+    private macro underscores
+      frame.underscores
+    end
 
     # Returns the instruction at the IP. Raises if there is
     # no such instruction.
@@ -65,16 +97,33 @@ module Ven
       frame.ip += 1
     end
 
-    # Jumps to the instruction at some instruction pointer
-    # *ip*.
+    # Jumps to the instruction at some instruction pointer *ip*.
     private macro jump(ip)
       next frame.ip = {{ip}}
     end
 
-    # Resolves the argument of the current instruction. The
-    # type of the argument can be ensured by passing *cast*.
-    private macro argument(cast = String)
-      chunk.resolve(fetch).as({{cast}})
+    # Resolves the argument of the current instruction, assuming
+    # it is a jump to some instruction pointer (`DJump`).
+    private macro anchor
+      chunk.resolve(fetch, :jump).as(DJump).anchor
+    end
+
+    # Resolves the argument of the current instruction, assuming
+    # it is a static value of type *cast* (`DStatic`).
+    private macro static(cast = String)
+      chunk.resolve(fetch, :static).as({{cast}})
+    end
+
+    # Resolves the argument of the current instruction, assuming
+    # it is a symbol (`DSymbol`).
+    private macro symbol
+      chunk.resolve(fetch, :symbol).as(DSymbol)
+    end
+
+    # Resolves the argument of the current instruction, assuming
+    # it is a function (`DFunction`).
+    private macro function
+      chunk.resolve(fetch, :function).as(DFunction)
     end
 
     # Returns *value* if *condition* is true, and *fallback*
@@ -108,7 +157,7 @@ module Ven
     end
 
     # Returns the last value of the stack. *cast* can be passed
-    # to ensure the type of this value. Raises on underflow.
+    # to ensure the type of the value. Raises on underflow.
     private macro tap(cast = Model)
       frame.stack.last.as({{cast}})
     end
@@ -127,16 +176,22 @@ module Ven
     end
 
     # Pops multiple values from the stack and passes them to
-    # the block. Keeps their order. The amount of values to
-    # pop is determined from the amount of arguments of the
-    # block. *cast* can be passed to specify the types of each
-    # value (N values, N *cast*s), or all values (N values,
-    # 1 *cast*). Raises if *cast* underflows the block arguments.
-    private macro get(*cast, &block)
+    # the block, keeping their order. E.g., given (x1 x2 x3 --),
+    # will pass |x1, x2, x3|, not |x3, x2, x1|.
+    #
+    # The amount of values to pop is determined from the amount
+    # of block's arguments.
+    #
+    # *cast* can be passed to specify the types of each value
+    # (N values, N *cast*s), or all values (N values, 1 *cast*).
+    # *cast* defaults to `Model`, and thus can be omitted.
+    #
+    # Raises if *cast* underflows the block arguments.
+    private macro gather(cast = {Model}, &block)
       {% amount = block.args.size %}
 
-      {% unless cast.size == 1 || cast.size == amount %}
-        raise "cast underflow"
+      {% if cast.size != 1 && cast.size != amount %}
+        {{raise "cast underflow"}}
       {% end %}
 
       %values = frame.stack.pop({{amount}})
@@ -182,7 +237,7 @@ module Ven
     # Performs an invokation: pushes a frame, introduces a
     # child context and starts executing the *chunk*. The
     # frame stack is initialized with values of *import*.
-    # Their order is kept.
+    # **The order of *import* is kept.**
     private macro invoke(chunk, import values = Models.new)
       @chunks << {{chunk}}
       @frames << Frame.new({{values}}, @chunks.size - 1)
@@ -190,10 +245,13 @@ module Ven
       next
     end
 
-    # Reverts the actions of `invoke`. Bool *export* determines
-    # whether to put exactly one value from the stack used by
-    # the invokation onto the parent stack. Returns nil if
-    # *export* was requested, but there is no value to export.
+    # Reverts the actions of `invoke`.
+    #
+    # Bool *export* determines whether to put exactly one value
+    # from the stack of the invokation onto the parent stack.
+    #
+    # Returns nil if *export* was requested, but there was no
+    # value to export. Returns true otherwise.
     private macro revoke(export = false)
       %frame = @frames.pop
 
@@ -209,9 +267,12 @@ module Ven
       {% end %}
     end
 
-    # Matches *args* against *types*. Makes the lattermost
-    # type cover the excess arguments, if any. **Will crash
-    # of memory error if *types* is empty.**
+    # Matches *args* against *types*.
+    #
+    # Makes the lattermost type cover the excess arguments,
+    # if any.
+    #
+    # NOTE: will crash of memory error if *types* is empty.
     def typecheck(types : Models, args : Models) : Bool
       last = uninitialized Model
 
@@ -226,366 +287,433 @@ module Ven
       true
     end
 
-    # Computes a *normal* binary operation. Returns nil if
-    # *operator* cannot  accept *left* and *right*.
+    # Performs a binary operation on *left*, *right*.
+    #
+    # Tries to normalize if *left*, *right* cannot be used
+    # with the *operator*.
     def binary(operator : String, left : Model, right : Model)
-      case {operator, left, right}
-      when {"is", MBool, MBool}
-        bool left.eqv?(right)
-      when {"is", Str, MRegex}
-        may_be str($0), if: left.value =~ right.value
-      when {"is", _, MType}
-        bool left.of?(right)
-      when {"is", _, MAny}
-        bool true
-      when {"is", _, _}
-        may_be left, if: left.eqv?(right)
-      when {"in", Str, Str}
-        may_be left, if: right.value.includes?(left.value)
-      when {"in", _, Vec}
-        may_be left, if: right.value.any? &.eqv?(left)
-      when {"<", Num, Num}
-        bool left.value < right.value
-      when {">", Num, Num}
-        bool left.value > right.value
-      when {"<=", Num, Num}
-        bool left.value <= right.value
-      when {">=", Num, Num}
-        bool left.value >= right.value
-      when {"+", Num, Num}
-        num left.value + right.value
-      when {"-", Num, Num}
-        num left.value - right.value
-      when {"*", Num, Num}
-        num left.value * right.value
-      when {"/", Num, Num}
-        num left.value / right.value
-      when {"&", Vec, Vec}
-        vec left.value + right.value
-      when {"~", Str, Str}
-        str left.value + right.value
-      when {"x", Vec, Num}
-        vec left.value * right.value.to_big_i
-      when {"x", Str, Num}
-        str left.value * right.value.to_big_i
+      loop do
+        return case {operator, left, right}
+          when {"is", MBool, MBool}
+            bool left.eqv?(right)
+          when {"is", Str, MRegex}
+            may_be str($0), if: left.value =~ right.value
+          when {"is", _, MType}
+            bool left.of?(right)
+          when {"is", _, MAny}
+            bool true
+          when {"is", _, _}
+            may_be left, if: left.eqv?(right)
+          when {"in", Str, Str}
+            may_be left, if: right.value.includes?(left.value)
+          when {"in", _, Vec}
+            may_be left, if: right.value.any? &.eqv?(left)
+          when {"<", Num, Num}
+            bool left.value < right.value
+          when {">", Num, Num}
+            bool left.value > right.value
+          when {"<=", Num, Num}
+            bool left.value <= right.value
+          when {">=", Num, Num}
+            bool left.value >= right.value
+          when {"+", Num, Num}
+            num left.value + right.value
+          when {"-", Num, Num}
+            num left.value - right.value
+          when {"*", Num, Num}
+            num left.value * right.value
+          when {"/", Num, Num}
+            num left.value / right.value
+          when {"&", Vec, Vec}
+            vec left.value + right.value
+          when {"~", Str, Str}
+            str left.value + right.value
+          when {"x", Vec, Num}
+            vec left.value * right.value.to_big_i
+          when {"x", Str, Num}
+            str left.value * right.value.to_big_i
+          else
+            left, right = normalize(operator, left, right)
+
+            # 'next' vetoes 'return'. Also, `normalize` raises
+            # if unable to normalize. Hence not an infinite
+            # loop.
+            next
+          end
       end
     rescue DivisionByZeroError
       die("'#{operator}': division by zero given #{left}, #{right}")
     end
 
-    # Normalizes (i.e., converts to the *normal* form) a binary
-    # operation. Dies if failed to convert, or if found no
-    # matching conversion template.
+    # Normalizes a binary operation (i.e., converts to its
+    # normal form, if any).
+    #
+    # Dies if could not convert, or if found no matching
+    # conversion.
     def normalize(operator : String, left : Model, right : Model)
-      begin
-        case operator
-        when "is" then case {left, right}
-          when {_, MRegex}
-            return left.to_str, right
-          when {MRegex, _}
-            return right.to_str, left
-          when {_, Str}, {Str, _}
-            return left.to_str, right.to_str
-          when {_, Vec}, {Vec, _}
-            return left.to_vec, right.to_vec
-          when {_, Num}, {Num, _}
-            return left.to_num, right.to_num
-          when {_, MBool}, {MBool, _}
-            return left.to_bool, right.to_bool
-          end
-        when "x" then case {left, right}
-          when {_, Vec}, {_, Str}
-            return right, left.to_num
-          when {Str, _}, {Vec, _}
-            return left, right.to_num
-          else
-            return left.to_vec, right.to_num
-          end
-        when "in" then case {left, right}
-          when {_, Str}, {Str, _}
-            return left.to_str, right.to_str
-          end
-        when "<", ">", "<=", ">="
-          return left.to_num, right.to_num
-        when "+", "-", "*", "/"
-          return left.to_num, right.to_num
-        when "~"
+      case operator
+      when "is" then case {left, right}
+        when {_, MRegex}
+          return left.to_str, right
+        when {MRegex, _}
+          return right.to_str, left
+        when {_, Str}, {Str, _}
           return left.to_str, right.to_str
-        when "&"
+        when {_, Vec}, {Vec, _}
           return left.to_vec, right.to_vec
+        when {_, Num}, {Num, _}
+          return left.to_num, right.to_num
+        when {_, MBool}, {MBool, _}
+          return left.to_bool, right.to_bool
         end
-      rescue ModelCastException
-        # (fallthrough)
+      when "x" then case {left, right}
+        when {_, Vec}, {_, Str}
+          return right, left.to_num
+        when {Str, _}, {Vec, _}
+          return left, right.to_num
+        else
+          return left.to_vec, right.to_num
+        end
+      when "in" then case {left, right}
+        when {_, Str}, {Str, _}
+          return left.to_str, right.to_str
+        end
+      when "<", ">", "<=", ">="
+        return left.to_num, right.to_num
+      when "+", "-", "*", "/"
+        return left.to_num, right.to_num
+      when "~"
+        return left.to_str, right.to_str
+      when "&"
+        return left.to_vec, right.to_vec
       end
 
       die("'#{operator}': could not normalize: #{left}, #{right}")
+    rescue e : ModelCastException
+      die("'#{operator}': #{e.message}: #{left}, #{right}")
     end
 
-    # Interprets a debugger *command*, with the current
-    # instruction being *instruction*.
-    def debug(command : String, instruction : Instruction)
-      if command.in?(".", ".i", ".instruction")
-        puts chunk.to_s(instruction)
-      elsif command.in?(".s", ".stack")
-        puts stack.join(" ")
-      elsif command.in?(".u", ".underscores")
-        puts frame.underscores.join(" ")
-      elsif command.in?(".c", ".control")
-        puts frame.control.join(" ")
-      elsif command.in?(".h", ".help")
-        puts "Available commands: . (.i, .instruction) .s (.stack) " \
-             ".u (.underscores) .c (.control) .h (.help)"
+    # Properly defines a function based off an *informer* and
+    # some *given* values.
+    def defun(informer : DFunction, given : Models)
+      name = informer.name
+      chunk = @chunks[informer.chunk]
+      defee = MConcreteFunction.new(name,
+        informer.arity,
+        informer.slurpy,
+        informer.params,
+        given, chunk)
+
+      case existing = @context[name]?
+      when MGenericFunction
+        return existing.add(defee)
+      when MFunction
+        if existing != defee
+          defee = MGenericFunction.new(name)
+            .add!(existing)
+            .add!(defee)
+        end
+      end
+
+      @context[name] = defee
+    end
+
+    # Returns the variant of *callee* that understands *args*,
+    # or false if such variant wasn't found.
+    def variant?(callee : MFunction, args : Models)
+      index = -1
+      found = false
+      count = args.size
+      current = callee
+
+      until found
+        if callee.is_a?(MGenericFunction)
+          # Break if we're at the end of the variant
+          # list.
+          break if index >= callee.size - 1
+
+          current = callee[index += 1]
+        end
+
+        if current.is_a?(MConcreteFunction)
+          arity = current.arity
+          slurpy = current.slurpy
+          found =
+            ((slurpy && count >= arity) ||
+            (!slurpy && count == arity)) &&
+            typecheck(current.given, args)
+        elsif current.is_a?(MBuiltinFunction)
+          arity = current.arity
+          found = count == arity
+        end
+
+        # If at this point index is -1, we're certainly not
+        # an MGenericFunction. Thus, if found is false, the
+        # function that the user asked for was not found.
+        # Break if so.
+        break if index == -1 && !found
+      end
+
+      found && current
+    end
+
+    # Returns *index*th item of *indexee*.
+    def nth(indexee : Vec, index : Num)
+      if indexee.length <= index.value
+        die("index out of range: #{index}")
+      end
+
+      indexee[index.value.to_big_i]
+    end
+
+    # :ditto:
+    def nth(indexee : Str, index : Num)
+      if indexee.length <= index.value
+        die("index out of range: #{index}")
+      end
+
+      indexee[index.value.to_big_i]
+    end
+
+    # :ditto:
+    def nth(indexee, index)
+      die("indexee not indexable: #{indexee}")
+    end
+
+    # Gathers multiple *indexes* for *indexee* and returns
+    # a `Vec` of them.
+    def nth(indexee : Model, indexes : Models)
+      vec indexes.map { |index| nth(indexee, index) }
+    end
+
+    # Reduces the *reducee* using a binary *operator*.
+    def reduce(operator : String, reducee : Vec)
+      case reducee.length
+      when 0
+        reducee
+      when 1
+        reducee[0]
       else
-        puts @context[command]? || "no such variable: #{command}"
+        memo = binary(operator, reducee[0], reducee[1])
+
+        reducee[2..].reduce(memo) do |total, current|
+          binary(operator, total, current)
+        end
       end
     end
 
-    # >>>>>>>>>>>>> BADLANDS start <<<<<<<<<<<<<
+    # Starts a primitive state inspector prompt.
+    #
+    # Returns false if the user wanted to terminate inspector
+    # functionality, or true if the user requested the next
+    # instruction.
+    def inspector
+      loop do
+        begin
+          got = @@fancy.readline("#{frame.ip}@#{chunk.name} :: ")
+        rescue Fancyline::Interrupt # CTRL-C
+          puts
+
+          return true
+        end
+
+        case got
+        when /^\./
+          puts stack.join(" ")
+        when /^\.\./
+          puts "#{chunk.dis(point_at: frame.ip)}"
+        when /^\.c/
+          puts control.join(" ")
+        when /^\._/
+          puts underscores.join(" ")
+        when /^\.n(ext)?/
+          puts fetch? || "nothing"
+        when /^\.h(elp)?|^\?/
+          puts "?  : .h(elp) : display this",
+               ".  : display stack",
+               ".. : display chunk",
+               ".c : display control",
+               "._ : display underscores",
+               ".n(ext) displays the following instruction",
+               "CTRL-C : step",
+               "CTRL-D : skip all"
+        when nil # EOF (CTRL-D)
+          return false
+        else
+          puts @context[got]? || "variable not found: #{got}"
+        end
+      end
+    end
 
     # Starts the evaluation loop, which begins to fetch the
     # instructions from the current chunk and execute them,
-    # until there aren't any left. *debug*, if true, enables
-    # state inspection following every fetch.
-    def start(debug = false)
-      remnants = false
-
+    # until there aren't any left.
+    def start
       while this = fetch?
-        if debug
-          begin
-            puts "Hit CTRL+C to step, or CTRL+D to skip all"
+        puts chunk.dis(this) if @inspect
 
-            loop do
-              unless command = @@fancy.readline("#{frame.ip}, in #{chunk.name} >>> ")
-                remnants = @@fancy.readline("Print remnant frames? (y/n) ") == "y"
-
-                # EOF goes out of debug mode.
-                break debug = false
-              end
-
-              debug(command, this.as Instruction)
-            end
-          rescue Fancyline::Interrupt
-            puts
-          end
-        end
-
-        time = Time.measure do
+        duration = Time.measure do
           case this.opcode
           # Pops one value from the stack: (x --)
           when :POP
             pop
-          # Makes a duplicate of the last value: (x1 -- x1 x2)
+          # Makes a duplicate of the last value: (x1 -- x1 x1')
           when :DUP
             put tap
           # Clears the stack: (x1 x2 x3 ... --)
           when :CLEAR
             stack.clear
-          # XXX: rewrite
+          # Puts the value of a symbol: (-- x)
           when :SYM
-            put @context[argument(Entry)]
-          # -- (a : num)
+            put @context[symbol]
+          # Puts a number: (-- x)
           when :NUM
-            put num argument(BigDecimal)
-          # -- (a : str)
+            put num static(BigDecimal)
+          # Puts a string: (-- x)
           when :STR
-            put str argument
-          # -- (a : regex)
+            put str static
+          # Puts a regex: (-- x)
           when :PCRE
-            put regex argument
-          # -- (a : vec)
+            put regex static
+          # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
           when :VEC
-            put vec (pop argument Int32)
-          # -- true
+            put vec pop static(Int32)
+          # Puts true: (-- true)
           when :TRUE
             put bool true
-          # -- false
+          # Puts false: (-- false)
           when :FALSE
             put bool false
-          # ... -- false?
+          # Puts false if stack is empty:
+          #  - (-- false)
+          #  - (... -- ...)
           when :FALSE_IF_EMPTY
             put bool false if stack.empty?
-          # [NEGATE] (a : num) -- (a' : num)
+          # Negates a num: (x1 -- -x1)
           when :NEG
             put pop.to_num.neg!
-          # [TO NUM] (a : any) -- (a : num)
+          # Converts to num: (x1 -- x1' : num)
           when :TON
             put pop.to_num
-          # [TO STR] (a : any) -- (a : str)
+          # Converts to str: (x1 -- x1' : str)
           when :TOS
             put pop.to_str
-          # [TO BOOL] (a : any) -- (a : bool)
+          # Converts to bool: (x1 -- x1' : bool)
           when :TOB
             put pop.to_bool
-          # [TO VECTOR] (a : any) -- (a : vec)
-          when :TOV
-            put pop.to_vec
-          # [TO INVERSE BOOL] (a : any) -- ('a : bool)
+          # Converts to inverse boolean:
+          #   - (x1#t -- false)
+          #   - (x1#f -- true)
           when :TOIB
             put pop.to_bool(inverse: true)
-          # [LENGTH] (a : any) -- ('a : num)
+          # Converts to vec (unless vec):
+          #   - (x1 -- [x1])
+          #   - ([x1] -- [x1])
+          when :TOV
+            put pop.to_vec
+          # Puts length of an entity: (x1 -- x2)
           when :LEN
-            (it = pop).is_a?(Str | Vec) ? put num it.size : put num it.to_s.size
+            put num pop.length
+          # Evaluates a binary operation: (x1 x2 -- x3)
           when :BINARY
-            get(Model) do |left, right|
-              operator = argument
-
-              until result = binary(operator, left, right)
-                left, right = normalize(operator, left, right)
-              end
-
-              put result
-            end
-          # [ENSURE] a -- a
+            gather { |lhs, rhs| put binary(static, lhs, rhs) }
+          # Dies if tap is false: (x1 -- x1)
           when :ENS
-            die("ensure: got a falsey value") if tap.false?
-          # [GOTO] --
-          when :G
-            jump (argument Int32)
-          # [GOTO IF TRUE] a --
-          when :GIT
-            jump (argument Int32) unless pop.false?
-          # [GOTO IF FALSE] a --
-          when :GIF
-            jump (argument Int32) if pop.false?
-          # [GOTO IF TRUE POP] a -- a?
-          when :GITP
-            unless (value = pop).false?
-              put value
-
-              jump (argument Int32)
-            end
-          # [GOTO IF FALSE POP] a -- a?
-          when :GIFP
-            if (value = pop).false?
-              put value
-
-              jump (argument Int32)
-            end
-          # a --
-          when :SET_POP
-            @context[argument(Entry)] = pop
-          # a -- a
-          when :SET_TAP
-            @context[argument(Entry)] = tap
-          # [REMAINING TO VEC] * -- (a : vec)
+            die("ensure: got false") if tap.false?
+          # Jumps at some instruction pointer.
+          when :J
+            jump anchor
+          # Jumps at some instruction pointer if popped true:
+          # (x1 --)
+          when :JIT
+            jump anchor unless pop.false?
+          # Jumps at some instruction pointer if popped false:
+          # (x1 --)
+          when :JIF
+            jump anchor if pop.false?
+          # Jumps at some instruction pointer if tapped true;
+          # pops otherwise:
+          #   - (true -- true)
+          #   - (false --)
+          when :JIT_ELSE_POP
+            tap.false? ? pop : jump anchor
+          # Jumps at some instruction pointer if tapped false;
+          # pops otherwise:
+          #   - (true --)
+          #   - (false -- false)
+          when :JIF_ELSE_POP
+            tap.false? ? jump anchor : pop
+          # Pops and assigns it to a symbol: (x1 --)
+          when :POP_ASSIGN
+            @context[symbol] = pop
+          # Taps and assigns it to a symbol: (x1 -- x1)
+          when :TAP_ASSIGN
+            @context[symbol] = tap
+          # Makes whole stack a vector: (... -- [...])
           when :REM_TO_VEC
-            put vec (pop stack.size)
-          # ...types --
+            put vec pop(stack.size)
+          # Defines a function. Requires the values of the
+          # given appendix to be on the stack; it pops them.
           when :FUN
-            code = @chunks[argument Int32]
-            name = code.name
-            given = code.meta.as(Metadata::Function).given
-            types = pop given
-            defee = MConcreteFunction.new(types, code)
-
-            case existing = @context[name]?
-            when MGenericFunction
-               existing.add(defee)
-            when MFunction
-              if existing != defee
-                @context[name] = MGenericFunction
-                  .new(name)
-                  .add!(existing)
-                  .add!(defee)
-              end
-            else
-              @context[name] = defee
-            end
-          # a ...b -- a
+            defun(myself = function, pop myself.given)
+          # If *x1* is a fun, invokes it. If a vec/str, indexes
+          # it: (x1 a1 a2 a3 -- R), where *aN* is an argument,
+          # and R is the returned value.
           when :CALL
-            args, callee = pop(argument Int32), pop
+            args = pop static(Int32)
 
-            case callee
+            case callee = pop
             when Vec, Str
-              items = args.map do |index|
-                if !index.is_a?(Num)
-                  die("improper item index value: #{index}")
-                elsif index.value >= callee.size
-                  die("item index out of bounds: #{index}")
-                end
-
-                callee[index.value.to_i]
-              end
-
-              put (items.size == 1 ? items.first : vec items)
+              put nth(callee, args.size == 1 ? args.first : args)
             when MFunction
-              index = -1
-              found = false
-              count = args.size
-              current = callee
+              found = variant?(callee, args)
 
-              until found
-                if callee.is_a?(MGenericFunction)
-                  # Break if we're at the end of the variant
-                  # list.
-                  break if index >= callee.size - 1
-
-                  current = callee[index += 1]
-                end
-
-                if current.is_a?(MConcreteFunction)
-                  arity = current.arity
-                  slurpy = current.slurpy
-                  found =
-                    ((slurpy && count >= arity) ||
-                    (!slurpy && count == arity)) &&
-                    typecheck(current.types, args)
-                elsif current.is_a?(MBuiltinFunction)
-                  arity = current.arity
-                  found = count == arity
-                end
-
-                # If index is -1 at this point, we're certainly
-                # not an MGenericFunction. Thus, if found is false,
-                # the function that the user asked for was not
-                # found.
-                break if index == -1 && !found
-              end
-
-              if !found
+              if found.is_a?(MConcreteFunction)
+                invoke(found.code, args.reverse!)
+              elsif found.is_a?(MBuiltinFunction)
+                put found.callee.call(self, args)
+              else
                 die("improper arguments for #{callee}: #{args.join(", ")}")
-              elsif current.is_a?(MBuiltinFunction)
-                put current.callee.call(self, args)
-              elsif current.is_a?(MConcreteFunction)
-                invoke(current.code, args.reverse!)
               end
             else
               die("illegal callee: #{callee}")
             end
-          # a --> a
+          # Returns from a function. Exports exactly one last
+          # value from the function's stack.
           when :RET
             unless revoke(export: true)
               die("void functions illegal")
             end
+          # Brings a value to the underscores stack:
+          #   S: (x1 --) ==> _: (-- x1)
           when :UPUT
-            frame.underscores << pop
+            underscores << pop
+          # Brings a value from the underscores stack:
           when :UPOP
-            if frame.underscores.empty?
-              die("void pop from context")
-            end
-
-            put frame.underscores.pop
+            put underscores.pop? || die("'_': no contextual")
+          # Brings a copy of a value from the underscores stack:
           when :UREF
-            if frame.underscores.empty?
-              die("void reference to context")
-            end
-
-            put frame.underscores.last
-          when :SETUP_MAP
-            frame.control << tap.as(Vec).size
-            frame.control << argument Int32
-            frame.control << 0
-
-            put Vec.new
+            put underscores.last? || die("'&_': no contextual")
+          # Prepares for a series of `MAP_ITER`s on a vector.
+          when :MAP_SETUP
+            control << tap.length << 0 << stack.size - 2
+          # It is executed each map iteration. Assumes:
+          #   - that control[-2] is the index, and
+          #   - control[-3] is the length of the iteratee;
           when :MAP_ITER
-            if frame.control[-1] >= frame.control[-3]
-              _, stop, _ = frame.control.pop(3)
-
-              jump stop
+            if control[-2] >= control[-3]
+              control.pop(3) && jump anchor
             end
 
-            frame.underscores << frame.stack[-2].as(Vec)[frame.@control[-1]]
-            frame.control[-1] += 1
+            control[-2] += 1
+          # A variation of "&" exclusive to maps. Assumes
+          # the last value of the control stack is a stack
+          # pointer to the destination vector.
+          when :MAP_APPEND
+            stack[control.last].as(Vec) << pop
+          # Reduces a vector using a binary operator: ([...] -- x1)
+          when :REDUCE
+            put reduce(static, pop.as Vec)
           else
             raise InternalError.new("unknown opcode: #{this.opcode}")
           end
@@ -593,20 +721,12 @@ module Ven
           jump
         end
 
-        # Record the current instruction in the timetable.
-        if @timetable.dig?(c_id = chunk.hash, this)
-          @timetable[c_id][this] += time
-        elsif it = @timetable[c_id]?
-          it[this] = time
-        else
-          @timetable[c_id] = { this => time }
+        if @measure
+          record!(this, duration)
         end
-      end
 
-      # Print the remnants if the user wished so.
-      if remnants
-        @frames.each do |frame|
-          puts "Remnant frame:", frame
+        if @inspect
+          @inspect = inspector
         end
       end
     end

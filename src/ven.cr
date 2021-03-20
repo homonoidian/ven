@@ -81,6 +81,9 @@ module Ven
 
       m = Machine.new(chunks, @context)
 
+      m.inspect = @debug
+      m.measure = @timetable
+
       if @quiet == 0
         chunks.each_with_index do |chunk, index|
           puts "(#{index}) #{chunk}\n"
@@ -88,7 +91,7 @@ module Ven
       end
 
       mt = Time.measure do
-        m.start(@debug)
+        m.start
       end
 
       if @timetable
@@ -96,11 +99,11 @@ module Ven
           puts "[#{c_id}]:"
 
           instructions.each do |instruction, time|
-            took = "#{time.microseconds}qs"
-            puts "  #{took.ljust(10)} #{instruction}"
+            took = "#{time[0]} x #{time[1].microseconds}qs"
+            puts "  #{took.ljust(16)} #{instruction}"
           end
 
-          total = instructions.values.sum.milliseconds
+          total = instructions.values.sum(&.[1]).milliseconds
           puts "(total: #{total}ms)"
         end
       end
