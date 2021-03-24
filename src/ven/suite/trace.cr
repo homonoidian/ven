@@ -1,6 +1,6 @@
 module Ven::Suite
-  # A `Trace` is left when a blob of code decides to be
-  # remembered in an error message or whatnot.
+  # Represents an individual trace entry in an error's
+  # traceback.
   struct Trace
     getter file : String
     getter line : UInt32

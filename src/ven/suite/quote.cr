@@ -158,15 +158,14 @@ module Ven::Suite
   defquote(QEnsure, expression : Quote)
   defquote(QQueue, value : Quote)
 
-  defquote(QInfiniteLoop, body : Quotes)
-  defquote(QBaseLoop, base : Quote, body : Quotes)
-  defquote(QStepLoop, base : Quote, step : Quote, body : Quotes)
+  defquote(QInfiniteLoop, repeatee : Quote)
+  defquote(QBaseLoop, base : Quote, repeatee : Quote)
+  defquote(QStepLoop, base : Quote, step : Quote, repeatee : Quote)
   defquote(QComplexLoop,
     start : Quote,
     base : Quote,
-    pres : Quotes,
     step : Quote,
-    body : Quotes)
+    repeatee : Quote)
 
   defquote(QExpose, pieces : Array(String))
   defquote(QDistinct, pieces : Array(String))

@@ -1,247 +1,202 @@
-require "big"
-
 module Ven::Suite
-  # Represents a static data argument.
-  alias DStatic = Int32 | BigDecimal | String
-
-  # Represents a symbolic argument with some *name* and *nesting*.
-  struct DSymbol
-    getter name : String
-    getter nesting : Int32
-
-    def initialize(@name, @nesting)
-    end
-
-    def to_s(io)
-      io << "symbol " << @name << "#" << @nesting
-    end
-  end
-
-  # Represents a jump to some instruction pointer.
-  #
-  # The compiler inserts it automatically at `delabel` stage.
-  # There is no need to use DJump explicitly.
-  struct DJump
-    getter anchor : Int32
-
-    def initialize(@anchor)
-    end
-
-    def to_s(io)
-      io << "to " << @anchor
-    end
-  end
-
-  # Represents a function argument.
-  class DFunction
-    getter name : String
-
-    property chunk : Int32
-    property given : Int32
-    property arity : Int32
-    property slurpy : Bool
-    property params : Array(String)
-
-    def initialize(@name)
-      @chunk = uninitialized Int32
-      @given = uninitialized Int32
-      @arity = uninitialized Int32
-      @slurpy = uninitialized Bool
-      @params = uninitialized Array(String)
-    end
-
-    def to_s(io)
-      io << "fun " << @name << "@" << @chunk
-    end
-  end
-
-  # A chunk is a blob of instructions, static data, symbols
-  # and functions.
+  # A chunk is an abstraction over a collection of `Snippet`s.
   class Chunk
-    # Records which opcode takes what kind of argument.
-    @@takes = {} of Symbol => Symbol
-
     getter file : String
     getter name : String
 
-    getter code : Array(Instruction)
-    getter jumps : Array(DJump)
-    getter static : Array(DStatic)
-    getter symbols : Array(DSymbol)
-    getter functions : Array(DFunction)
+    getter snippets
+    getter seamless
 
-    @index = 0
+    # The payload storages of this chunk: all jumps, symbols,
+    # static data and functions end up here.
+    @jumps = [] of VJump
+    @symbols = [] of VSymbol
+    @statics = [] of VStatic
+    @functions = [] of VFunction
 
     def initialize(@file, @name)
-      @code = [] of Instruction
-      @label = {} of Label => Int32
-      @jumps = [] of DJump
-      @static = [] of DStatic
-      @symbols = [] of DSymbol
-      @functions = [] of DFunction
+      @snippets = [Snippet.core]
+      @seamless = [] of Instruction
     end
 
-    delegate :[], :size, to: @code
+    # These are only used by the Machine, and the Machine does
+    # not (and should not) know anything about snippets. So,
+    # redirect to seamless.
+    delegate :[], :size, to: @seamless
 
-    # Returns the offset of an *argument* in a *container*.
-    private def offset?(argument : DStatic, in container : Array(DStatic))
-      found = container.index do |item|
-        argument.class == item.class && item == argument
-      end
-
-      unless found
-        container << argument
-      end
-
-      found || container.size - 1
+    # Returns the snippet we currently emit to.
+    private macro snippet
+      @snippets.last
     end
 
-    # :ditto:
-    private def offset?(argument : T, in container : Array(T)) forall T
-      container.index(argument) || (container << argument).size - 1
+    # Appends *value* to *target* and returns its index there.
+    private macro append(target, value)
+      ({{target}} << {{value}}).size - 1
     end
 
-    # Appends an instruction and increments the index counter.
-    #
-    # Returns true.
-    private def add!(opcode : Symbol, offset : Int32?, line : UInt32)
-      @code << Instruction.new(@index, opcode, offset, line)
-      @index += 1
-
-      true
+    # Returns the offset of *argument* in the appropriate
+    # payload storage, if it is there already. Otherwise,
+    # adds *argument* to the appropriate payload storage
+    # first, and then returns the resulting offset.
+    def offset(argument : VJump)
+      @jumps.index(argument) || append(@jumps, argument)
     end
 
     # :ditto:
-    private def add!(opcode, label : Label, line)
-      @code << Instruction.new(@index, opcode, label, line)
-      @index += 1
-
-      true
+    def offset(argument : VStatic)
+      @statics.index(argument) || append(@statics, argument)
     end
 
-    # Appends an argumentless instruction.
-    def add(opcode : Symbol, argument : Nil, line : UInt32)
-      add!(opcode, nil, line)
+    # :ditto:
+    def offset(argument : VSymbol)
+      @symbols.index(argument) || append(@symbols, argument)
     end
 
-    # Appends an instruction whose *argument* is `DStatic`.
-    #
-    # Saves *argument* in this chunk's statics, if not there
-    # already.
-    def add(opcode, argument : DStatic, line)
-      @@takes[opcode] = :static
-
-      add!(opcode, offset?(argument, in: @static), line)
+    # :ditto:
+    def offset(argument : VFunction)
+      @functions.index(argument) || append(@functions, argument)
     end
 
-    # Appends an instruction whose *argument* is `DSymbol`.
-    #
-    # Saves *argument* in this chunk's symbols, if not there
-    # already.
-    def add(opcode, argument : DSymbol, line)
-      @@takes[opcode] = :symbol
-
-      add!(opcode, offset?(argument, in: @symbols), line)
+    # :ditto:
+    def offset(argument : Static)
+      offset VStatic.new(argument)
     end
 
-    # Appends an instruction whose *argument* is `DFunction`.
-    #
-    # Saves *argument* in this chunk's functions, if not there
-    # already.
-    def add(opcode, argument : DFunction, line)
-      @@takes[opcode] = :function
-
-      add!(opcode, offset?(argument, in: @functions), line)
+    # :ditto:
+    def offset(argument : Nil)
+      nil
     end
 
-    # Appends an instruction whose  *argument* is `Label`.
+    # Appends an instruction given its *opcode*, *argument*
+    # and *line* number.
+    def add(opcode : Opcode, argument : Payload, line : UInt32)
+      snippet.add(opcode, offset(argument), line)
+    end
+
+    # :ditto:
     def add(opcode, argument : Label, line)
-      @@takes[opcode] = :jump
-
-      add!(opcode, argument, line)
+      snippet.add(opcode, argument, line)
     end
 
-    # Declares *label* at the emission offset.
-    #
-    # Returns true.
+    # :ditto:
+    def add(opcode, argument, line)
+      snippet.add(opcode, offset(argument), line)
+    end
+
+    # Declares that whatever follows should be emitted under
+    # the label *label*.
     def label(label : Label)
-      @label[label] = @code.size
-
-      true
+      @snippets << Snippet.new(label)
+      label.target = @snippets.size - 1
     end
 
-    # Resolves the labels in this chunk.
+    # Returns the payload vehicle this instruction references,
+    # or nil if it doesn't reference one.
+    def resolve?(instruction : Instruction)
+      return nil unless argument = instruction.argument
+
+      case instruction.opcode.payload
+      when :jump
+        @jumps[argument]
+      when :static
+        @statics[argument]
+      when :symbol
+        @symbols[argument]
+      when :function
+        @functions[argument]
+      end
+    end
+
+    # Returns the payload vehicle this instruction references.
+    # Raises if it doesn't reference one.
+    def resolve(instruction : Instruction)
+      resolve?(instruction) || raise "Chunk.resolve(): #{instruction}"
+    end
+
+    # Stitches this chunk.
+    #
+    # Stitching is the process of merging many snippets of
+    # instructions into one seamless blob.
+    #
+    # As labels that reference snippets lose their meaning
+    # with no snippets there, the references to snippets are
+    # changed to the offsets of snippets' first instructions.
     #
     # Returns true.
-    def delabel
-      @code.each_with_index do |instruction, index|
-        label = instruction.label || next
-
-        unless anchor = @label[label]?
-          raise "this label was never declared: #{label}"
-        end
-
-        jump_offset = offset?(DJump.new(anchor), in: @jumps)
-
-        @code[index] =
-          Instruction.new(
-            instruction.index,
-            instruction.opcode,
-            jump_offset,
-            instruction.line)
+    def stitch
+      @snippets.each do |snippet|
+        snippet.label.target = @seamless.size
+        @seamless += snippet.code
       end
 
       true
     end
 
-    # Tries to resolve the argument of an *instruction* off
-    # this chunk's static data, symbols or functions.
+    # Replaces all labels in seamless with the appropriate
+    # jumps (see `VJump`).
     #
-    # Returns the referencee if succeeded, or nil if did not.
-    def resolve(instruction : Instruction, kind = :static)
-      if offset = instruction.argument
-        case kind
-        when :jump
-          @jumps[offset]
-        when :static
-          @static[offset]
-        when :symbol
-          @symbols[offset]
-        when :function
-          @functions[offset]
+    # Returns true.
+    def jumpize
+      @seamless.map! do |instruction|
+        line, opcode = instruction.line, instruction.opcode
+
+        if target = instruction.label.try(&.target)
+          Instruction.new(opcode, offset(VJump.new target), line)
         else
-          raise "malformed resolve() kind"
+          Instruction.new(opcode, instruction.argument, line)
         end
       end
+
+      true
     end
 
-    # Disassembles an *instruction*. If *point* is true,
-    # prepends the disassembly with `>>>`.
-    def dis(instruction : Instruction, point = false)
-      String.build do |str|
-        str << (point ? ">>> #{instruction}" : instruction)
+    # Stitches and jumpizes this chunk.
+    def complete!
+      stitch && jumpize
 
-        if kind = @@takes[instruction.opcode]?
-          str << " (" << resolve(instruction, kind) << ")"
+      self
+    end
+
+    # Disassembles an *instruction*, trying to resolve its
+    # argument with the payload storage of this chunk. If
+    # got an *index*, prints it before the instruction.
+    def to_s(io : IO, instruction : Instruction, index : Int32? = nil)
+      argument = resolve?(instruction)
+
+      io << sprintf("%05d", index) << "| " if index
+      io << instruction
+      io << " (" << argument << ")" if argument
+    end
+
+    # Disassembles seamless if available, otherwise snippets.
+    def to_s(io : IO, deepen = 2)
+      io << @name << " {\n"
+
+      unless @seamless.empty?
+        @seamless.each_with_index do |instruction, index|
+          io << " " * deepen; to_s(io, instruction, index); io << "\n"
+        end
+      else
+        @snippets.each do |snippet|
+          io << " " * deepen << snippet.label << ":\n"
+
+          snippet.code.each do |instruction|
+            io << " " * (deepen * 2); to_s(io, instruction); io << "\n"
+          end
         end
       end
+
+      io << "}\n"
     end
 
-    # Disassembles whole chunk. If *point_at* is provided,
-    # `>>>` is going to be printed before the correspoding
-    # instruction.
-    def dis(point_at : Int32? = nil)
-      String.build do |str|
-        str << @name << ":\n"
-
-        @code.each_with_index do |instruction, index|
-          str << dis(instruction, point_at == index) << "\n"
-        end
-      end
+    # Disassembles an *instruction* given no IO (see `to_s(io, instruction)`).
+    def to_s(instruction : Instruction, index : Int32? = nil)
+      String.build { |io| to_s(io, instruction, index) }
     end
 
-    def to_s(io)
-      io << dis
+    # Disassembles this chunk given no IO (see `to_s(io)`)
+    def to_s
+      String.build { |io| to_s(io) }
     end
   end
 

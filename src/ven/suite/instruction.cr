@@ -1,20 +1,22 @@
 module Ven::Suite
-  # An individual bytecode instruction.
+  # A bytecode instruction.
+  #
+  # It can accept an argument, which may be either a label
+  # or a data offset pointing to a payload vehicle.
   struct Instruction
     getter line : UInt32
-    getter index : Int32
     getter label : Label?
-    getter opcode : Symbol
+    getter opcode : Opcode
     getter argument : Int32?
 
-    def initialize(@index, @opcode, @label : Label?, @line)
+    def initialize(@opcode, @argument : Int32?, @line)
     end
 
-    def initialize(@index, @opcode, @argument : Int32, @line)
+    def initialize(@opcode, @label : Label, @line)
     end
 
     def to_s(io)
-      io << sprintf("%05d", @index) << "| " << @opcode << " " << (@argument || @label)
+      io << @opcode << " " << (@argument || @label)
     end
   end
 end

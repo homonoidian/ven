@@ -69,12 +69,12 @@ module Ven
       @context.lookup(%symbol = {{symbol}}) || die("symbol not found: #{%symbol}")
     end
 
-    # A shorthand for `DSymbol.new(...)`.
+    # A shorthand for `VSymbol.new(...)`.
     private macro symbol(name, nesting = nil)
       {% if nesting %}
-        DSymbol.new({{name}}, {{nesting}})
+        VSymbol.new({{name}}, {{nesting}})
       {% else %}
-        DSymbol.new(%name = {{name}}, lookup %name)
+        VSymbol.new(%name = {{name}}, lookup %name)
       {% end %}
     end
 
@@ -87,28 +87,34 @@ module Ven
       symbol(%symbol, %nesting)
     end
 
+    # Returns the result of this compiler's work: an array of
+    # unoptimized, snippeted chunks.
+    def result
+      @chunks
+    end
+
     def visit!(q : QSymbol)
-      emit :SYM, symbol(q.value)
+      emit Opcode::SYM, symbol(q.value)
     end
 
     def visit!(q : QNumber)
-      emit :NUM, q.value
+      emit Opcode::NUM, q.value
     end
 
     def visit!(q : QString)
-      emit :STR, q.value
+      emit Opcode::STR, q.value
     end
 
     def visit!(q : QVector)
-      emit :VEC, visit(q.items)
+      emit Opcode::VEC, visit(q.items)
     end
 
     def visit!(q : QUPop)
-      emit :UPOP
+      emit Opcode::UPOP
     end
 
     def visit!(q : QURef)
-      emit :UREF
+      emit Opcode::UREF
     end
 
     def visit!(q : QUnary)
@@ -116,12 +122,12 @@ module Ven
 
       opcode =
         case q.operator
-        when "+" then :TON
-        when "-" then :NEG
-        when "~" then :TOS
-        when "#" then :LEN
-        when "&" then :TOV
-        when "not" then :TOIB
+        when "+" then Opcode::TON
+        when "-" then Opcode::NEG
+        when "~" then Opcode::TOS
+        when "#" then Opcode::LEN
+        when "&" then Opcode::TOV
+        when "not" then Opcode::TOIB
         end
 
       emit opcode
@@ -130,86 +136,100 @@ module Ven
     def visit!(q : QBinary)
       visit([q.left, q.right])
 
-      emit :BINARY, q.operator
+      emit Opcode::BINARY, q.operator
     end
 
     def visit!(q : QAssign)
       visit(q.value)
 
-      emit :TAP_ASSIGN, assign(q.target, q.global)
+      emit Opcode::TAP_ASSIGN, assign(q.target, q.global)
     end
 
     def visit!(q : QCall)
       visit(q.callee)
 
-      emit :CALL, visit(q.args)
+      emit Opcode::CALL, visit(q.args)
     end
 
     def visit!(q : QIntoBool)
       visit(q.value)
 
-      emit :TOB
+      emit Opcode::TOB
     end
 
     def visit!(q : QReturnIncrement)
       symbol = symbol(q.target)
 
-      emit :SYM, symbol
-      emit :DUP
-      emit :TON
-      emit :INC
-      emit :SET, symbol
+      emit Opcode::SYM, symbol
+      emit Opcode::DUP
+      emit Opcode::TON
+      emit Opcode::INC
+      emit Opcode::POP_ASSIGN, symbol
     end
 
     def visit!(q : QReturnDecrement)
       symbol = symbol(q.target)
 
-      emit :SYM, symbol
-      emit :DUP
-      emit :TON
-      emit :DEC
-      emit :SET, symbol
+      emit Opcode::SYM, symbol
+      emit Opcode::DUP
+      emit Opcode::TON
+      emit Opcode::DEC
+      emit Opcode::POP_ASSIGN, symbol
     end
 
     def visit!(q : QBinarySpread)
       visit(q.operand)
-      emit :TOV
-      emit :REDUCE, q.operator
+      emit Opcode::TOV
+      emit Opcode::REDUCE, q.operator
     end
 
     def visit!(q : QLambdaSpread)
       stop = label?
       start = label?
 
-      emit :VEC, 0
+      emit Opcode::VEC, 0
       visit(q.operand)
-      emit :MAP_SETUP
+      emit Opcode::MAP_SETUP
 
       label start
-      emit :MAP_ITER, stop
+      emit Opcode::MAP_ITER, stop
       visit(q.lambda)
-      emit :MAP_APPEND
-      emit :J, start
+      emit Opcode::MAP_APPEND
+      emit Opcode::J, start
 
       label stop
-      emit :POP
+      emit Opcode::POP
+    end
+
+    def visit!(q : QBlock)
+      offset = chunk "<block>" do
+        visit(q.body)
+
+        emit Opcode::RET
+      end
+
+      emit Opcode::GOTO, offset
     end
 
     def visit!(q : QEnsure)
       visit(q.expression)
 
-      emit :ENS
+      emit Opcode::ENS
     end
 
     def visit!(q : QFun)
+      given = uninitialized Int32
+      arity = uninitialized Int32
+      slurpy = uninitialized Bool
+      params = uninitialized Array(String)
+      target = uninitialized Int32
+
       repeat = false
-      offset = uninitialized Int32
-      function = DFunction.new(q.name)
 
       # Emit the 'given' values.
       q.params.zip?(q.given) do |_, given|
         if !given && !repeat
-          emit :SYM, symbol("any", 0)
+          emit Opcode::SYM, symbol("any", 0)
         elsif !given
           visit q.given.last
         elsif repeat = true
@@ -222,47 +242,105 @@ module Ven
 
       @context.trace(q.tag, q.name) do
         @context.child do |nesting|
-          function.chunk = chunk q.name do
+          target = chunk q.name do
             params = q.params
             onymous = params.reject("*")
 
-            function.given = params.size
-            function.arity = onymous.size
-            function.slurpy = q.slurpy
-            function.params = params
+            given = params.size
+            arity = onymous.size
+            slurpy = q.slurpy
 
             onymous.each do |parameter|
               @context.let(parameter)
 
-              emit :POP_ASSIGN, symbol(parameter, nesting)
+              emit Opcode::POP_ASSIGN, symbol(parameter, nesting)
             end
 
             # Slurpies eat the rest of the stack's values. It
             # must, however, be proven that the slurpie (`*`)
             # is at the end of the function's parameters.
             if q.slurpy
-              emit :REM_TO_VEC
-              emit :POP_ASSIGN, symbol("rest", nesting)
+              emit Opcode::REM_TO_VEC
+              emit Opcode::POP_ASSIGN, symbol("rest", nesting)
             end
 
             visit q.body
 
-            emit :RET
+            emit Opcode::RET
           end
         end
       end
 
-      emit :FUN, function
+      emit Opcode::FUN, VFunction.new(q.name, target, params, given, arity, slurpy)
     end
 
-    # Finalizes the process of compilation. Returns the
-    # resulting chunks.
-    def compile : Chunks
-      @chunks.each do |chunk|
-        chunk.delabel
-      end
+    # A note on infinite (and other) loops: they clear the
+    # stack after each iteration. This prevents the stack
+    # from flooding, if such a thing even occurs (e.g. `loop 1`).
+    def visit!(q : QInfiniteLoop)
+      start = label?
 
-      @chunks
+      label start
+      visit(q.repeatee)
+      emit Opcode::POP # q.body is QBlock => only 1 value exported
+      emit Opcode::J, start
+    end
+
+    # Base loops, step loops and complex loops return false
+    # if there were no iterations; otherwise, they return
+    # the result of the last iteration.
+    def visit!(q : QBaseLoop)
+      stop = label?
+      start = label?
+
+      label start
+      visit(q.base)
+      emit Opcode::JIF, stop
+      emit Opcode::TRY_POP # # previous q.repeatee
+      visit(q.repeatee)
+      emit Opcode::J, start
+
+      label stop
+      emit Opcode::FALSE_IF_EMPTY
+    end
+
+    # :ditto:
+    def visit!(q : QStepLoop)
+      stop = label?
+      start = label?
+
+      label start
+      visit(q.base)
+      emit Opcode::JIF, stop
+      emit Opcode::TRY_POP # previous q.repeatee
+      visit(q.repeatee)
+      visit(q.step)
+      emit Opcode::POP # q.step
+      emit Opcode::J, start
+
+      label stop
+      emit Opcode::FALSE_IF_EMPTY
+    end
+
+    # :ditto:
+    def visit!(q : QComplexLoop)
+      stop = label?
+      start = label?
+
+      visit(q.start)
+      emit Opcode::POP # q.start
+
+      label start
+      visit(q.base)
+      emit Opcode::JIF, stop
+      emit Opcode::TRY_POP # previous q.repeatee
+      visit(q.repeatee)
+      visit(q.step)
+      emit Opcode::POP # q.step
+      emit Opcode::J, start
+
+      label stop
+      emit Opcode::FALSE_IF_EMPTY
     end
   end
 end

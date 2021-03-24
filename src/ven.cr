@@ -11,6 +11,7 @@ module Ven
 
     @quiet = 0
     @debug = false
+    @passes = 8
     @timetable = false
 
     def initialize
@@ -77,36 +78,64 @@ module Ven
         end
       end
 
-      chunks = compiler.compile
+      chunks = compiler.result
+
+      if @quiet == 0
+        puts "preopt:"
+
+        chunks.each do |chunk|
+          puts chunk
+        end
+      end
+
+      opt = Optimizer.new(chunks)
+      opt.optimize(@passes)
+
+      chunks.each do |chunk|
+        chunk.complete!
+
+        if @quiet == 0
+          puts "POSTOPT:", chunk
+        end
+      end
 
       m = Machine.new(chunks, @context)
 
       m.inspect = @debug
       m.measure = @timetable
 
-      if @quiet == 0
-        chunks.each_with_index do |chunk, index|
-          puts "(#{index}) #{chunk}\n"
-        end
-      end
+      # # if @quiet == 0
+      # #   puts "after opt:"
+      # #   chunks.each_with_index do |chunk, index|
+      # #     puts "(#{index}) #{chunk}\n"
+      # #   end
+      # # end
 
       mt = Time.measure do
         m.start
       end
 
-      if @timetable
-        m.timetable.each do |c_id, instructions|
-          puts "[#{c_id}]:"
+      total = 0
 
-          instructions.each do |instruction, time|
-            took = "#{time[0]} x #{time[1].microseconds}qs"
-            puts "  #{took.ljust(16)} #{instruction}"
-          end
+      # if @timetable
+      #   m.timetable.each do |c_id, instructions|
+      #     puts "[#{c_id}]:"
 
-          total = instructions.values.sum(&.[1]).milliseconds
-          puts "(total: #{total}ms)"
-        end
-      end
+      #     instructions.each_value do |time|
+      #       took = "#{time[:amount]} x #{time[:duration].microseconds}us"
+      #       puts "  #{took.ljust(16)} #{time[:instruction]}"
+      #     end
+
+      #     total += instructions.values.sum(&.[:duration].microseconds)
+      #   end
+
+      #   puts "(total MT (machine time): #{mt.milliseconds}ms)"
+
+      #   if total
+      #     puts "(total IT (instruction time): #{total / 1_000}ms)"
+      #         #  "(MT - IT = #{(mt - total).milliseconds}ms)"
+      #   end
+      # end
 
       if @quiet <= 1
         puts m.result?
@@ -183,6 +212,10 @@ module Ven
 
         parser.on "-d", "--debug", "Enable step-by-step mode" do
           @debug = true
+        end
+
+        parser.on "-O level", "--optimize level", "Set optimization level" do |level|
+          @passes = 8 * level.to_i
         end
 
         parser.unknown_args do |args|

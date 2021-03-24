@@ -1,5 +1,5 @@
 module Ven::Suite::Context
-  # A subset of context for the compiler (see `Ven::Compiler`).
+  # The context for the compiler.
   #
   # The compiler uses context to determine the nesting of a
   # symbol and/or check if a symbol exists.
@@ -13,33 +13,37 @@ module Ven::Suite::Context
       @scopes = [Scope.new]
     end
 
-    # Returns the nesting of a *symbol*, if it exists.
+    # Returns the nest of a *symbol* if it exists, or nil if
+    # it does not.
     def lookup(symbol : String)
-      @scopes.reverse_each.with_index do |scope, nesting|
+      @scopes.reverse_each.with_index do |scope, depth|
         if scope.has_key?(symbol)
-          # *nesting* is index from the end. We need index
-          # from the start.
-          return (@scopes.size - 1) - nesting
+          # *depth* is from the end, but we need it from the
+          # start.
+          return @scopes.size - depth - 1
         end
       end
     end
 
-    # Declares that *symbol* exists in the local scope, and
-    # that it is local.
+    # Declares that a local *symbol* exists in the localmost
+    # scope.
     def let(symbol : String)
       @scopes[-1][symbol] = false
     end
 
-    # Emulates a global lookup assignment to *symbol*.
+    # Emulates a lookup assignment to *symbol*. Returns the
+    # resulting nest.
     #
-    # Returns the nesting of the scope *symbol* was assigned
-    # (or defined) in.
-    #
-    # *global* determines whether, if globality lookup found
-    # nothing, to define a global or local symbol.
+    # A lookup assignment is when we literally look up: we
+    # check if there is a symbol in the parent scopes that
+    # has the same name as this one, and whose *global* is
+    # true. If found such one, "assign" to it. If didn't,
+    # make a new entry in the localmost scope.
     def assign(symbol : String, global = false)
       @scopes.each_with_index do |scope, nesting|
-        return nesting if scope.has_key?(symbol) && scope[symbol]
+        if scope.has_key?(symbol) && scope[symbol]
+          return nesting
+        end
       end
 
       @scopes[-1][symbol] = global
@@ -47,7 +51,7 @@ module Ven::Suite::Context
       @scopes.size - 1
     end
 
-    # Traces the block during its execution.
+    # Adds a trace for the block.
     def trace(tag : QTag, name : String)
       @traces << Trace.new(tag, name)
 
@@ -59,7 +63,7 @@ module Ven::Suite::Context
     end
 
     # Evaluates the block inside a child scope. Passes the
-    # nesting of the child scope to the block.
+    # depth of the child scope to the block.
     def child(& : Int32 ->)
       @scopes << Scope.new
 
@@ -74,7 +78,7 @@ module Ven::Suite::Context
     end
   end
 
-  # A subset of context for the virtual machine (see `Ven::Machine`).
+  # The context for the Machine.
   class Machine
     private alias Scope = Hash(String, Model)
 
@@ -88,24 +92,24 @@ module Ven::Suite::Context
       @scopes[-1][entry]
     end
 
-    def [](entry : DSymbol)
-      @scopes[entry.nesting][entry.name]
+    def [](entry : VSymbol)
+      @scopes[entry.nest][entry.name]
     end
 
     def []?(entry : String)
       @scopes[-1][entry]?
     end
 
-    def []?(entry : DSymbol)
-      @scopes[entry.depth][entry.name]?
+    def []?(entry : VSymbol)
+      @scopes[entry.nest][entry.name]?
     end
 
     def []=(entry : String, value : Model)
       @scopes[-1][entry] = value
     end
 
-    def []=(entry : DSymbol, value : Model)
-      @scopes[entry.nesting][entry.name] = value
+    def []=(entry : VSymbol, value : Model)
+      @scopes[entry.nest][entry.name] = value
     end
 
     # Loads an *extension* into this context.

@@ -252,7 +252,7 @@ module Ven
         start : Quote?
         base : Quote?
         step : Quote?
-        body : Quotes
+        body : QBlock
 
         pres = Quotes.new
 
@@ -263,31 +263,30 @@ module Ven
           when 0
             # (pass)
           when 1
-            base = head.first
+            base = head[0]
           when 2
             base, step = head[0], head[1]
           when 3
             start, base, step = head[0], head[1], head[2]
           else
-            start, base, pres, step = head.first, head[1], head[2..-2], head.last
+            parser.die("malformed loop setup")
           end
         end
 
-        body =
-          if parser.word!("{")
-            block(parser, opening: false)
-          else
-            @semicolon, _ = true, [parser.led]
-          end
+        repeatee = parser.led
+
+        if repeatee.is_a?(QBlock)
+          @semicolon = false
+        end
 
         if start && base && step
-          QComplexLoop.new(tag, start, base, pres, step, body)
+          QComplexLoop.new(tag, start, base, step, repeatee)
         elsif base && step
-          QStepLoop.new(tag, base, step, body)
+          QStepLoop.new(tag, base, step, repeatee)
         elsif base
-          QBaseLoop.new(tag, base, body)
+          QBaseLoop.new(tag, base, repeatee)
         else
-          QInfiniteLoop.new(tag, body)
+          QInfiniteLoop.new(tag, repeatee)
         end
       end
     end
