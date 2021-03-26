@@ -4,17 +4,28 @@ module Ven
   class Machine
     include Suite
 
+    alias Timetable = Hash(UInt64, IStatistics)
+    alias IStatistics = Hash(Int32, IStatistic)
+    alias IStatistic = {
+      amount: Int32,
+      duration: Time::Span,
+      instruction: Instruction
+    }
+
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
     property inspect : Bool
     property measure : Bool
 
+    getter timetable : Timetable
+
     @inspect = false
     @measure = false
 
     def initialize(@chunks : Chunks, @context : Context::Machine)
       @frames = [Frame.new]
+      @timetable = Timetable.new
     end
 
     # Dies of runtime error with *message*, which should explain
@@ -23,30 +34,28 @@ module Ven
       raise RuntimeError.new(chunk.file, fetch.line, message)
     end
 
-    # Records an *instruction* in the timetable.
-    #
-    # The timetable records the duration and the amount of
-    # evaluations of an instruction pointer.
-    #
-    # Returns true.
-    def record!(cp : Int32, ip : Int32, instruction : Instruction, duration : Time::Span)
-      unless entry = @timetable[cp]?
-        @timetable[cp] = TEntry.new
-      end
-
-      unless statistic = @timetable[cp][ip]?
-        @timetable[cp][ip] =
-          { amount: 1,
+    def record!(chunk_id : UInt64, ip : Int32, instruction : Instruction, duration : Time::Span)
+      if !(statistics = @timetable[chunk_id]?)
+        @timetable[chunk_id] = {
+          ip => {
+            amount: 1,
             duration: duration,
-            instruction: instruction }
+            instruction: instruction
+          }
+        }
+      elsif !(statistic = statistics[ip]?)
+        statistics[ip] = {
+          amount: 1,
+          duration: duration,
+          instruction: instruction
+        }
       else
-        @timetable[cp][ip] =
-          { amount: statistic[:amount] + 1,
-            duration: statistic[:duration] + duration,
-            instruction: instruction }
+        statistics[ip] = {
+          amount: statistic[:amount] + 1,
+          duration: statistic[:duration] + duration,
+          instruction: instruction
+        }
       end
-
-      true
     end
 
     # Returns the current frame.
@@ -99,30 +108,30 @@ module Ven
     end
 
     # Returns this instruction's jump payload.
-    private macro target
-      chunk.resolve(fetch).as(VJump).target
+    private macro target(source = this)
+      chunk.resolve({{source}}).as(VJump).target
     end
 
     # Returns this instruction's static payload, making sure
     # it is of type *cast*.
-    private macro static(cast = String)
-      chunk.resolve(fetch).as(VStatic).value.as({{cast}})
+    private macro static(cast = String, source = this)
+      chunk.resolve({{source}}).as(VStatic).value.as({{cast}})
     end
 
     # Returns this instruction's symbol payload.
-    private macro symbol
-      chunk.resolve(fetch).as(VSymbol)
+    private macro symbol(source = this)
+      chunk.resolve({{source}}).as(VSymbol)
     end
 
     # Returns this instruction's function payload.
-    private macro function
-      chunk.resolve(fetch).as(VFunction)
+    private macro function(source = this)
+      chunk.resolve({{source}}).as(VFunction)
     end
 
     # Interprets this instruction's static payload as an
     # offset of a chunk. Returns that chunk.
-    private macro chunk_argument
-      @chunks[static(Int32)]
+    private macro chunk_argument(source = this)
+      @chunks[static(Int32, {{source}})]
     end
 
     # Returns *value* if *condition* is true, and *fallback*
@@ -270,15 +279,13 @@ module Ven
     #
     # Makes the lattermost type cover the excess arguments,
     # if any.
-    #
-    # NOTE: will crash of memory error if *types* is empty.
     def typecheck(types : Models, args : Models) : Bool
-      last = uninitialized Model
+      cover = uninitialized Model
 
       args.zip?(types) do |arg, type|
-        type ? (last = type) : (type = last)
+        cover = type if type
 
-        unless arg.of?(type) || type.eqv?(arg)
+        unless arg.of?(cover) || cover.eqv?(arg)
           return false
         end
       end
@@ -291,53 +298,50 @@ module Ven
     # Tries to normalize if *left*, *right* cannot be used
     # with the *operator*.
     def binary(operator : String, left : Model, right : Model)
-      loop do
-        return case {operator, left, right}
-          when {"is", MBool, MBool}
-            bool left.eqv?(right)
-          when {"is", Str, MRegex}
-            may_be str($0), if: left.value =~ right.value
-          when {"is", _, MType}
-            bool left.of?(right)
-          when {"is", _, MAny}
-            bool true
-          when {"is", _, _}
-            may_be left, if: left.eqv?(right)
-          when {"in", Str, Str}
-            may_be left, if: right.value.includes?(left.value)
-          when {"in", _, Vec}
-            may_be left, if: right.value.any? &.eqv?(left)
-          when {"<", Num, Num}
-            bool left.value < right.value
-          when {">", Num, Num}
-            bool left.value > right.value
-          when {"<=", Num, Num}
-            bool left.value <= right.value
-          when {">=", Num, Num}
-            bool left.value >= right.value
-          when {"+", Num, Num}
-            num left.value + right.value
-          when {"-", Num, Num}
-            num left.value - right.value
-          when {"*", Num, Num}
-            num left.value * right.value
-          when {"/", Num, Num}
-            num left.value / right.value
-          when {"&", Vec, Vec}
-            vec left.value + right.value
-          when {"~", Str, Str}
-            str left.value + right.value
-          when {"x", Vec, Num}
-            vec left.value * right.value.to_big_i
-          when {"x", Str, Num}
-            str left.value * right.value.to_big_i
-          else
-            left, right = normalize(operator, left, right)
-
-            # 'next' vetoes 'return' once, as `normalize`
-            # raises if unable to normalize.
-            next
-          end
+      case {operator, left, right}
+      when {"is", MBool, MBool}
+        bool left.eqv?(right)
+      when {"is", Str, MRegex}
+        may_be str($0), if: left.value =~ right.value
+      when {"is", _, MType}
+        bool left.of?(right)
+      when {"is", _, MAny}
+        bool true
+      when {"is", _, _}
+        # 'is' requires explicit, non-strict (does not die if
+        # failed) normalization.
+        norm = normalize?(operator, left, right)
+        may_be left, if: norm && norm[0].eqv?(norm[1])
+      when {"in", Str, Str}
+        may_be left, if: right.value.includes?(left.value)
+      when {"in", _, Vec}
+        may_be left, if: right.value.any? &.eqv?(left)
+      when {"<", Num, Num}
+        bool left.value < right.value
+      when {">", Num, Num}
+        bool left.value > right.value
+      when {"<=", Num, Num}
+        bool left.value <= right.value
+      when {">=", Num, Num}
+        bool left.value >= right.value
+      when {"+", Num, Num}
+        num left.value + right.value
+      when {"-", Num, Num}
+        num left.value - right.value
+      when {"*", Num, Num}
+        num left.value * right.value
+      when {"/", Num, Num}
+        num left.value / right.value
+      when {"&", Vec, Vec}
+        vec left.value + right.value
+      when {"~", Str, Str}
+        str left.value + right.value
+      when {"x", Vec, Num}
+        vec left.value * right.value.to_big_i
+      when {"x", Str, Num}
+        str left.value * right.value.to_big_i
+      else
+        binary operator, *normalize(operator, left, right)
       end
     rescue DivisionByZeroError
       die("'#{operator}': division by zero given #{left}, #{right}")
@@ -346,9 +350,8 @@ module Ven
     # Normalizes a binary operation (i.e., converts it to its
     # normal form, if any).
     #
-    # Dies if could not convert, or if found no matching
-    # conversion.
-    def normalize(operator : String, left : Model, right : Model)
+    # Returns nil if found no matching conversion.
+    def normalize?(operator : String, left : Model, right : Model)
       case operator
       when "is" then case {left, right}
         when {_, MRegex}
@@ -363,6 +366,8 @@ module Ven
           return left.to_num, right.to_num
         when {_, MBool}, {MBool, _}
           return left.to_bool, right.to_bool
+        else
+          return left, right
         end
       when "x" then case {left, right}
         when {_, Vec}, {_, Str}
@@ -385,10 +390,16 @@ module Ven
       when "&"
         return left.to_vec, right.to_vec
       end
+    rescue ModelCastException
+    end
 
-      die("'#{operator}': could not normalize: #{left}, #{right}")
-    rescue e : ModelCastException
-      die("'#{operator}': #{e.message}: #{left}, #{right}")
+    # Normalizes a binary operation (i.e., converts it to its
+    # normal form).
+    #
+    # Dies if found no matching conversion.
+    def normalize(operator, left, right)
+      normalize?(operator, left, right) ||
+        die("'#{operator}': could not normalize: #{left}, #{right}")
     end
 
     # Properly defines a function based off an *informer* and
@@ -455,36 +466,41 @@ module Ven
       found && current
     end
 
-    # Returns *index*th item of *indexee*.
-    def nth(indexee : Vec, index : Num)
-      if indexee.length <= index.value
-        die("index out of range: #{index}")
+    # Returns *index*th item of *operand*.
+    def nth(operand : Vec, index : Num)
+      if operand.length <= index.value
+        die("indexable: index out of range: #{index}")
       end
 
-      indexee[index.value.to_big_i]
+      operand[index.value.to_big_i]
     end
 
     # :ditto:
-    def nth(indexee : Str, index : Num)
-      if indexee.length <= index.value
-        die("index out of range: #{index}")
+    def nth(operand : Str, index : Num)
+      if operand.length <= index.value
+        die("indexable: index out of range: #{index}")
       end
 
-      indexee[index.value.to_big_i]
+      operand[index.value.to_big_i]
     end
 
     # :ditto:
-    def nth(indexee, index)
-      die("indexee not indexable: #{indexee}")
+    def nth(operand, index)
+      die("value not indexable: #{operand}")
     end
 
-    # Gathers several *indexes* for *indexee* and returns
-    # a `Vec` of them.
-    def nth(indexee : Model, indexes : Models)
-      vec indexes.map { |index| nth(indexee, index) }
+    # Gathers multiple *indices* of an *operand*.
+    #
+    # Returns a `Vec` of the gathered values.
+    def nth(operand : Model, indices : Models)
+      vec indices.map { |index| nth(operand, index) }
     end
 
     # Reduces *reducee* using a binary *operator*.
+    #
+    # Note:
+    # - If *reducee* is empty, returns it back.
+    # - If *reducee* has one item, returns that one item.
     def reduce(operator : String, reducee : Vec)
       case reducee.length
       when 0
@@ -498,6 +514,36 @@ module Ven
           binary(operator, total, current)
         end
       end
+    end
+
+    # Resolves a field access.
+    #
+    # If *head* has a field named *field*, returns the value
+    # of that field.
+    #
+    # Otherwise, tries to construct a partial from a function
+    # called *field*, if such one exists.
+    #
+    # Returns nil if found no working field resolution.
+    def field?(head : Model, field : String)
+      head.field(field) || field?(head, @context[field]?)
+    end
+
+    # :ditto:
+    def field?(head, field : MFunction)
+      MPartial.new(field, [head])
+    end
+
+    # :ditto:
+    def field?(head, field)
+      nil
+    end
+
+    # Resolves a field access (see `field?`).
+    #
+    # Dies if found no working field resolution.
+    def field(head, field)
+      field?(head, field) || die("#{head}: no such field or function: '#{field}'")
     end
 
     # Starts a primitive state inspector prompt.
@@ -549,187 +595,218 @@ module Ven
           puts this
         end
 
-        case this.opcode
-        # Pops one value from the stack: (x --)
-        in Opcode::POP
-          pop
-        # Pops two values from the stack (x1 x2 --)
-        in Opcode::POP2
-          pop 2
-        # Same as POP, but does not raise on underflow.
-        in Opcode::TRY_POP
-          frame.stack.pop?
-        # Makes a duplicate of the last value: (x1 -- x1 x1')
-        in Opcode::DUP
-          put tap
-        # Clears the stack: (x1 x2 x3 ... --)
-        in Opcode::CLEAR
-          stack.clear
-        # Puts the value of a symbol: (-- x)
-        in Opcode::SYM
-          put @context[symbol]
-        # Puts a number: (-- x)
-        in Opcode::NUM
-          put num static(BigDecimal)
-        # Puts a string: (-- x)
-        in Opcode::STR
-          put str static
-        # Puts a regex: (-- x)
-        in Opcode::PCRE
-          put regex static
-        # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
-        in Opcode::VEC
-          put vec pop static(Int32)
-        # Puts true: (-- true)
-        in Opcode::TRUE
-          put bool true
-        # Puts false: (-- false)
-        in Opcode::FALSE
-          put bool false
-        # Puts false if stack is empty:
-        #  - (-- false)
-        #  - (... -- ...)
-        in Opcode::FALSE_IF_EMPTY
-          put bool false if stack.empty?
-        # Negates a num: (x1 -- -x1)
-        in Opcode::NEG
-          put pop.to_num.neg!
-        # Converts to num: (x1 -- x1' : num)
-        in Opcode::TON
-          put pop.to_num
-        # Converts to str: (x1 -- x1' : str)
-        in Opcode::TOS
-          put pop.to_str
-        # Converts to bool: (x1 -- x1' : bool)
-        in Opcode::TOB
-          put pop.to_bool
-        # Converts to inverse boolean (...#t, ...#f - true/false
-        # by meaning):
-        #   - (x1#t -- false)
-        #   - (x1#f -- true)
-        in Opcode::TOIB
-          put pop.to_bool(inverse: true)
-        # Converts to vec (unless vec):
-        #   - (x1 -- [x1])
-        #   - ([x1] -- [x1])
-        in Opcode::TOV
-          put pop.to_vec
-        # Puts length of an entity: (x1 -- x2)
-        in Opcode::LEN
-          put num pop.length
-        # Evaluates a binary operation: (x1 x2 -- x3)
-        in Opcode::BINARY
-          gather { |lhs, rhs| put binary(static, lhs, rhs) }
-        # Dies if tap is false: (x1 -- x1)
-        in Opcode::ENS
-          die("ensure: got false") if tap.false?
-        # Jumps at some instruction pointer.
-        in Opcode::J
-          jump target
-        # Jumps at some instruction pointer if not popped
-        # bool false: (x1 --)
-        in Opcode::JIT
-          jump target unless pop.false?
-        # Jumps at some instruction pointer if popped bool
-        # false: (x1 --)
-        in Opcode::JIF
-          jump target if pop.false?
-        # Jumps at some instruction pointer if not tapped
-        # bool false; pops otherwise:
-        #   - (true -- true)
-        #   - (false --)
-        in Opcode::JIT_ELSE_POP
-          tap.false? ? pop : jump target
-        # Jumps at some instruction pointer if tapped bool
-        # false; pops otherwise:
-        #   - (true --)
-        #   - (false -- false)
-        in Opcode::JIF_ELSE_POP
-          tap.false? ? jump target : pop
-        # Pops and assigns it to a symbol: (x1 --)
-        in Opcode::POP_ASSIGN
-          @context[symbol] = pop
-        # Taps and assigns it to a symbol: (x1 -- x1)
-        in Opcode::TAP_ASSIGN
-          @context[symbol] = tap
-        # Pops and adds one. Raises if not a number: (x1 -- x1)
-        in Opcode::INC
-          put num pop.as(Num).value + 1
-        # Pops and subtracts one. Raises if not a number:
-        # (x1 -- x1)
-        in Opcode::DEC
-          put num pop.as(Num).value - 1
-        # Converts the stack into a vector: (... -- [...])
-        in Opcode::REM_TO_VEC
-          put vec pop(stack.size)
-        # Defines a function. Requires the values of the
-        # given appendix (orelse the appropriate number of
-        # `any`s) to be on the stack; it pops them.
-        in Opcode::FUN
-          defun(myself = function, pop myself.given)
-        # If *x1* is a fun, invokes it. If a vec/str, indexes
-        # it: (x1 a1 a2 a3 ... -- R), where *aN* is an argument,
-        # and R is the returned value.
-        in Opcode::CALL
-          args = pop static(Int32)
+        # Remember the chunk we are/(at the end, were) in,
+        # and our current instruction pointer.
+        ip, c_id = frame.ip, chunk.hash
 
-          case callee = pop
-          when Vec, Str
-            put nth(callee, args.size == 1 ? args.first : args)
-          when MFunction
-            found = variant?(callee, args)
+        begin
+          duration = Time.monotonic
 
-            if found.is_a?(MConcreteFunction)
-              invoke(found.code, args.reverse!)
-            elsif found.is_a?(MBuiltinFunction)
-              put found.callee.call(self, args)
+          case this.opcode
+          # Pops one value from the stack: (x --)
+          in Opcode::POP
+            pop
+          # Pops two values from the stack (x1 x2 --)
+          in Opcode::POP2
+            pop 2
+          # Swaps two last values on the stack: (x1 x2 -- x2 x1)
+          in Opcode::SWAP
+            stack.swap(-2, -1)
+          # Same as POP, but does not raise on underflow.
+          in Opcode::TRY_POP
+            stack.pop?
+          # Makes a duplicate of the last value: (x1 -- x1 x1')
+          in Opcode::DUP
+            put tap
+          # Clears the stack: (x1 x2 x3 ... --)
+          in Opcode::CLEAR
+            stack.clear
+          # Puts the value of a symbol: (-- x)
+          in Opcode::SYM
+            put @context[symbol]
+          # Puts a number: (-- x)
+          in Opcode::NUM
+            put num static(BigDecimal)
+          # Puts a string: (-- x)
+          in Opcode::STR
+            put str static
+          # Puts a regex: (-- x)
+          in Opcode::PCRE
+            put regex static
+          # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
+          in Opcode::VEC
+            put vec pop static(Int32)
+          # Puts true: (-- true)
+          in Opcode::TRUE
+            put bool true
+          # Puts false: (-- false)
+          in Opcode::FALSE
+            put bool false
+          # Puts false if stack is empty:
+          #  - (-- false)
+          #  - (... -- ...)
+          in Opcode::FALSE_IF_EMPTY
+            put bool false if stack.empty?
+          # Negates a num: (x1 -- -x1)
+          in Opcode::NEG
+            put pop.to_num.neg!
+          # Converts to num: (x1 -- x1' : num)
+          in Opcode::TON
+            put pop.to_num
+          # Converts to str: (x1 -- x1' : str)
+          in Opcode::TOS
+            put pop.to_str
+          # Converts to bool: (x1 -- x1' : bool)
+          in Opcode::TOB
+            put pop.to_bool
+          # Converts to inverse boolean (...#t, ...#f - true/false
+          # by meaning):
+          #   - (x1#t -- false)
+          #   - (x1#f -- true)
+          in Opcode::TOIB
+            put pop.to_bool(inverse: true)
+          # Converts to vec (unless vec):
+          #   - (x1 -- [x1])
+          #   - ([x1] -- [x1])
+          in Opcode::TOV
+            put pop.to_vec
+          # Puts length of an entity: (x1 -- x2)
+          in Opcode::LEN
+            put num pop.length
+          # Evaluates a binary operation: (x1 x2 -- x3)
+          in Opcode::BINARY
+            gather { |lhs, rhs| put binary(static, lhs, rhs) }
+          in Opcode::BINARY_ASSIGN
+            put binary(static, pop, tap)
+          # Dies if tap is false: (x1 -- x1)
+          in Opcode::ENS
+            die("ensure: got false") if tap.false?
+          # Jumps at some instruction pointer.
+          in Opcode::J
+            jump target
+          # Jumps at some instruction pointer if not popped
+          # bool false: (x1 --)
+          in Opcode::JIT
+            jump target unless pop.false?
+          # Jumps at some instruction pointer if popped bool
+          # false: (x1 --)
+          in Opcode::JIF
+            jump target if pop.false?
+          # Jumps at some instruction pointer if not tapped
+          # bool false; pops otherwise:
+          #   - (true -- true)
+          #   - (false --)
+          in Opcode::JIT_ELSE_POP
+            tap.false? ? pop : jump target
+          # Jumps at some instruction pointer if tapped bool
+          # false; pops otherwise:
+          #   - (true --)
+          #   - (false -- false)
+          in Opcode::JIF_ELSE_POP
+            tap.false? ? jump target : pop
+          # Pops and assigns it to a symbol: (x1 --)
+          in Opcode::POP_ASSIGN
+            @context[symbol] = pop
+          # Taps and assigns it to a symbol: (x1 -- x1)
+          in Opcode::TAP_ASSIGN
+            @context[symbol] = tap
+          # Pops and adds one. Raises if not a number: (x1 -- x1)
+          in Opcode::INC
+            put num pop.as(Num).value + 1
+          # Pops and subtracts one. Raises if not a number:
+          # (x1 -- x1)
+          in Opcode::DEC
+            put num pop.as(Num).value - 1
+          # Converts the stack into a vector: (... -- [...])
+          in Opcode::REM_TO_VEC
+            put vec pop(stack.size).reverse!
+          # Defines a function. Requires the values of the
+          # given appendix (orelse the appropriate number of
+          # `any`s) to be on the stack; it pops them.
+          in Opcode::FUN
+            defun(myself = function, pop myself.given)
+          # If *x1* is a fun, invokes it. If a vec/str, indexes
+          # it: (x1 a1 a2 a3 ... -- R), where *aN* is an argument,
+          # and R is the returned value.
+          in Opcode::CALL
+            args = pop static(Int32)
+
+            case callee = pop
+            when Vec, Str
+              put nth(callee, args.size == 1 ? args.first : args)
+            when MFunction
+              if callee.is_a?(MPartial)
+                callee, args = callee.function, callee.args + args
+              end
+
+              found = variant?(callee, args)
+
+              if found.is_a?(MConcreteFunction)
+                invoke(found.code, args.reverse!)
+              elsif found.is_a?(MBuiltinFunction)
+                put found.callee.call(self, args)
+              else
+                die("improper arguments for #{callee}: #{args.join(", ")}")
+              end
             else
-              die("improper arguments for #{callee}: #{args.join(", ")}")
+              die("illegal callee: #{callee}")
             end
-          else
-            die("illegal callee: #{callee}")
-          end
-        # Returns from a function. Exports last value from
-        # the function's stack beforehand.
-        in Opcode::RET
-          unless revoke(export: true)
-            die("void expression")
-          end
-        # Moves a value onto the underscores stack:
-        #   S: (x1 --) ==> _: (-- x1)
-        in Opcode::UPUT
-          underscores << pop
-        # Moves a value from the underscores stack:
-        in Opcode::UPOP
-          put underscores.pop? || die("'_': no contextual")
-        # Moves a copy of a value from the underscores stack
-        # to the stack:
-        in Opcode::UREF
-          put underscores.last? || die("'&_': no contextual")
-        # Prepares for a series of `MAP_ITER`s on a vector.
-        in Opcode::MAP_SETUP
-          control << tap.length << 0 << stack.size - 2
-        # Executed each map iteration. It assumes:
-        #   - that control[-2] is the index, and
-        #   - control[-3] is the length of the vector we
-        #   iterate on;
-        in Opcode::MAP_ITER
-          if control[-2] >= control[-3]
-            control.pop(3) && jump target
-          end
+          # Returns from a function. Exports last value from
+          # the function's stack beforehand.
+          in Opcode::RET
+            unless revoke(export: true)
+              die("void expression")
+            end
+          # Moves a value onto the underscores stack:
+          #   S: (x1 --) ==> _: (-- x1)
+          in Opcode::UPUT
+            underscores << pop
+          # Moves a value from the underscores stack:
+          in Opcode::UPOP
+            put underscores.pop? || die("'_': no contextual")
+          # Moves a copy of a value from the underscores stack
+          # to the stack:
+          in Opcode::UREF
+            put underscores.last? || die("'&_': no contextual")
+          # Prepares for a series of `MAP_ITER`s on a vector.
+          in Opcode::MAP_SETUP
+            control << tap.length << 0 << stack.size - 2
+          # Executed each map iteration. It assumes:
+          #   - that control[-2] is the index, and
+          #   - control[-3] is the length of the vector we
+          #   iterate on;
+          in Opcode::MAP_ITER
+            length, index, _ = control.last(3)
 
-          control[-2] += 1
-        # A variation of "&" exclusive to maps. Assumes
-        # the last value of the control stack is a stack
-        # pointer to the destination vector.
-        in Opcode::MAP_APPEND
-          stack[control.last].as(Vec) << pop
-        # Reduces a vector using a binary operator: ([...] -- x1)
-        in Opcode::REDUCE
-          put reduce(static, pop.as Vec)
-        # Goes to the chunk it received as the argument.
-        in Opcode::GOTO
-          invoke(chunk_argument)
+            if index >= length
+              control.pop(3) && jump target
+            else
+              put tap.as(Vec)[index]
+            end
+
+            control[-2] += 1
+          # A variation of "&" exclusive to maps. Assumes
+          # the last value of the control stack is a stack
+          # pointer to the destination vector.
+          in Opcode::MAP_APPEND
+            stack[control.last].as(Vec) << pop
+          # Reduces a vector using a binary operator: ([...] -- x1)
+          in Opcode::REDUCE
+            put reduce(static, pop.as Vec)
+          # Goes to the chunk it received as the argument.
+          in Opcode::GOTO
+            invoke(chunk_argument)
+          in Opcode::FIELD_IMMEDIATE
+            put field(pop, static)
+          in Opcode::FIELD_DYNAMIC
+            gather do |head, field|
+              put field(head, field)
+            end
+          end
+        ensure
+          if @measure && duration
+            record!(c_id, ip, this, Time.monotonic - duration)
+          end
         end
 
         if @inspect

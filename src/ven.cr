@@ -117,25 +117,25 @@ module Ven
 
       total = 0
 
-      # if @timetable
-      #   m.timetable.each do |c_id, instructions|
-      #     puts "[#{c_id}]:"
+      if @timetable
+        m.timetable.each do |c_id, instructions|
+          puts "[#{c_id}]:"
 
-      #     instructions.each_value do |time|
-      #       took = "#{time[:amount]} x #{time[:duration].microseconds}us"
-      #       puts "  #{took.ljust(16)} #{time[:instruction]}"
-      #     end
+          instructions.each_value do |time|
+            took = "#{time[:amount]} x #{time[:duration].microseconds}us"
+            puts " #{took.ljust(16)} #{time[:instruction]}"
+          end
 
-      #     total += instructions.values.sum(&.[:duration].microseconds)
-      #   end
+          total += instructions.values.sum(&.[:duration].microseconds)
+        end
 
-      #   puts "(total MT (machine time): #{mt.milliseconds}ms)"
+        puts "(total MT (machine time): #{mt.milliseconds}ms)"
 
-      #   if total
-      #     puts "(total IT (instruction time): #{total / 1_000}ms)"
-      #         #  "(MT - IT = #{(mt - total).milliseconds}ms)"
-      #   end
-      # end
+        if total
+          puts "(total IT (instruction time): #{total / 1_000}ms)"
+              #  "(MT - IT = #{(mt - total).milliseconds}ms)"
+        end
+      end
 
       if @quiet <= 1
         puts m.result?

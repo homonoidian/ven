@@ -71,7 +71,9 @@ module Ven
                 static(triplet[0], BigDecimal),
                 static(triplet[1], BigDecimal))
 
-            break snippet.replace(start, 3, Opcode::NUM, offsetize resolution)
+            if resolution
+              break snippet.replace(start, 3, Opcode::NUM, offsetize resolution)
+            end
           when [Opcode::STR, Opcode::STR, Opcode::BINARY]
             resolution =
               binary2s(
@@ -79,20 +81,22 @@ module Ven
                 static(triplet[0], String),
                 static(triplet[1], String))
 
-            break snippet.replace(start, 3, Opcode::STR, offsetize resolution)
+            if resolution
+              break snippet.replace(start, 3, Opcode::STR, offsetize resolution)
+            end
           end
         end
 
         snippet.for(2) do |pair, start|
           case pair.map(&.opcode)
           when [Opcode::NUM, Opcode::TON]
-            snippet.replace(start, 2, Opcode::NUM, argument pair[0])
+            break snippet.replace(start, 2, Opcode::NUM, argument pair[0])
           when [Opcode::STR, Opcode::TOS]
-            snippet.replace(start, 2, Opcode::STR, argument pair[0])
+            break snippet.replace(start, 2, Opcode::STR, argument pair[0])
           when [Opcode::VEC, Opcode::TOV]
-            snippet.replace(start, 2, Opcode::VEC, argument pair[0])
+            break snippet.replace(start, 2, Opcode::VEC, argument pair[0])
           when [Opcode::TAP_ASSIGN, Opcode::POP]
-            snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
+            break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
           end
         end
       end

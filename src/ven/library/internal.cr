@@ -11,6 +11,7 @@ module Ven::Library
       c.let("true")
       c.let("false")
       c.let("say")
+      c.let("die")
     end
 
     def load(c : Context::Machine)
@@ -25,6 +26,11 @@ module Ven::Library
         puts args.first
 
         args.first
+      end)
+      c["die"] = MBuiltinFunction.new("die", 1, -> (machine : Machine, args : Models) do
+        machine.die(args.first.to_s)
+
+        MBool.new(false).as(Model)
       end)
     end
   end

@@ -7,6 +7,7 @@ module Ven::Suite
     # Opcodes that take no payload.
     POP = 16
     POP2
+    SWAP
     TRY_POP
     DUP
     TON
@@ -30,6 +31,7 @@ module Ven::Suite
     MAP_APPEND
     REM_TO_VEC
     FALSE_IF_EMPTY
+    FIELD_DYNAMIC
 
     # Opcodes that take a static payload.
     NUM = 128
@@ -40,6 +42,8 @@ module Ven::Suite
     CALL
     REDUCE
     BINARY
+    BINARY_ASSIGN
+    FIELD_IMMEDIATE
 
     # Opcodes that take a jump payload.
     J = 512

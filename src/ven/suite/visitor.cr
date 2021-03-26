@@ -1,7 +1,5 @@
 module Ven::Suite
   # The base class for a node (in Ven, quote) visitor.
-  #
-  # *T* is the type a visit must return.
   abstract class Visitor
     setter last : Quote = QVoid.new
 
@@ -9,8 +7,6 @@ module Ven::Suite
     # off to `visit!`.
     def visit(quote : Quote)
       visit!(@last = quote)
-
-      1
     end
 
     # Same as `visit(quote)`, but iterates over *quotes*.
@@ -18,8 +14,6 @@ module Ven::Suite
       quotes.each do |quote|
         visit(@last = quote)
       end
-
-      quotes.size
     end
 
     # Fallback visitor (subclass has no such visitor).

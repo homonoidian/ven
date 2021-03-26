@@ -78,8 +78,8 @@ module Ven
       {% end %}
     end
 
-    # Assigns a *symbol*. Returns the resulting `DSymbol`.
-    private macro assign(symbol, global)
+    # Assigns a *symbol*. Returns the resulting `VSymbol`.
+    private macro assign(symbol, global = false)
       %symbol = {{symbol}}
       %global = {{global}}
       %nesting = @context.assign({{symbol}}, {{global}})
@@ -93,6 +93,18 @@ module Ven
       @chunks
     end
 
+    def visit(quote : Quote)
+      super(quote)
+
+      1
+    end
+
+    def visit(quotes : Quotes)
+      super(quotes)
+
+      quotes.size
+    end
+
     def visit!(q : QSymbol)
       emit Opcode::SYM, symbol(q.value)
     end
@@ -103,6 +115,10 @@ module Ven
 
     def visit!(q : QString)
       emit Opcode::STR, q.value
+    end
+
+    def visit!(q : QRegex)
+      emit Opcode::PCRE, q.value
     end
 
     def visit!(q : QVector)
@@ -145,6 +161,15 @@ module Ven
       emit Opcode::TAP_ASSIGN, assign(q.target, q.global)
     end
 
+    def visit!(q : QBinaryAssign)
+      target = symbol(q.target)
+
+      visit(q.value)
+      emit Opcode::SYM, target
+      emit Opcode::BINARY_ASSIGN, q.operator
+      emit Opcode::POP_ASSIGN, target
+    end
+
     def visit!(q : QCall)
       visit(q.callee)
 
@@ -177,6 +202,52 @@ module Ven
       emit Opcode::POP_ASSIGN, symbol
     end
 
+    # Emits the appropriate field gathering instructions for
+    # an *accessor*.
+    private def field(accessor : FAImmediate)
+      emit Opcode::FIELD_IMMEDIATE, accessor.access
+    end
+
+    # :ditto:
+    private def field(accessor : FADynamic)
+      visit(accessor.access)
+
+      emit Opcode::FIELD_DYNAMIC
+    end
+
+    # :ditto:
+    private def field(accessor : FAMulti)
+      items = accessor.access.items
+
+      items.each_with_index do |item, index|
+        emit Opcode::SWAP unless index == 0
+        emit Opcode::DUP unless index == items.size -  1
+
+        if item.is_a?(QAccessField)
+          field [FADynamic.new(item.head)] + item.tail
+        elsif item.is_a?(QSymbol)
+          field FAImmediate.new(item.value)
+        else
+          field FADynamic.new(item)
+        end
+      end
+
+      emit Opcode::VEC, items.size
+    end
+
+    # Emits the appropriate field gathering instructions for
+    # each accessor of *accessors*.
+    private def field(accessors : FieldAccessors)
+      accessors.each do |accessor|
+        field(accessor)
+      end
+    end
+
+    def visit!(q : QAccessField)
+      visit(q.head)
+      field(q.tail)
+    end
+
     def visit!(q : QBinarySpread)
       visit(q.operand)
       emit Opcode::TOV
@@ -193,6 +264,7 @@ module Ven
 
       label start
       emit Opcode::MAP_ITER, stop
+      emit Opcode::UPUT
       visit(q.lambda)
       emit Opcode::MAP_APPEND
       emit Opcode::J, start
@@ -251,9 +323,7 @@ module Ven
             slurpy = q.slurpy
 
             onymous.each do |parameter|
-              @context.let(parameter)
-
-              emit Opcode::POP_ASSIGN, symbol(parameter, nesting)
+              emit Opcode::POP_ASSIGN, assign(parameter)
             end
 
             # Slurpies eat the rest of the stack's values. It
@@ -261,7 +331,7 @@ module Ven
             # is at the end of the function's parameters.
             if q.slurpy
               emit Opcode::REM_TO_VEC
-              emit Opcode::POP_ASSIGN, symbol("rest", nesting)
+              emit Opcode::POP_ASSIGN, assign("rest")
             end
 
             visit q.body

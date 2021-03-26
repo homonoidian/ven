@@ -37,7 +37,7 @@ ensure ~[1, 2, 3] is "[1, 2, 3]";
 
 ensure &1 is [1];
 ensure &"hello" is ["hello"];
-ensure &[1, 2, 3] is [[1, 2, 3]];
+ensure &[1, 2, 3] is [1, 2, 3];
 
 
 #) Unary '#' returns the length of whatever it is given:

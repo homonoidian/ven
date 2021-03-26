@@ -517,4 +517,24 @@ module Ven::Suite
       io << "generic " << @name << " with " << @variants.size << " variant(s)"
     end
   end
+
+  # A partial call to an `MFunction`.
+  #
+  # Used mainly for UFCS, say, to write `1.say()` instead of
+  # `say(1)`. In this example, `1.say` is a partial.
+  #
+  # Partials are introduced when gathering fields.
+  class MPartial < MFunction
+    getter args : Models
+    getter function : MFunction
+
+    def initialize(@function, @args)
+    end
+
+    delegate :field, to: @function
+
+    def to_s(io)
+      io << "partial " << @function << "(" << @args.join(", ") << ")"
+    end
+  end
 end

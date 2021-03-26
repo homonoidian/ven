@@ -103,44 +103,7 @@ module Ven::Suite
   defquote(QReturnDecrement, target : String)
   defquote(QReturnIncrement, target : String)
 
-  # Part of the field access' (`QAccessField`) path.
-  abstract struct FieldAccessor(T)
-    getter field
-
-    def initialize(
-      @field : T)
-    end
-  end
-
-  # E.g.: a.b.c
-  struct SingleFieldAccessor < FieldAccessor(String)
-    def to_s(io)
-      io << @field
-    end
-  end
-
-  # E.g.: a.("b").(foo-bar-baz ~ "2")
-  struct DynamicFieldAccessor < FieldAccessor(Quote)
-    def to_s(io)
-      io << "(<...>)"
-    end
-  end
-
-  # E.g.: a.["b", "c"]
-  struct MultiFieldAccessor < FieldAccessor(Array(DynamicFieldAccessor))
-    def to_s(io)
-      io << "[<...>]"
-    end
-  end
-
-  defquote(QAccessField,
-    head : Quote,
-    path : Array(
-      # Crystal doesn't yet support just `FieldAccessor` here,
-      # have to write by hand:
-      SingleFieldAccessor  |
-      DynamicFieldAccessor |
-      MultiFieldAccessor))
+  defquote(QAccessField, head : Quote, tail : FieldAccessors)
 
   defquote(QBinarySpread, operator : String, operand : Quote)
   defquote(QLambdaSpread, lambda : Quote, operand : Quote, iterative : Bool)

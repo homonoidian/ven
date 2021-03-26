@@ -1,6 +1,12 @@
 module Ven::Suite
-  # Frame encapsualtes all that is relevant to the current
-  # state of a `Machine`.
+  # A frame is a package of state. It is there to simplify
+  # statekeeping. For an instance of `Machine`, it provides:
+  #
+  # - A chunk pointer (chunk index, really)
+  # - An instruction pointer (instruction index, really)
+  # - An operand stack (or just stack)
+  # - A control stack (used, say, to save iteration indices)
+  # - An underscores stack (used for context, i.e., '_' and '&_').
   class Frame
     property cp : Int32
     property ip : Int32 = 0

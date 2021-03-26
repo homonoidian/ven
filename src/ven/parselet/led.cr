@@ -96,33 +96,49 @@ module Ven
 
     # Parses a field access expression into a QAccessField:
     # `a.b.c`, `1.bar`, `"quux".strip!`, etc. Also parses
-    # multifield access (`a.[b, c]`) and dynamic field
-    # access (`a.(b)`).
+    # dynamic field access (`a.(b)`).
     class PAccessField < Led
       def parse(parser, tag, left, token)
-        path = parser.repeat(sep: ".", unit: -> { member(parser, tag) })
-
-        QAccessField.new(tag, left, path)
+        QAccessField.new(tag, left, pieces parser)
       end
 
-      def member(parser, tag)
-        token = parser.expect("SYMBOL", "[", "(")
+      # Parses the pieces (those that are separated by dots)
+      # of the path.
+      def pieces(parser)
+        parser.repeat(sep: ".", unit: -> { piece parser })
+      end
 
-        if token[:type] == "SYMBOL"
-          SingleFieldAccessor.new(token[:lexeme])
-        elsif token[:type] == "("
-          DynamicFieldAccessor.new(PGroup.new.parse(parser, tag, token))
-        else # if it[:type] == "["
-          vector = PVector.new.parse(parser, tag, token)
+      # Parses an individual piece. It may either be a multifield
+      # access piece, dynamic field access piece, or an immediate
+      # field access piece.
+      def piece(parser)
+        lead = parser.expect("[", "(", "SYMBOL")
 
-          # Wrap all vector items into dynamic field accessors:
-          wrapped =
-            vector.items.map do |route|
-              DynamicFieldAccessor.new(route)
-            end
+        case lead[:type]
+        when "["
+          FAMulti.new(multi parser)
+        when "("
+          FADynamic.new(dynamic parser)
+        when "SYMBOL"
+          FAImmediate.new(lead[:lexeme])
+        end.not_nil!
+      end
 
-          MultiFieldAccessor.new(wrapped)
-        end
+      # Parses a multifield field access piece, which is,
+      # essentially, a vector.
+      def multi(parser)
+        PVector.new.parse(parser, QTag.void, word?)
+      end
+
+      # Parses a dynamic field access piece, which is,
+      # essentially, a grouping.
+      def dynamic(parser)
+        PGroup.new.parse(parser, QTag.void, word?)
+      end
+
+      # Returns a fictious word.
+      private macro word?
+        { type: ".", lexeme: ".", line: 0 }
       end
     end
   end

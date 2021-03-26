@@ -69,12 +69,7 @@ module Ven::Suite
 
     # Appends an instruction given its *opcode*, *argument*
     # and *line* number.
-    def add(opcode : Opcode, argument : Payload, line : UInt32)
-      snippet.add(opcode, offset(argument), line)
-    end
-
-    # :ditto:
-    def add(opcode, argument : Label, line)
+    def add(opcode : Opcode, argument : Label, line : UInt32)
       snippet.add(opcode, argument, line)
     end
 
@@ -123,20 +118,23 @@ module Ven::Suite
     # changed to the offsets of snippets' first instructions.
     #
     # Returns true.
-    def stitch
+    private def stitch
       @snippets.each do |snippet|
+        # Idiomatically, labels point to snippets and never
+        # to IPs. But we can do anything under the hood :)
         snippet.label.target = @seamless.size
+
         @seamless += snippet.code
       end
 
       true
     end
 
-    # Replaces all labels in seamless with the appropriate
+    # Replaces all `Label`s in seamless with the appropriate
     # jumps (see `VJump`).
     #
     # Returns true.
-    def jumpize
+    private def jumpize
       @seamless.map! do |instruction|
         line, opcode = instruction.line, instruction.opcode
 

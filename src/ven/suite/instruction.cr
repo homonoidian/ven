@@ -2,7 +2,7 @@ module Ven::Suite
   # A bytecode instruction.
   #
   # It can accept an argument, which may be either a label
-  # or a data offset pointing to a payload vehicle.
+  # or a data offset pointing to a payload vehicle (see `Payload`).
   struct Instruction
     getter line : UInt32
     getter label : Label?
