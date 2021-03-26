@@ -389,6 +389,10 @@ module Ven::Suite
       end
     end
 
+    def length
+      @arity
+    end
+
     def to_s(io)
       io << "concrete " << @name << "("
 
@@ -449,6 +453,10 @@ module Ven::Suite
       when "specificity"
         Num.new(specificity)
       end
+    end
+
+    def length
+      @arity
     end
 
     # Returns whether this builtin's identity is equal to the
@@ -531,7 +539,7 @@ module Ven::Suite
     def initialize(@function, @args)
     end
 
-    delegate :field, to: @function
+    delegate :field, :length, :specificity, to: @function
 
     def to_s(io)
       io << "partial " << @function << "(" << @args.join(", ") << ")"

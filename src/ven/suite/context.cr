@@ -113,7 +113,7 @@ module Ven::Suite::Context
     #
     # Returns nil if it was not found.
     def []?(symbol : String)
-      @scopes[-1][symbol]?
+      @scopes[nest?(symbol) || return][symbol]?
     end
 
     # :ditto:
