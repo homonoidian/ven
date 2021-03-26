@@ -64,9 +64,9 @@ module Ven
       end
     end
 
-    # Looks up a symbol or dies.
+    # Looks up a symbol.
     private macro lookup(symbol)
-      @context.lookup(%symbol = {{symbol}}) || die("symbol not found: #{%symbol}")
+      @context.lookup({{symbol}})
     end
 
     # A shorthand for `VSymbol.new(...)`.

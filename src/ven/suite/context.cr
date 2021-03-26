@@ -71,45 +71,66 @@ module Ven::Suite::Context
     ensure
       @scopes.pop
     end
-
-    # Loads an *extension* into this context.
-    def use(extension : Extension)
-      extension.load(self)
-    end
   end
 
   # The context for the Machine.
   class Machine
     private alias Scope = Hash(String, Model)
 
+    # The scope hierarchy of this machine. The rightmost scope
+    # is the localmost, and the leftmost - the globalmost.
     getter scopes : Array(Scope)
 
     def initialize
       @scopes = [Scope.new]
     end
 
-    def [](entry : String)
-      @scopes[-1][entry]
+    # Returns the nest of a *symbol* if it exists in one of
+    # the scopes, or nil if it does not.
+    def nest?(symbol : String)
+      @scopes.reverse_each.with_index do |scope, depth|
+        return @scopes.size - depth - 1 if scope.has_key?(symbol)
+      end
     end
 
-    def [](entry : VSymbol)
-      @scopes[entry.nest][entry.name]
+    # Returns the value for a *symbol*.
+    #
+    # Raises if it was not found.
+    def [](symbol : String)
+      @scopes[-1][symbol]
     end
 
-    def []?(entry : String)
-      @scopes[-1][entry]?
+    # :ditto:
+    def [](symbol : VSymbol)
+      unless nest = symbol.nest || nest?(symbol.name)
+        raise "symbol not found: #{symbol}"
+      end
+
+      @scopes[nest][symbol.name]
     end
 
-    def []?(entry : VSymbol)
-      @scopes[entry.nest][entry.name]?
+    # Returns the value for a *symbol*.
+    #
+    # Returns nil if it was not found.
+    def []?(symbol : String)
+      @scopes[-1][symbol]?
     end
 
-    def []=(entry : String, value : Model)
-      @scopes[-1][entry] = value
+    # :ditto:
+    def []?(symbol : VSymbol)
+      @scopes[symbol.nest || nest?(symbol.name) || return][symbol.name]?
     end
 
-    def []=(entry : VSymbol, value : Model)
-      @scopes[entry.nest][entry.name] = value
+    # Makes *symbol* be *value* in its nest.
+    #
+    # Assumes *symbol*'s nest is not nil.
+    def []=(symbol : String, value : Model)
+      @scopes[-1][symbol] = value
+    end
+
+    # :ditto:
+    def []=(symbol : VSymbol, value : Model)
+      @scopes[symbol.nest.not_nil!][symbol.name] = value
     end
 
     # Loads an *extension* into this context.
@@ -117,7 +138,7 @@ module Ven::Suite::Context
       extension.load(self)
     end
 
-    # Pushes a new, child scope.
+    # Introduces a child scope.
     def push
       @scopes << Scope.new
     end

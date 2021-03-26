@@ -75,7 +75,7 @@ module Ven::Suite
   # It carries and defines the identity of a symbol, whose
   # nest and name are known at compile-time.
   struct VSymbol < Payload
-    carries name : String, nest : Int32
+    carries name : String, nest : Int32?
 
     def ==(other : VSymbol)
       @name == other.name && @nest == other.nest

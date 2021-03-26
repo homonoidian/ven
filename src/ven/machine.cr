@@ -18,12 +18,13 @@ module Ven
     property inspect : Bool
     property measure : Bool
 
+    getter context : Context::Machine
     getter timetable : Timetable
 
     @inspect = false
     @measure = false
 
-    def initialize(@chunks : Chunks, @context : Context::Machine)
+    def initialize(@chunks : Chunks, @context)
       @frames = [Frame.new]
       @timetable = Timetable.new
     end
@@ -273,6 +274,12 @@ module Ven
       {% else %}
         true
       {% end %}
+    end
+
+    # Looks up the symbol *name* and dies if was not found.
+    private macro lookup(name)
+      @context[%symbol = {{name}}]? ||
+        die("symbol not found: '#{%symbol.name}'")
     end
 
     # Matches *args* against *types*.
@@ -624,7 +631,7 @@ module Ven
             stack.clear
           # Puts the value of a symbol: (-- x)
           in Opcode::SYM
-            put @context[symbol]
+            put lookup(symbol)
           # Puts a number: (-- x)
           in Opcode::NUM
             put num static(BigDecimal)

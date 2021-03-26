@@ -19,7 +19,6 @@ module Ven
       @ccontext = Context::Compiler.new
 
       @context.use(Library::Internal.new)
-      @ccontext.use(Library::Internal.new)
     end
 
     # Prints a *message* and quits with exit status 0.

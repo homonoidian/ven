@@ -1,37 +1,42 @@
 module Ven::Library
   include Suite
 
-  class Internal < Extension
-    def load(c : Context::Compiler)
-      c.let("any")
-      c.let("num")
-      c.let("str")
-      c.let("vec")
-      c.let("bool")
-      c.let("true")
-      c.let("false")
-      c.let("say")
-      c.let("die")
+  extension Internal do
+    # Prints *message* to STDOUT. Returns Ven true (through
+    # `extension` semantics).
+    def say(message : Str) : Nil
+      puts message
     end
 
-    def load(c : Context::Machine)
-      c["any"] = MAny.new
-      c["num"] = MType.new("num", Num)
-      c["str"] = MType.new("str", Str)
-      c["vec"] = MType.new("vec", Vec)
-      c["bool"] = MType.new("bool", MBool)
-      c["true"] = MBool.new(true)
-      c["false"] = MBool.new(false)
-      c["say"] = MBuiltinFunction.new("say", 1, -> (machine : Machine, args : Models) do
-        puts args.first
-
-        args.first
-      end)
-      c["die"] = MBuiltinFunction.new("die", 1, -> (machine : Machine, args : Models) do
-        machine.die(args.first.to_s)
-
-        MBool.new(false).as(Model)
-      end)
+    # Dies of *message*. It is a no-return.
+    def die(message : Str)
+      machine.die(message.value)
     end
+
+    # Defines a local variable called *name* with value
+    # *value*.
+    def define(name : Str, value)
+      machine.context[name.value] = value
+    end
+
+    true_ = MBool.new(true)
+    false_ = MBool.new(false)
+
+    # 'any' is not a type and not a value. It is something
+    # in-between.
+    any = MAny.new
+
+    # These are the types of Ven:
+
+    num = Num
+    str = Str
+    vec = Vec
+    bool = MBool
+
+    partial = MPartial
+    builtin = MBuiltinFunction
+    generic = MGenericFunction
+    concrete = MConcreteFunction
+    function = MFunction
   end
 end
