@@ -150,9 +150,30 @@ module Ven
     end
 
     def visit!(q : QBinary)
-      visit([q.left, q.right])
+      visit(q.left)
 
-      emit Opcode::BINARY, q.operator
+      if q.operator == "and"
+        alt = label?
+        end_ = label?
+
+        emit Opcode::JIF, alt
+        visit(q.right)
+        emit Opcode::JIT_ELSE_POP, end_
+        label alt
+        emit Opcode::FALSE
+        label end_
+      elsif q.operator == "or"
+        end_ = label?
+
+        emit Opcode::JIT_ELSE_POP, end_
+        visit(q.right)
+        emit Opcode::JIT_ELSE_POP, end_
+        emit Opcode::FALSE
+        label end_
+      else
+        visit(q.right)
+        emit Opcode::BINARY, q.operator
+      end
     end
 
     def visit!(q : QAssign)
@@ -271,6 +292,19 @@ module Ven
 
       label stop
       emit Opcode::POP
+    end
+
+    def visit!(q : QIf)
+      alt = label?
+      end_ = label?
+
+      visit(q.cond)
+      emit Opcode::JIF, alt
+      visit(q.suc)
+      emit Opcode::J, end_
+      label alt
+      q.alt ? visit(q.alt.not_nil!) : emit Opcode::FALSE
+      label end_
     end
 
     def visit!(q : QBlock)

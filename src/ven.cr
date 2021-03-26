@@ -140,6 +140,10 @@ module Ven
       if @quiet <= 1
         puts m.result?
       end
+
+      if @quiet == 0 && m.remnants?
+        puts "Warning: several stack remnants: #{m.remnants}"
+      end
     end
 
     def open(path : String)

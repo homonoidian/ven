@@ -310,8 +310,9 @@ module Ven
       when {"is", _, _}
         # 'is' requires explicit, non-strict (does not die if
         # failed) normalization.
-        norm = normalize?(operator, left, right)
-        may_be left, if: norm && norm[0].eqv?(norm[1])
+        normal = normalize?(operator, left, right)
+
+        may_be left, if: normal && normal[0].eqv?(normal[1])
       when {"in", Str, Str}
         may_be left, if: right.value.includes?(left.value)
       when {"in", _, Vec}
@@ -348,7 +349,7 @@ module Ven
     end
 
     # Normalizes a binary operation (i.e., converts it to its
-    # normal form, if any).
+    # normal form).
     #
     # Returns nil if found no matching conversion.
     def normalize?(operator : String, left : Model, right : Model)
@@ -796,8 +797,15 @@ module Ven
           # Goes to the chunk it received as the argument.
           in Opcode::GOTO
             invoke(chunk_argument)
+          # Pops an operand and, if possible, gets the value
+          # of its field. Alternatively, builds a partial:
+          # (x1 -- x2)
           in Opcode::FIELD_IMMEDIATE
             put field(pop, static)
+          # Pops two values, first being the operand and second
+          # the field, and, if possible, gets the value of a
+          # field. Alternatively, builds a partial:
+          # (x1 x2 -- x3)
           in Opcode::FIELD_DYNAMIC
             gather do |head, field|
               put field(head, field)
@@ -817,9 +825,19 @@ module Ven
       end
     end
 
+    # Returns whether this Machine has stack remnants.
+    def remnants?
+      stack.size > 0
+    end
+
+    # Returns the stack remnants that this Machine has.
+    def remnants
+      stack
+    end
+
     # Returns the result of this Machine's work.
     def result?
-      stack.last?
+      stack.pop?
     end
   end
 end
