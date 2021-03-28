@@ -5,5 +5,5 @@ fun fib(_) given 0 = 0;
 fun fib(_) given 1 = 1;
 fun fib(n) = fib(n - 1) + fib(n - 2);
 
-#) fib(30);
+# fib(30);
 fact(100_000);

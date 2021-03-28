@@ -1,5 +1,5 @@
-#) +, -, *, / all work with nums and convert anything they get into nums.
-#) unary +, - ^^^^^^^^^^^^^^^^^^
+#  +, -, *, / all work with nums and convert anything they get into nums.
+#  unary +, - ^^^^^^^^^^^^^^^^^^
 
 ensure 1 + 1 is 2;
 ensure "12" + 1 is 13;
@@ -15,8 +15,8 @@ ensure -1 is -1;
 ensure -"1.23" is -1.23;
 ensure -[1, 2, 3] is -3;
 
-#) ~ pends (appends / prepends) strings, and converts left & right to str
-#) unary ~ converts to str
+#  ~ pends (appends / prepends) strings, and converts left & right to str
+#  unary ~ converts to str
 
 ensure 1 ~ 2 is "12";
 ensure "1" ~ 2 is "12";
@@ -29,8 +29,8 @@ ensure ~1 is "1";
 ensure ~1.23 is "1.23";
 ensure ~[1, 2, 3] is "[1, 2, 3]";
 
-#) & pends (appends / prepends) vectors, and converts left & right to vec
-#) unary & converts to vec (e.g., ensure &foo is [foo])
+# & pends (appends / prepends) vectors, and converts left & right to vec
+# unary & converts to vec (e.g., ensure &foo is [foo])
 
 ensure 1 & 2 is [1, 2];
 ensure [1, 2] & 3 is [1, 2, 3];
@@ -39,8 +39,8 @@ ensure [1, 2] & [3, 4] is [1, 2, 3, 4];
 
 ensure &1 is [1];
 
-#) x accepts (REPEATABLE : vec | str, COUNT : num) or (COUNT : num, REPEATABLE : vec | str).
-#) fallbacks to (vec, num): 2 x 2 => [2] x 2 => [2, 2]
+# x accepts (REPEATABLE : vec | str, COUNT : num) or (COUNT : num, REPEATABLE : vec | str).
+# fallbacks to (vec, num): 2 x 2 => [2] x 2 => [2, 2]
 
 ensure 2 x [1, 2, 3] is [1, 2, 3, 1, 2, 3];
 ensure 2 x "a" is "aa";
@@ -49,7 +49,7 @@ ensure "a" x 2 is "aa";
 ensure 3 x 0 is [];
 ensure 0 x 3 is [0, 0, 0];
 
-#) # accepts vec | str and returns length
+# # accepts vec | str and returns length
 
 ensure #"abc" is 3;
 ensure #[1, 2, 3] is 3;

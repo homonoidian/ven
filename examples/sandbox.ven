@@ -31,15 +31,15 @@ fun slurpy(*) {
   say("slurpy(*)")
 }
 
-#) Should succeed:
+# Should succeed:
 not-slurpy(1, 2, 3);
 not-slurpy("a", "b", "c");
 
-#) Should fail:
-#)not-slurpy(1, 2, 3, 4);
-#)not-slurpy("a", 3, "c", 4);
+# Should fail:
+# not-slurpy(1, 2, 3, 4);
+# not-slurpy("a", 3, "c", 4);
 
-#) Should succeed:
+# Should succeed:
 slurpy(1, 2, 3, 4, 5, 6, 7);
 slurpy(1, 2, 3);
 slurpy("a", "b", "c", "d", "e");
@@ -47,7 +47,7 @@ slurpy("a", "b");
 slurpy(1, "b", [3], 4);
 slurpy();
 
-#) Concretes are loopy:
+# Concretes are loopy:
 fun up-to-ten(this) given num =
   if this < 10
     next say(this + 1)

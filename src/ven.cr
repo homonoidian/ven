@@ -169,7 +169,7 @@ module Ven
 
         if source.nil?
           error("Bye bye!")
-        elsif source.empty? || source.starts_with?("#)")
+        elsif source.empty? || source.starts_with?("# ")
           next
         end
 

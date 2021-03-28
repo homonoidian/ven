@@ -1,29 +1,29 @@
-#)expose std;
+# expose std;
 
 
-#) There are two general kinds of `loop` statements: headless
-#) (unconditional) loop and conditional loop. A loop's condition
-#) is put inside parentheses:
-#)  --> loop <loop body>
-#)  --> loop (<condition>) <loop body>
-#)
-#) There are two ways to form a loop's body: with an expression,
-#) or with a block (which is itself an expression):
-#)   --> loop <condition?> say("Hi!")
-#)   --> loop <condition?> { say("Hi!"); ... }
-#)
+# There are two general kinds of `loop` statements: headless
+# (unconditional) loop and conditional loop. A loop's condition
+# is put inside parentheses:
+#  --> loop <loop body>
+#  --> loop (<condition>) <loop body>
+#
+# There are two ways to form a loop's body: with an expression,
+# or with a block (which is itself an expression):
+#   --> loop <condition?> say("Hi!")
+#   --> loop <condition?> { say("Hi!"); ... }
+#
 
 
-#) HEADLESS (UNCONDITIONAL) LOOP:
+# HEADLESS (UNCONDITIONAL) LOOP:
 
 
-#) Commented out because, well, it is infinite.
-#) loop ask("...").say();
+# Commented out because, well, it is infinite.
+# loop ask("...").say();
 
 
-#) CONDITIONAL LOOP:
+# CONDITIONAL LOOP:
 
-#) [1] Loop while some condition is true:
+# [1] Loop while some condition is true:
 
 i = 0;
 
@@ -31,15 +31,15 @@ loop (i++ < 10)
   say("i = " ~ i);
 
 
-#) [2] Check if condition is true, evaluate the body, evaluate
-#)     a step expression, repeat.
+# [2] Check if condition is true, evaluate the body, evaluate
+#     a step expression, repeat.
 
 loop (i < 10; i += 1)
   say("i = " ~ i);
 
 
-#) [3] Initialize a variable, check if a condition is true,
-#)     evaluate the body, evaluate a step expression, repeat.
+# [3] Initialize a variable, check if a condition is true,
+#     evaluate the body, evaluate a step expression, repeat.
 
 loop (i = 0; i < 10; i++)
   say("i = " ~ i);

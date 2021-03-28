@@ -12,13 +12,13 @@ box Pos(a);
 box Neg(a);
 
 
-#) Reads *source* into an AST node.
+# Reads *source* into an AST node.
 fun read(source) given str {
   token  := ["<START>", "..."];
   cursor := 0;
 
-  #) Returns the precedence of the current token, or 0
-  #) if it has no precedence.
+  # Returns the precedence of the current token, or 0
+  # if it has no precedence.
   fun precedence? =
     if token(0) in ["+", "-"]
       1
@@ -27,13 +27,13 @@ fun read(source) given str {
     else
       0;
 
-  #) Matches *pattern* against offset source.
+  # Matches *pattern* against offset source.
   fun match(pattern) given regex =
     if source.offset(cursor) is pattern
       cursor += #(return &_);
 
-  #) Consumes exactly one token and returns the previous
-  #) token.
+  # Consumes exactly one token and returns the previous
+  # token.
   fun consume =
     token = return token and
       if match(`[1-9]\d*`)
@@ -47,10 +47,10 @@ fun read(source) given str {
       else
         die("invalid lexeme");
 
-  #) `consume`s only if current token type is *type*.
+  # `consume`s only if current token type is *type*.
   fun consume(type) given str = if token(0) is type consume();
 
-  #) Parses a prefix expression.
+  # Parses a prefix expression.
   fun prefix =
     if it = consume("NUMBER")
       Num(it(1))
@@ -63,7 +63,7 @@ fun read(source) given str {
     else
       die("invalid syntax in prefix position: " ~ token(0));
 
-  #) Parses an infix expression.
+  # Parses an infix expression.
   fun infix(depth) given num {
     left = prefix();
 
@@ -86,14 +86,14 @@ fun read(source) given str {
     left
   }
 
-  #) Pre-read the first token.
+  # Pre-read the first token.
   consume();
 
   infix(0);
 }
 
 
-#) Evaluates the *entity*.
+# Evaluates the *entity*.
 fun eval(entity) = die("eval(): unknown entity: " ~ entity);
 
 fun eval(entity) given Num = +entity.value;
@@ -106,7 +106,7 @@ fun eval(entity) given Mul = eval(entity.a) * eval(entity.b);
 fun eval(entity) given Div = eval(entity.a) / eval(entity.b);
 
 
-#) Read-eval-print loop:
+# Read-eval-print loop:
 loop
   ask(">")
     .read
