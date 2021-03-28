@@ -32,6 +32,7 @@ module Ven::Suite
     REM_TO_VEC
     FALSE_IF_EMPTY
     FIELD_DYNAMIC
+    RESET_DIES
 
     # Opcodes that take a static payload.
     NUM = 128
@@ -53,6 +54,7 @@ module Ven::Suite
     MAP_ITER
     JIT_ELSE_POP
     JIF_ELSE_POP
+    SETUP_DIES
 
     # Opcodes that take a symbol payload.
     SYM = 1024

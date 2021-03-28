@@ -29,11 +29,11 @@ module Ven::Suite
     takes Quote
   end
 
-  # A multifield accessor.
+  # A branches field accessor.
   #
-  # In the field path `(a).[b.e, c]`, `[b.e, c]` is a multifield
-  # accessor.
-  struct FAMulti < FieldAccessor
+  # In the field path `(a).[b.e, c]`, `[b.e, c]` is a branches
+  # field accessor.
+  struct FABranches < FieldAccessor
     takes QVector
   end
 

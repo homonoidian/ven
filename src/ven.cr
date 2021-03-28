@@ -15,6 +15,8 @@ module Ven
     @timetable = false
 
     def initialize
+      @chunks = Chunks.new
+
       @context = Context::Machine.new
       @ccontext = Context::Compiler.new
 
@@ -68,8 +70,10 @@ module Ven
     end
 
     def process(file : String, source : String)
+      start_from = @chunks.size
+
       reader = Reader.new.reset
-      compiler = Compiler.new(@ccontext, file)
+      compiler = Compiler.new(@ccontext, file, offset: start_from)
 
       rt = Time.measure do
         reader.read(file, source) do |statement|
@@ -77,20 +81,20 @@ module Ven
         end
       end
 
-      chunks = compiler.result
+      @chunks |= compiler.result
 
       if @quiet == 0
         puts "preopt:"
 
-        chunks.each do |chunk|
+        @chunks[start_from...].each do |chunk|
           puts chunk
         end
       end
 
-      opt = Optimizer.new(chunks)
+      opt = Optimizer.new(@chunks[start_from...])
       opt.optimize(@passes)
 
-      chunks.each do |chunk|
+      @chunks[start_from...].each do |chunk|
         chunk.complete!
 
         if @quiet == 0
@@ -98,7 +102,7 @@ module Ven
         end
       end
 
-      m = Machine.new(chunks, @context)
+      m = Machine.new(@chunks, @context, cp: start_from)
 
       m.inspect = @debug
       m.measure = @timetable

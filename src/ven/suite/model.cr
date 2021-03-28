@@ -354,14 +354,14 @@ module Ven::Suite
 
   # Ven's most essential function model.
   class MConcreteFunction < MFunction
-    getter code : Chunk
+    getter cp : Int32
     getter name : String
     getter arity : Int32
     getter given : Models
     getter slurpy : Bool
     getter params : Array(String)
 
-    def initialize(@name, @arity, @slurpy, @params, @given, @code)
+    def initialize(@name, @given, @arity, @slurpy, @params, @cp)
     end
 
     # Returns how specific this concrete is.

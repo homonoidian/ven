@@ -45,7 +45,7 @@ module Ven
   enum Precedence : UInt8
     ZERO
     ASSIGNMENT
-    CONDITIONAL
+    CONVERT
     JUNCTION
     IDENTITY
     ADDITION
@@ -64,7 +64,7 @@ module Ven
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
       given loop next queue ensure expose
-      distinct box and or return)
+      distinct box and or return dies)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -347,7 +347,8 @@ module Ven
         common: Parselet::PBinaryAssign,
         precedence: ASSIGNMENT)
 
-      defled("?", Parselet::PIntoBool, precedence: ASSIGNMENT)
+      defled("?", Parselet::PIntoBool, precedence: CONVERT)
+      defled("DIES", Parselet::PDies, precedence: CONVERT)
       defled("AND", "OR", precedence: JUNCTION)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", "&", precedence: ADDITION)

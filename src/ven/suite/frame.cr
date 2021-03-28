@@ -29,6 +29,9 @@ module Ven::Suite
     property control = [] of Int32
     property underscores = Models.new
 
+    # The IP to jump if there was a death.
+    property dies : Int32?
+
     def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
     end
 

@@ -23,8 +23,10 @@ module Ven
     @inspect = false
     @measure = false
 
-    def initialize(@chunks : Chunks, @context)
-      @frames = [Frame.new]
+    # Initializes a Machine given *chunks*, *context* and the
+    # starting chunk pointer *cp*.
+    def initialize(@chunks : Chunks, @context, cp = 0)
+      @frames = [Frame.new(cp: cp)]
       @timetable = Timetable.new
     end
 
@@ -109,7 +111,7 @@ module Ven
 
     # Jumps to the instruction at some instruction pointer *ip*.
     private macro jump(ip)
-      next frame.ip = {{ip}}
+      next frame.ip = ({{ip}}.not_nil!)
     end
 
     # Returns this instruction's jump payload.
@@ -131,12 +133,6 @@ module Ven
     # Returns this instruction's function payload.
     private macro function(source = this)
       chunk.resolve({{source}}).as(VFunction)
-    end
-
-    # Interprets this instruction's static payload as an
-    # offset of a chunk. Returns that chunk.
-    private macro chunk_argument(source = this)
-      @chunks[static(Int32, {{source}})]
     end
 
     # Returns *value* if *condition* is true, and *fallback*
@@ -248,13 +244,12 @@ module Ven
     end
 
     # Performs an invokation: pushes a frame, introduces a
-    # child context and starts executing the *chunk*.
+    # child context and starts executing the chunk at *cp*.
     #
     # The frame stack is initialized with values of *import*.
     # **The order of *import* is kept.**
-    private macro invoke(chunk, import values = Models.new, purpose = Frame::Goal::Unknown)
-      @chunks << {{chunk}}
-      @frames << Frame.new({{purpose}}, {{values}}, @chunks.size - 1)
+    private macro invoke(cp, import values = Models.new, purpose = Frame::Goal::Unknown)
+      @frames << Frame.new({{purpose}}, {{values}}, {{cp}})
       @context.push
     end
 
@@ -268,7 +263,6 @@ module Ven
     private macro revoke(export = false)
       %frame = @frames.pop
 
-      @chunks.pop
       @context.pop
 
       {% if export %}
@@ -418,12 +412,11 @@ module Ven
     # some *given* values.
     def defun(informer : VFunction, given : Models)
       name = informer.name
-      chunk = @chunks[informer.target]
-      defee = MConcreteFunction.new(name,
+      defee = MConcreteFunction.new(name, given,
         informer.arity,
         informer.slurpy,
         informer.params,
-        given, chunk)
+        informer.target)
 
       case existing = @context[name]?
       when MGenericFunction
@@ -617,25 +610,19 @@ module Ven
         # https://github.com/crystal-lang/crystal/issues/5830#issuecomment-386591044
         sleep 0
 
-        if interrupt
-          # Reset the INT handler after we raise. I do not
-          # know whether this is necessary.
-          Signal::INT.reset
-
-          # Reset *interrupt*, as the `die`, in theory, could
-          # be caught.
-          interupt = false
-
-          die("interrupted")
-        elsif @inspect
-          puts this
-        end
-
         # Remember the chunk we are/(at the end, maybe were)
         # in and the current instruction pointer.
         ip, c_id = frame.ip, chunk.hash
 
         begin
+          if interrupt
+            interrupt = false
+
+            die("interrupted")
+          elsif @inspect
+            puts this
+          end
+
           began = Time.monotonic
 
           case this.opcode
@@ -778,7 +765,7 @@ module Ven
               found = variant?(callee, args)
 
               if found.is_a?(MConcreteFunction)
-                next invoke(found.code, args.reverse!, Frame::Goal::Function)
+                next invoke(found.cp, args.reverse!, Frame::Goal::Function)
               elsif found.is_a?(MBuiltinFunction)
                 put found.callee.call(self, args)
               else
@@ -831,7 +818,7 @@ module Ven
             put reduce(static, pop.as Vec)
           # Goes to the chunk it received as the argument.
           in Opcode::GOTO
-            next invoke(chunk_argument)
+            next invoke(static Int32)
           # Pops an operand and, if possible, gets the value
           # of its field. Alternatively, builds a partial:
           # (x1 -- x2)
@@ -871,21 +858,41 @@ module Ven
 
               break revoke &&
                 invoke(
-                  variant.code,
+                  variant.cp,
                   args.reverse!,
                   Frame::Goal::Function)
             end
 
             next
+          in Opcode::SETUP_DIES
+            frame.dies = target
+          in Opcode::RESET_DIES
+            frame.dies = nil
           end
+        rescue error : RuntimeError
+          dies = @frames.reverse_each do |it|
+            break it.dies || next @frames.pop
+          end
+
+          unless dies
+            # Re-raise if climbed up all frames & didn't find
+            # a handler.
+            raise error
+          end
+
+          # I do not know why this is required here, but without
+          # it, if interrupted, it rescues infinitely.
+          interupt = false
+
+          jump(dies)
         ensure
           if @measure && began
             record!(this, Time.monotonic - began, c_id, ip)
           end
-        end
 
-        if @inspect
-          @inspect = inspector
+          if @inspect
+            @inspect = inspector
+          end
         end
 
         jump

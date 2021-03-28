@@ -96,7 +96,8 @@ module Ven
 
     # Parses a field access expression into a QAccessField:
     # `a.b.c`, `1.bar`, `"quux".strip!`, etc. Also parses
-    # dynamic field access (`a.(b)`).
+    # dynamic field access (`a.(b)`) and branches field access
+    # (`a.[b.c, d]`).
     class PAccessField < Led
       def parse(parser, tag, left, token)
         QAccessField.new(tag, left, pieces parser)
@@ -108,7 +109,7 @@ module Ven
         parser.repeat(sep: ".", unit: -> { piece parser })
       end
 
-      # Parses an individual piece. It may either be a multifield
+      # Parses an individual piece. It may either be a branches
       # access piece, dynamic field access piece, or an immediate
       # field access piece.
       def piece(parser)
@@ -116,7 +117,7 @@ module Ven
 
         case lead[:type]
         when "["
-          FAMulti.new(multi parser)
+          FABranches.new(branches parser)
         when "("
           FADynamic.new(dynamic parser)
         when "SYMBOL"
@@ -124,9 +125,9 @@ module Ven
         end.not_nil!
       end
 
-      # Parses a multifield field access piece, which is,
+      # Parses a branches field access piece, which is,
       # essentially, a vector.
-      def multi(parser)
+      def branches(parser)
         PVector.new.parse(parser, QTag.void, word?)
       end
 
@@ -139,6 +140,14 @@ module Ven
       # Returns a fictious word.
       private macro word?
         { type: ".", lexeme: ".", line: 0 }
+      end
+    end
+
+    # Parses postfix 'dies' into a QDies: `1 dies`,
+    # `die("hi") dies`, etc.
+    class PDies < Led
+      def parse(parser, tag, left, token)
+        QDies.new(tag, left)
       end
     end
   end

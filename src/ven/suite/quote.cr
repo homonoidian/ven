@@ -99,7 +99,8 @@ module Ven::Suite
   defquote(QAssign, target : String, value : Quote, global : Bool)
   defquote(QBinaryAssign, operator : String, target : String, value : Quote)
 
-  defquote(QIntoBool, value : Quote)
+  defquote(QDies, operand : Quote)
+  defquote(QIntoBool, operand : Quote)
   defquote(QReturnDecrement, target : String)
   defquote(QReturnIncrement, target : String)
 

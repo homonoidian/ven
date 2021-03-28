@@ -10,6 +10,10 @@ module Ven
     # emitting into.
     @cp = 0
 
+    # How much chunks that the compiler does not know about
+    # already exist.
+    @offset : Int32
+
     # A label pointing to the body of the nearmost surrounding
     # loop. This is mostly useful for `next loop`.
     @loop : Label?
@@ -18,7 +22,7 @@ module Ven
     # function. This is mostly useful for `next fun`.
     @fun : {VFunction, Int32}?
 
-    def initialize(@context : Context::Compiler, @file = "<unknown>")
+    def initialize(@context : Context::Compiler, @file = "<unknown>", @offset = 0)
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
@@ -54,10 +58,18 @@ module Ven
     #
     # In the block, makes the chunk-of-emission be this new
     # chunk.
+    #
+    # The block may receive a computed target chunk pointer
+    # - the chunk pointer where this new chunk will be at
+    # after the compilation.
     private macro chunk!(name, &block)
-      @chunks << Chunk.new(@file, {{name}})
+      under @cp, being: @chunks.size do
+        @chunks << Chunk.new(@file, {{name}})
 
-      under @cp, being: @chunks.size - 1 do
+        {% if block.args %}
+          {{*block.args}} = @offset + @cp
+        {% end %}
+
         {{yield}}
       end
     end
@@ -154,30 +166,23 @@ module Ven
     end
 
     def visit!(q : QBinary)
+      finish = label
+
       visit(q.left)
 
-      if q.operator == "and"
-        alt = label
-        end_ = label
-
-        emit Opcode::JIF, alt
-        visit(q.right)
-        emit Opcode::JIT_ELSE_POP, end_
-        label alt
-        emit Opcode::FALSE
-        label end_
-      elsif q.operator == "or"
-        end_ = label
-
-        emit Opcode::JIT_ELSE_POP, end_
-        visit(q.right)
-        emit Opcode::JIT_ELSE_POP, end_
-        emit Opcode::FALSE
-        label end_
-      else
-        visit(q.right)
-        emit Opcode::BINARY, q.operator
+      if finishable = q.operator == "and"
+        emit Opcode::JIF_ELSE_POP, finish
+      elsif finishable = q.operator == "or"
+        emit Opcode::JIT_ELSE_POP, finish
       end
+
+      visit(q.right)
+
+      unless finishable
+        return emit Opcode::BINARY, q.operator
+      end
+
+      label finish
     end
 
     def visit!(q : QAssign)
@@ -200,8 +205,21 @@ module Ven
       emit Opcode::CALL, q.args.size
     end
 
+    def visit!(q : QDies)
+      finish = label
+      handler = label
+
+      emit Opcode::SETUP_DIES, handler
+      visit(q.operand)
+      emit Opcode::J, finish
+      label handler
+      emit Opcode::TRUE
+      label finish
+      emit Opcode::RESET_DIES
+    end
+
     def visit!(q : QIntoBool)
-      visit(q.value)
+      visit(q.operand)
       emit Opcode::TOB
     end
 
@@ -238,23 +256,23 @@ module Ven
     end
 
     # :ditto:
-    private def field(accessor : FAMulti)
-      items = accessor.access.items
+    private def field(accessor : FABranches)
+      branches = accessor.access.items
 
-      items.each_with_index do |item, index|
+      branches.each_with_index do |branch, index|
         emit Opcode::SWAP unless index == 0
-        emit Opcode::DUP unless index == items.size -  1
+        emit Opcode::DUP unless index == branches.size -  1
 
-        if item.is_a?(QAccessField)
-          field [FADynamic.new(item.head)] + item.tail
-        elsif item.is_a?(QSymbol)
-          field FAImmediate.new(item.value)
+        if branch.is_a?(QAccessField)
+          field [FADynamic.new(branch.head)] + branch.tail
+        elsif branch.is_a?(QSymbol)
+          field FAImmediate.new(branch.value)
         else
-          field FADynamic.new(item)
+          field FADynamic.new(branch)
         end
       end
 
-      emit Opcode::VEC, items.size
+      emit Opcode::VEC, branches.size
     end
 
     # Emits the appropriate field gathering instructions for
@@ -327,13 +345,12 @@ module Ven
     end
 
     def visit!(q : QBlock)
-      chunk! "<block>" do
+      chunk! "<block>" do |target|
         visit(q.body)
         emit Opcode::RET
       end
 
-      # `chunk` always appends:
-      emit Opcode::GOTO, @chunks.size - 1
+      emit Opcode::GOTO, target
     end
 
     def visit!(q : QEnsure)
@@ -369,14 +386,14 @@ module Ven
 
       @context.trace(q.tag, q.name) do
         @context.child do |nest|
-          chunk! q.name do
+          chunk! q.name do |target|
             slurpy = q.slurpy
             params = q.params
             onymous = params.reject("*")
 
             function =
               VFunction.new(q.name,
-                @cp,
+                target,
                 params,
                 q.params.size,
                 onymous.size,
