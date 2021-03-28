@@ -52,8 +52,8 @@ module Ven
     # Introduces a new chunk under the name *name* and with
     # the filename of this Compiler.
     #
-    # Makes the chunk-of-emission be this new chunk for the
-    # time in the block.
+    # In the block, makes the chunk-of-emission be this new
+    # chunk.
     private macro chunk!(name, &block)
       @chunks << Chunk.new(@file, {{name}})
 
@@ -67,8 +67,8 @@ module Ven
       Label.new
     end
 
-    # In the chunk-of-emission, introduces a new snippet under
-    # the *label*.
+    # In the chunk-of-emission, introduces a new blob of
+    # instructions under a *label*.
     private macro label(label)
       chunk.label({{label}})
     end
@@ -344,8 +344,14 @@ module Ven
     def visit!(q : QFun)
       function = uninitialized VFunction
 
-      # Emit the 'given' values. If a 'given' value is missing
-      # for a parameter, emit symbol 'any'.
+      # Emit the 'given' values.
+      #
+      # If there were no 'given' values, make an `any` per
+      # each function parameter.
+      #
+      # Otherwise, if missing 'given' values, repeat the
+      # latest mentioned one.
+
       repeat = false
 
       q.params.zip?(q.given) do |_, given|
@@ -388,9 +394,7 @@ module Ven
               emit Opcode::POP_ASSIGN, assign("rest")
             end
 
-            # We could not have possibly intruduced any other
-            # child scopes yet, so nest - 1 is our parent, i.e.,
-            # where the function itself was defined.
+            # The scope of `nest - 1` encloses this function.
             under @fun, being: { function, nest - 1 } do
               visit q.body
             end

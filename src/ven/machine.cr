@@ -6,11 +6,10 @@ module Ven
 
     alias Timetable = Hash(UInt64, IStatistics)
     alias IStatistics = Hash(Int32, IStatistic)
-    alias IStatistic = {
-      amount: Int32,
-      duration: Time::Span,
-      instruction: Instruction
-    }
+    alias IStatistic =
+      { amount: Int32,
+        duration: Time::Span,
+        instruction: Instruction }
 
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
@@ -35,27 +34,32 @@ module Ven
       raise RuntimeError.new(chunk.file, fetch.line, message)
     end
 
-    def record!(chunk_id : UInt64, ip : Int32, instruction : Instruction, duration : Time::Span)
-      if !(statistics = @timetable[chunk_id]?)
-        @timetable[chunk_id] = {
-          ip => {
-            amount: 1,
-            duration: duration,
-            instruction: instruction
-          }
-        }
-      elsif !(statistic = statistics[ip]?)
-        statistics[ip] = {
-          amount: 1,
-          duration: duration,
-          instruction: instruction
-        }
+    # Builds an `IStatistic` given *amount*, *duration* and
+    # an *instruction*.
+    private macro stat(amount, duration, instruction)
+      { amount: {{amount}},
+        duration: {{duration}},
+        instruction: {{instruction}} }
+    end
+
+    # Updates the timetable entry for an *instruction* given
+    # *duration* - the time it took to execute.
+    #
+    # *c_id* is a unique id of the chunk where *instruction*
+    # can be found.
+    #
+    # *ip* is the instruction pointer at which *instruction*
+    # can be found.
+    def record!(instruction, duration, c_id, ip)
+      if !(stats = @timetable[c_id]?)
+        @timetable[c_id] = { ip => stat(1, duration, instruction) }
+      elsif !(stat = stats[ip]?)
+        stats[ip] = stat(1, duration, instruction)
       else
-        statistics[ip] = {
-          amount: statistic[:amount] + 1,
-          duration: statistic[:duration] + duration,
-          instruction: instruction
-        }
+        stats[ip] = stat(
+          stat[:amount] + 1,
+          stat[:duration] + duration,
+          instruction)
       end
     end
 
@@ -614,21 +618,25 @@ module Ven
         sleep 0
 
         if interrupt
-          # Reset the INT handler after we raise. I do not know
-          # if this is required or not.
+          # Reset the INT handler after we raise. I do not
+          # know whether this is necessary.
           Signal::INT.reset
+
+          # Reset *interrupt*, as the `die`, in theory, could
+          # be caught.
+          interupt = false
 
           die("interrupted")
         elsif @inspect
           puts this
         end
 
-        # Remember the chunk we are/(at the end, were) in,
-        # and our current instruction pointer.
+        # Remember the chunk we are/(at the end, maybe were)
+        # in and the current instruction pointer.
         ip, c_id = frame.ip, chunk.hash
 
         begin
-          duration = Time.monotonic
+          began = Time.monotonic
 
           case this.opcode
           # Pops one value from the stack: (x --)
@@ -837,32 +845,42 @@ module Ven
             gather do |head, field|
               put field(head, field)
             end
+          # Implements the semantics of 'next fun', which is
+          # an explicit tail-call (elimination) request. Pops
+          # the callee and N arguments:
+          # (x1 ...N --)
           in Opcode::NEXT_FUN
             args = pop static(Int32)
             callee = pop.as(MFunction)
 
             # Pop frames until we meet the nearest surrounding
             # function.
+            #
+            # We know there is one because Compiler let this
+            # NEXT through & we trust the Compiler.
             @frames.reverse_each do |frame|
-              if frame.goal == Frame::Goal::Function
-                variant = variant?(callee, args)
-
-                unless variant.is_a?(MConcreteFunction)
-                  die("improper 'next fun': #{callee}: #{args.join(", ")}")
-                end
-
-                break revoke &&
-                  invoke(variant.code, args.reverse!, Frame::Goal::Function)
+              unless frame.goal == Frame::Goal::Function
+                next @frames.pop
               end
 
-              @frames.pop
+              variant = variant?(callee, args)
+
+              unless variant.is_a?(MConcreteFunction)
+                die("improper 'next fun': #{callee}: #{args.join(", ")}")
+              end
+
+              break revoke &&
+                invoke(
+                  variant.code,
+                  args.reverse!,
+                  Frame::Goal::Function)
             end
 
             next
           end
         ensure
-          if @measure && duration
-            record!(c_id, ip, this, Time.monotonic - duration)
+          if @measure && began
+            record!(this, Time.monotonic - began, c_id, ip)
           end
         end
 
