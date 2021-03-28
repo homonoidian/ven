@@ -1,8 +1,12 @@
 module Ven::Suite
   # An extension to Ven, made in Crystal.
   abstract class Extension
-    # Exports the definitions into *context* .
-    abstract def load(context : Context::Machine)
+    # Exports the definitions into *m_context*. Declares them
+    # in *c_context*.
+    protected abstract def load(
+      c_context : Context::Compiler,
+      m_context : Context::Machine
+    )
   end
 
   # A DSL for quickly making Ven extensions.
@@ -24,7 +28,7 @@ module Ven::Suite
   # T means return `T.new(value_returned_by_def)`.
   macro extension(name, &block)
     class {{name}} < Extension
-      def load(context)
+      def load(c_context, m_context)
         {% for expression in block.body.expressions %}
           {% if expression.is_a?(Assign) %}
             {% value = expression.value %}
@@ -37,10 +41,14 @@ module Ven::Suite
               {% target = target[0...-1] %}
             {% end %}
 
+            # Declare it to the compiler so we get faster
+            # symbol lookups.
+            c_context.let({{target}})
+
             {% if value.is_a?(Path) %}
-              context[{{target}}] = MType.new({{target}}, {{value}})
+              m_context[{{target}}] = MType.new({{target}}, {{value}})
             {% else %}
-              context[{{target}}] = {{expression.value}}
+              m_context[{{target}}] = {{expression.value}}
             {% end %}
           {% elsif expression.is_a?(Def) %}
             {% name = expression.name.stringify %}
@@ -48,6 +56,10 @@ module Ven::Suite
             {% body = expression.body %}
             {% arity = args.size %}
             {% return_type = expression.return_type %}
+
+            # Declare it to the compiler so we get faster
+            # symbol lookups.
+            c_context.let({{name}})
 
             %callee = -> (machine : Machine, args : Models) do
               # Define a variable for each of the received
@@ -79,7 +91,7 @@ module Ven::Suite
               .as(Model)
             end
 
-            context[{{name}}] = MBuiltinFunction.new(
+            m_context[{{name}}] = MBuiltinFunction.new(
               {{name}},
               {{arity}},
               %callee

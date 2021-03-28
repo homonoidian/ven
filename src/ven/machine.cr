@@ -244,14 +244,14 @@ module Ven
     end
 
     # Performs an invokation: pushes a frame, introduces a
-    # child context and starts executing the *chunk*. The
-    # frame stack is initialized with values of *import*.
+    # child context and starts executing the *chunk*.
+    #
+    # The frame stack is initialized with values of *import*.
     # **The order of *import* is kept.**
-    private macro invoke(chunk, import values = Models.new)
+    private macro invoke(chunk, import values = Models.new, purpose = Frame::Goal::Unknown)
       @chunks << {{chunk}}
-      @frames << Frame.new({{values}}, @chunks.size - 1)
+      @frames << Frame.new({{purpose}}, {{values}}, @chunks.size - 1)
       @context.push
-      next
     end
 
     # Reverts the actions of `invoke`.
@@ -574,6 +574,8 @@ module Ven
           puts stack.join(" ")
         when ".."
           puts chunk
+        when ".f"
+          puts frame
         when ".c"
           puts control.join(" ")
         when "._"
@@ -582,6 +584,7 @@ module Ven
           puts "?  : .h(elp) : display this",
                ".  : display stack",
                ".. : display chunk",
+               ".f : display frame",
                ".c : display control",
                "._ : display underscores",
                "CTRL-C : step",
@@ -598,8 +601,25 @@ module Ven
     # instructions from the current chunk and execute them,
     # until there aren't any left.
     def start
+      interrupt = false
+
+      # Trap so users see a nice error message instead of
+      # just killing the program.
+      Signal::INT.trap do
+        interrupt = true
+      end
+
       while this = fetch?
-        if @inspect
+        # https://github.com/crystal-lang/crystal/issues/5830#issuecomment-386591044
+        sleep 0
+
+        if interrupt
+          # Reset the INT handler after we raise. I do not know
+          # if this is required or not.
+          Signal::INT.reset
+
+          die("interrupted")
+        elsif @inspect
           puts this
         end
 
@@ -750,7 +770,7 @@ module Ven
               found = variant?(callee, args)
 
               if found.is_a?(MConcreteFunction)
-                invoke(found.code, args.reverse!)
+                next invoke(found.code, args.reverse!, Frame::Goal::Function)
               elsif found.is_a?(MBuiltinFunction)
                 put found.callee.call(self, args)
               else
@@ -803,7 +823,7 @@ module Ven
             put reduce(static, pop.as Vec)
           # Goes to the chunk it received as the argument.
           in Opcode::GOTO
-            invoke(chunk_argument)
+            next invoke(chunk_argument)
           # Pops an operand and, if possible, gets the value
           # of its field. Alternatively, builds a partial:
           # (x1 -- x2)
@@ -817,6 +837,28 @@ module Ven
             gather do |head, field|
               put field(head, field)
             end
+          in Opcode::NEXT_FUN
+            args = pop static(Int32)
+            callee = pop.as(MFunction)
+
+            # Pop frames until we meet the nearest surrounding
+            # function.
+            @frames.reverse_each do |frame|
+              if frame.goal == Frame::Goal::Function
+                variant = variant?(callee, args)
+
+                unless variant.is_a?(MConcreteFunction)
+                  die("improper 'next fun': #{callee}: #{args.join(", ")}")
+                end
+
+                break revoke &&
+                  invoke(variant.code, args.reverse!, Frame::Goal::Function)
+              end
+
+              @frames.pop
+            end
+
+            next
           end
         ensure
           if @measure && duration
@@ -832,19 +874,12 @@ module Ven
       end
     end
 
-    # Returns whether this Machine has stack remnants.
-    def remnants?
-      stack.size > 0
-    end
+    # Cleans up and returns the last value on the operand
+    # stack, if any.
+    def return!
+      @context.clear
 
-    # Returns the stack remnants that this Machine has.
-    def remnants
-      stack
-    end
-
-    # Returns the result of this Machine's work.
-    def result?
-      stack.pop?
+      stack.delete_at(..).last?
     end
   end
 end

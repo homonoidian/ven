@@ -6,23 +6,40 @@ module Ven::Suite
   # - An instruction pointer (instruction index, really)
   # - An operand stack (or just stack)
   # - A control stack (used, say, to save iteration indices)
-  # - An underscores stack (used for context, i.e., '_' and '&_').
+  # - An underscores stack (used for context, i.e., '_' and '&_')
+  # - A Goal (`Frame::Goal`): what the Machine is  trying to
+  # achieve with this frame.
   class Frame
+    # The goal of this frame. It represents the reason this
+    # frame was created in the first place.
+    enum Goal
+      # The goal of this frame is unknown.
+      Unknown
+
+      # This frame was created in order to evaluate a function.
+      Function
+    end
+
+    getter goal : Goal
+
     property cp : Int32
     property ip : Int32 = 0
+
     property stack : Models
     property control = [] of Int32
     property underscores = Models.new
 
-    def initialize(@stack = Models.new, @cp = 0)
+    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
     end
 
     delegate :last, :last?, to: @stack
 
     def to_s(io)
-      io << "S = " << @stack.join(" ") << ";\n"
-      io << "C = " << @control.join(" ") << ";\n"
-      io << "_ = " << @underscores.join(" ") << ";\n"
+      io << "frame@" << @cp << " [goal: " << goal << "] {\n"
+      io << "  ip: " << @ip << "\n"
+      io << "  oS: " << @stack.join(" ") << "\n"
+      io << "  cS: " << @control.join(" ")  << "\n"
+      io << "  _S: " << @underscores.join(" ")  << "\n"
     end
   end
 end

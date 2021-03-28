@@ -51,6 +51,16 @@ module Ven::Suite
           first.line)
     end
 
+    # Removes a blob of instructions starting at *start* and
+    # of size *count*.
+    def remove(start, count : Int32)
+      unless first = @code[start]?
+        raise "Snippet.replace(): snippet not long enough"
+      end
+
+      @code.delete_at(start...start + count)
+    end
+
     # Returns a new snippet with a fictious label.
     def self.core
       new(Label.new)

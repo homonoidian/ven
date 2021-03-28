@@ -18,7 +18,7 @@ module Ven
       @context = Context::Machine.new
       @ccontext = Context::Compiler.new
 
-      @context.use(Library::Internal.new)
+      Library::Internal.new.load(@ccontext, @context)
     end
 
     # Prints a *message* and quits with exit status 0.
@@ -137,11 +137,7 @@ module Ven
       end
 
       if @quiet <= 1
-        puts m.result?
-      end
-
-      if @quiet == 0 && m.remnants?
-        puts "Warning: several stack remnants: #{m.remnants}"
+        puts m.return!
       end
     end
 

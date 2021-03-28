@@ -5,7 +5,7 @@ module Ven::Library
     # Prints *message* to STDOUT. Returns Ven true (through
     # `extension` semantics).
     def say(message : Str) : Nil
-      puts message
+      puts message.value
     end
 
     # Dies of *message*. It is a no-return.

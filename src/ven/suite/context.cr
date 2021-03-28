@@ -1,8 +1,9 @@
 module Ven::Suite::Context
-  # The context for the compiler.
+  # The context for a `Compiler`.
   #
-  # The compiler uses context to determine the nesting of a
-  # symbol and/or check if a symbol exists.
+  # A compiler may use context to determine where (and whether)
+  # a symbol was defined, as well as to manage compile-time
+  # traceback.
   class Compiler
     private alias Scope = Hash(String, Bool)
 
@@ -40,9 +41,9 @@ module Ven::Suite::Context
     # true. If found such one, "assign" to it. If didn't,
     # make a new entry in the localmost scope.
     def assign(symbol : String, global = false)
-      @scopes.each_with_index do |scope, nesting|
+      @scopes.each_with_index do |scope, nest|
         if scope.has_key?(symbol) && scope[symbol]
-          return nesting
+          return nest
         end
       end
 
@@ -73,16 +74,21 @@ module Ven::Suite::Context
     end
   end
 
-  # The context for the Machine.
+  # The context for a `Machine`.
   class Machine
     private alias Scope = Hash(String, Model)
 
-    # The scope hierarchy of this machine. The rightmost scope
-    # is the localmost, and the leftmost - the globalmost.
+    # The scope hierarchy. The rightmost scope is the localmost,
+    # and the leftmost - the globalmost.
     getter scopes : Array(Scope)
 
     def initialize
       @scopes = [Scope.new]
+    end
+
+    # Deletes all scopes except the globalmost.
+    def clear
+      @scopes.delete_at(1...)
     end
 
     # Returns the nest of a *symbol* if it exists in one of
@@ -131,11 +137,6 @@ module Ven::Suite::Context
     # :ditto:
     def []=(symbol : VSymbol, value : Model)
       @scopes[symbol.nest.not_nil!][symbol.name] = value
-    end
-
-    # Loads an *extension* into this context.
-    def use(extension : Extension)
-      extension.load(self)
     end
 
     # Introduces a child scope.

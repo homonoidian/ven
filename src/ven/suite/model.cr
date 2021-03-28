@@ -310,6 +310,10 @@ module Ven::Suite
     def initialize(@name, @type)
     end
 
+    def eqv?(other : MType)
+      @name == other.name
+    end
+
     def weight
       MWeight::TYPE
     end
@@ -526,7 +530,7 @@ module Ven::Suite
     end
   end
 
-  # A partial call to an `MFunction`.
+  # A partial (withheld) call to an `MFunction`.
   #
   # Used mainly for UFCS, say, to write `1.say()` instead of
   # `say(1)`. In this example, `1.say` is a partial.

@@ -6,12 +6,23 @@ module Ven
   class Compiler < Suite::Visitor
     include Suite
 
+    # Points to the chunk this Compiler is currently
+    # emitting into.
+    @cp = 0
+
+    # A label pointing to the body of the nearmost surrounding
+    # loop. This is mostly useful for `next loop`.
+    @loop : Label?
+
+    # The payload vehicle & nest of the nearmost surrounding
+    # function. This is mostly useful for `next fun`.
+    @fun : {VFunction, Int32}?
+
     def initialize(@context : Context::Compiler, @file = "<unknown>")
-      @cursor = 0
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
-    # Raises a traceback-ed compile-time error.
+    # Raises a compile-time error, providing it the traceback.
     def die(message : String)
       traces = @context.traces.dup
 
@@ -22,87 +33,79 @@ module Ven
       raise CompileError.new(traces, message)
     end
 
-    # Returns the chunk under the cursor.
-    private macro lead
-      @chunks[@cursor]
-    end
-
-    # Requests a new, unique label.
-    private macro label?
-      Label.new
-    end
-
-    # Declares a label in the lead chunk.
-    private macro label(name)
-      lead.label({{name}})
-    end
-
-    # Emits an instruction into the lead chunk.
-    #
-    # Ensures *opcode* is not nil.
-    private macro emit(opcode, argument = nil)
-      lead.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
-    end
-
-    # Makes a new chunk, *name*, and evaluates the block
-    # within it.
-    #
-    # Returns the chunk cursor for the new chunk.
-    private macro chunk(name, &)
-      @chunks << Chunk.new(@file, {{name}})
-
-      # Make our chunk the lead chunk for the time the block
-      # executes. This allows `emit` to target it.
-      old, @cursor = @cursor, @chunks.size - 1
+    # Makes *target* be *value* while in the block.
+    private macro under(target, being value, &block)
+      %old, {{target}} = {{target}}, {{value}}
 
       begin
         {{yield}}
-
-        @cursor
       ensure
-        @cursor = old
+        {{target}} = %old
       end
     end
 
-    # Looks up a symbol.
-    private macro lookup(symbol)
-      @context.lookup({{symbol}})
+    # Returns the chunk at the *cursor* (hereinafter chunk-of-emission).
+    private macro chunk(at cursor = @cp)
+      @chunks[{{cursor}}]
     end
 
-    # A shorthand for `VSymbol.new(...)`.
-    private macro symbol(name, nesting = nil)
-      {% if nesting %}
-        VSymbol.new({{name}}, {{nesting}})
+    # Introduces a new chunk under the name *name* and with
+    # the filename of this Compiler.
+    #
+    # Makes the chunk-of-emission be this new chunk for the
+    # time in the block.
+    private macro chunk!(name, &block)
+      @chunks << Chunk.new(@file, {{name}})
+
+      under @cp, being: @chunks.size - 1 do
+        {{yield}}
+      end
+    end
+
+    # Returns a new label.
+    private macro label
+      Label.new
+    end
+
+    # In the chunk-of-emission, introduces a new snippet under
+    # the *label*.
+    private macro label(label)
+      chunk.label({{label}})
+    end
+
+    # Emits an instruction into the chunk-of-emission.
+    #
+    # Additionally, ensures *opcode* is not nil.
+    private macro emit(opcode, argument = nil)
+      chunk.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
+    end
+
+    # Makes a new symbol vehicle (see `VSymbol`).
+    #
+    # If provided with a *nest*, makes it the new symbol's
+    # nest. Otherwise, uses the context to determine the
+    # nest. If couldn't determine, makes the symbol's nest
+    # nil.
+    private macro symbol(name, nest = nil)
+      {% if nest %}
+        VSymbol.new({{name}}, {{nest}})
       {% else %}
-        VSymbol.new(%name = {{name}}, lookup %name)
+        VSymbol.new(%name = {{name}}, @context.lookup %name)
       {% end %}
     end
 
-    # Assigns a *symbol*. Returns the resulting `VSymbol`.
+    # Emulates an assignment to *symbol*. Returns the resulting
+    # symbol vehicle (`VSymbol`).
     private macro assign(symbol, global = false)
       %symbol = {{symbol}}
-      %global = {{global}}
-      %nesting = @context.assign({{symbol}}, {{global}})
-
-      symbol(%symbol, %nesting)
+      %nest = @context.assign(%symbol, {{global}})
+      symbol(%symbol, %nest)
     end
 
-    # Returns the result of this compiler's work: an array of
-    # unoptimized, snippeted chunks.
+    # Returns the raw result of this compiler's work: an
+    # array of unoptimized, unstitched chunks.
     def result
       @chunks
-    end
-
-    def visit(quote : Quote)
-      super(quote)
-
-      1
-    end
-
-    def visit(quotes : Quotes)
-      super(quotes)
-
-      quotes.size
     end
 
     def visit!(q : QSymbol)
@@ -122,7 +125,8 @@ module Ven
     end
 
     def visit!(q : QVector)
-      emit Opcode::VEC, visit(q.items)
+      visit(q.items)
+      emit Opcode::VEC, q.items.size
     end
 
     def visit!(q : QUPop)
@@ -134,7 +138,7 @@ module Ven
     end
 
     def visit!(q : QUnary)
-      visit q.operand
+      visit(q.operand)
 
       opcode =
         case q.operator
@@ -153,8 +157,8 @@ module Ven
       visit(q.left)
 
       if q.operator == "and"
-        alt = label?
-        end_ = label?
+        alt = label
+        end_ = label
 
         emit Opcode::JIF, alt
         visit(q.right)
@@ -163,7 +167,7 @@ module Ven
         emit Opcode::FALSE
         label end_
       elsif q.operator == "or"
-        end_ = label?
+        end_ = label
 
         emit Opcode::JIT_ELSE_POP, end_
         visit(q.right)
@@ -178,7 +182,6 @@ module Ven
 
     def visit!(q : QAssign)
       visit(q.value)
-
       emit Opcode::TAP_ASSIGN, assign(q.target, q.global)
     end
 
@@ -193,13 +196,12 @@ module Ven
 
     def visit!(q : QCall)
       visit(q.callee)
-
-      emit Opcode::CALL, visit(q.args)
+      visit(q.args)
+      emit Opcode::CALL, q.args.size
     end
 
     def visit!(q : QIntoBool)
       visit(q.value)
-
       emit Opcode::TOB
     end
 
@@ -224,7 +226,7 @@ module Ven
     end
 
     # Emits the appropriate field gathering instructions for
-    # an *accessor*.
+    # a field accessor *accessor*.
     private def field(accessor : FAImmediate)
       emit Opcode::FIELD_IMMEDIATE, accessor.access
     end
@@ -232,7 +234,6 @@ module Ven
     # :ditto:
     private def field(accessor : FADynamic)
       visit(accessor.access)
-
       emit Opcode::FIELD_DYNAMIC
     end
 
@@ -257,7 +258,7 @@ module Ven
     end
 
     # Emits the appropriate field gathering instructions for
-    # each accessor of *accessors*.
+    # each field accessor of *accessors*.
     private def field(accessors : FieldAccessors)
       accessors.each do |accessor|
         field(accessor)
@@ -269,70 +270,84 @@ module Ven
       field(q.tail)
     end
 
-    def visit!(q : QBinarySpread)
+    def visit!(q : QReduceSpread)
       visit(q.operand)
       emit Opcode::TOV
       emit Opcode::REDUCE, q.operator
     end
 
-    def visit!(q : QLambdaSpread)
-      stop = label?
-      start = label?
+    def visit!(q : QMapSpread)
+      stop = label
+      start = label
 
-      emit Opcode::VEC, 0
+      unless q.iterative
+        emit Opcode::VEC, 0
+      end
+
       visit(q.operand)
       emit Opcode::MAP_SETUP
-
       label start
       emit Opcode::MAP_ITER, stop
       emit Opcode::UPUT
-      visit(q.lambda)
-      emit Opcode::MAP_APPEND
+      visit(q.operator)
+
+      if q.iterative
+        emit Opcode::POP
+      else
+        emit Opcode::MAP_APPEND
+      end
+
       emit Opcode::J, start
 
       label stop
-      emit Opcode::POP
+
+      unless q.iterative
+        emit Opcode::POP
+      end
     end
 
     def visit!(q : QIf)
-      alt = label?
-      end_ = label?
+      finish = label
+      else_b = label
 
       visit(q.cond)
-      emit Opcode::JIF, alt
-      visit(q.suc)
-      emit Opcode::J, end_
-      label alt
-      q.alt ? visit(q.alt.not_nil!) : emit Opcode::FALSE
-      label end_
+
+      if alt = q.alt
+        emit Opcode::JIF_ELSE_POP, else_b
+        visit(q.suc)
+        emit Opcode::J, finish
+        label else_b
+        visit(alt)
+      else
+        emit Opcode::JIF_ELSE_POP, finish
+        visit(q.suc)
+      end
+
+      label finish
     end
 
     def visit!(q : QBlock)
-      offset = chunk "<block>" do
+      chunk! "<block>" do
         visit(q.body)
-
         emit Opcode::RET
       end
 
-      emit Opcode::GOTO, offset
+      # `chunk` always appends:
+      emit Opcode::GOTO, @chunks.size - 1
     end
 
     def visit!(q : QEnsure)
       visit(q.expression)
-
       emit Opcode::ENS
     end
 
     def visit!(q : QFun)
-      given = uninitialized Int32
-      arity = uninitialized Int32
-      slurpy = uninitialized Bool
-      params = uninitialized Array(String)
-      target = uninitialized Int32
+      function = uninitialized VFunction
 
+      # Emit the 'given' values. If a 'given' value is missing
+      # for a parameter, emit symbol 'any'.
       repeat = false
 
-      # Emit the 'given' values.
       q.params.zip?(q.given) do |_, given|
         if !given && !repeat
           emit Opcode::SYM, symbol("any", 0)
@@ -347,14 +362,19 @@ module Ven
       @context.let(q.name)
 
       @context.trace(q.tag, q.name) do
-        @context.child do |nesting|
-          target = chunk q.name do
+        @context.child do |nest|
+          chunk! q.name do
+            slurpy = q.slurpy
             params = q.params
             onymous = params.reject("*")
 
-            given = params.size
-            arity = onymous.size
-            slurpy = q.slurpy
+            function =
+              VFunction.new(q.name,
+                @cp,
+                params,
+                q.params.size,
+                onymous.size,
+                slurpy)
 
             onymous.each do |parameter|
               emit Opcode::POP_ASSIGN, assign(parameter)
@@ -363,30 +383,36 @@ module Ven
             # Slurpies eat the rest of the stack's values. It
             # must, however, be proven that the slurpie (`*`)
             # is at the end of the function's parameters.
-            if q.slurpy
+            if slurpy
               emit Opcode::REM_TO_VEC
               emit Opcode::POP_ASSIGN, assign("rest")
             end
 
-            visit q.body
+            # We could not have possibly intruduced any other
+            # child scopes yet, so nest - 1 is our parent, i.e.,
+            # where the function itself was defined.
+            under @fun, being: { function, nest - 1 } do
+              visit q.body
+            end
 
             emit Opcode::RET
           end
         end
       end
 
-      emit Opcode::FUN, VFunction.new(q.name, target, params, given, arity, slurpy)
+      emit Opcode::FUN, function
     end
 
-    # A note on infinite (and other) loops: they clear the
-    # stack after each iteration. This prevents the stack
-    # from flooding, if such a thing even occurs (e.g. `loop 1`).
     def visit!(q : QInfiniteLoop)
-      start = label?
+      start = label
 
       label start
-      visit(q.repeatee)
-      emit Opcode::POP # q.body is QBlock => only 1 value exported
+
+      under @loop, being: start do
+        visit(q.repeatee)
+      end
+
+      emit Opcode::POP
       emit Opcode::J, start
     end
 
@@ -394,14 +420,21 @@ module Ven
     # if there were no iterations; otherwise, they return
     # the result of the last iteration.
     def visit!(q : QBaseLoop)
-      stop = label?
-      start = label?
+      stop = label
+      start = label
 
       label start
       visit(q.base)
       emit Opcode::JIF, stop
-      emit Opcode::TRY_POP # # previous q.repeatee
-      visit(q.repeatee)
+
+      # Pop previous q.repeatee, if any.
+      # XXX: BUG-PRONE if loop becomes an expression.
+      emit Opcode::TRY_POP
+
+      under @loop, being: start do
+        visit(q.repeatee)
+      end
+
       emit Opcode::J, start
 
       label stop
@@ -410,14 +443,18 @@ module Ven
 
     # :ditto:
     def visit!(q : QStepLoop)
-      stop = label?
-      start = label?
+      stop = label
+      start = label
 
       label start
       visit(q.base)
       emit Opcode::JIF, stop
-      emit Opcode::TRY_POP # previous q.repeatee
-      visit(q.repeatee)
+      emit Opcode::TRY_POP
+
+      under @loop, being: start do
+        visit(q.repeatee)
+      end
+
       visit(q.step)
       emit Opcode::POP # q.step
       emit Opcode::J, start
@@ -428,23 +465,45 @@ module Ven
 
     # :ditto:
     def visit!(q : QComplexLoop)
-      stop = label?
-      start = label?
+      stop = label
+      start = label
 
       visit(q.start)
-      emit Opcode::POP # q.start
-
+      emit Opcode::POP
       label start
       visit(q.base)
       emit Opcode::JIF, stop
-      emit Opcode::TRY_POP # previous q.repeatee
-      visit(q.repeatee)
+      emit Opcode::TRY_POP
+
+      under @loop, being: start do
+        visit(q.repeatee)
+      end
+
       visit(q.step)
       emit Opcode::POP # q.step
       emit Opcode::J, start
-
       label stop
       emit Opcode::FALSE_IF_EMPTY
+    end
+
+    def visit!(q : QNext)
+      args, scope = q.args, q.scope
+
+      if @fun && scope.in?("fun", nil)
+        function, nest = @fun.not_nil!
+
+        emit Opcode::SYM, symbol(function.name, nest)
+        visit(args)
+        emit Opcode::NEXT_FUN, args.size
+      elsif @loop && scope.in?("loop", nil)
+        unless args.empty?
+          die("'next loop' arguments are currently illegal")
+        end
+
+        emit Opcode::J, @loop.not_nil!
+      else
+        die("'next' outside of a loop or a function")
+      end
     end
   end
 end

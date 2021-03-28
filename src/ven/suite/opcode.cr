@@ -44,6 +44,7 @@ module Ven::Suite
     BINARY
     BINARY_ASSIGN
     FIELD_IMMEDIATE
+    NEXT_FUN
 
     # Opcodes that take a jump payload.
     J = 512
@@ -74,6 +75,12 @@ module Ven::Suite
       when 2048..
         :function
       end
+    end
+
+     # Returns whether this opcode puts exactly one value on
+     # the operand stack **no matter what**, and consumes none.
+    def puts_one?
+      self.in?(DUP, SYM, NUM, STR, PCRE, TRUE, FALSE, UPOP, UREF)
     end
   end
 end

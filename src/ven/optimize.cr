@@ -97,6 +97,20 @@ module Ven
             break snippet.replace(start, 2, Opcode::VEC, argument pair[0])
           when [Opcode::TAP_ASSIGN, Opcode::POP]
             break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
+          when [Opcode::UPUT, Opcode::UPOP]
+            break snippet.remove(start, 2)
+          end
+
+          if pair.first.opcode == Opcode::J
+            # At this point we are in the snippet-world and
+            # there are only cross-snippet jumps. In one snippet
+            # therefore, everything past an absolute jump is
+            # dead weight.
+            break snippet.replace(start, 2, Opcode::J, pair.first.label)
+          elsif pair.first.opcode.puts_one? && pair[1].opcode == Opcode::POP
+            # First instruction of the pair produces one value,
+            # and second pops it right away. No effect at all.
+            break snippet.remove(start, 2)
           end
         end
       end

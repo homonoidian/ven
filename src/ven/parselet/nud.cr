@@ -133,21 +133,21 @@ module Ven
 
     # Parses a spread into a QSpread: `|+| [1, 2, 3]` (reduce
     # spread), `|_ is 5| [1, 2, 3]` (map spread), `|say(_)|: [1, 2, 3]`
-    # (iterative spread). Lambda spreads do not support naked
+    # (iterative spread). Map spreads do not support naked
     # unary bodies: `|+_| [1, "2", false]` will die; one can
     # use `|(+_)| ...` instead.
     class PSpread < Nud
       def parse(parser, tag, token)
         kind, body =
           parser.is_led?(only: PBinary) \
-            ? {:binary, parser.word![:lexeme]}
-            : {:lambda, parser.led}
+            ? {:reduce, parser.word![:lexeme]}
+            : {:map, parser.led}
 
         _, iterative = parser.expect("|"), !parser.word!(":").nil?
 
-        kind == :binary \
-          ? QBinarySpread.new(tag, body.as(String), parser.led)
-          : QLambdaSpread.new(tag, body.as(Quote), parser.led, iterative)
+        kind == :reduce \
+          ? QReduceSpread.new(tag, body.as(String), parser.led)
+          : QMapSpread.new(tag, body.as(Quote), parser.led, iterative)
       end
     end
 
@@ -242,19 +242,16 @@ module Ven
     end
 
     # Parses a 'loop' statement into
-    #   + a QInfiniteLoop: if `loop ...` or `loop { ... }`;
-    #   + a QBaseLoop: if `loop (base) ...` or `loop (base) { ... }`;
-    #   + a QStepLoop: if `loop (base; step) ...` or `loop (base; step) { ... }`;
-    #   + a QComplexLoop: if `loop (start; base; ...; step) ...` or
-    #     `loop (start; base; ...; step) { ... }`.
+    # - a QInfiniteLoop: if `loop ...`;
+    # - a QBaseLoop: if `loop (base) ...`;
+    # - a QStepLoop: if `loop (base; step) ...`;
+    # - a QComplexLoop: if `loop (start; base; step) ...`.
     class PLoop < Nud
       def parse(parser, tag, token)
         start : Quote?
         base : Quote?
         step : Quote?
         body : QBlock
-
-        pres = Quotes.new
 
         if parser.word!("(")
           head = parser.repeat(")", sep: ";")

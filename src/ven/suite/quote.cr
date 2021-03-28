@@ -105,8 +105,8 @@ module Ven::Suite
 
   defquote(QAccessField, head : Quote, tail : FieldAccessors)
 
-  defquote(QBinarySpread, operator : String, operand : Quote)
-  defquote(QLambdaSpread, lambda : Quote, operand : Quote, iterative : Bool)
+  defquote(QMapSpread, operator : Quote, operand : Quote, iterative : Bool)
+  defquote(QReduceSpread, operator : String, operand : Quote)
 
   defquote(QBlock, body : Quotes)
   defquote(QIf, cond : Quote, suc : Quote, alt : Quote?)
