@@ -534,6 +534,15 @@ module Ven
       end
     end
 
+    # Spreads field access on *head*. Returns a Vec of the
+    # resulting field values.
+    #
+    # Returns nil if one or more of these accesses weren't
+    # resolved correctly.
+    def field?(head : Vec, field : String)
+      vec (head.value.map { |item| field?(item, field) || return })
+    end
+
     # Resolves a field access.
     #
     # If *head* has a field named *field*, returns the value
