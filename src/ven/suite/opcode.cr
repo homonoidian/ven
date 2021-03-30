@@ -20,7 +20,8 @@ module Ven::Suite
     NEG
     LEN
     ENS
-    UPUT
+    POP_UPUT
+    TAP_UPUT
     UPOP
     UREF
     CLEAR
@@ -35,6 +36,7 @@ module Ven::Suite
     RESET_DIES
     FORCE_RET
     SETUP_RET
+    ANY
 
     # Opcodes that take a static payload.
     NUM = 128
@@ -48,6 +50,7 @@ module Ven::Suite
     BINARY_ASSIGN
     FIELD_IMMEDIATE
     NEXT_FUN
+    BOX_INSTANCE
 
     # Opcodes that take a jump payload.
     J = 512
@@ -65,6 +68,7 @@ module Ven::Suite
 
     # Opcodes that take a function payload.
     FUN = 2048
+    BOX
 
     # Returns the kind of payload an instruction takes, or
     # nil if it does not take any.
@@ -84,7 +88,17 @@ module Ven::Suite
      # Returns whether this opcode puts exactly one value on
      # the operand stack **no matter what**, and consumes none.
     def puts_one?
-      self.in?(DUP, SYM, NUM, STR, PCRE, TRUE, FALSE, UPOP, UREF)
+      self.in?(
+        DUP,
+        SYM,
+        NUM,
+        STR,
+        PCRE,
+        TRUE,
+        FALSE,
+        UPOP,
+        UREF,
+        ANY)
     end
   end
 end

@@ -4,8 +4,16 @@ module Ven::Library
   extension Internal do
     # Prints *message* to STDOUT. Returns Ven true (through
     # `extension` semantics).
-    def say(message : Str) : Nil
-      puts message.value
+    def say(message) : Nil
+      puts message.to_str.value
+    end
+
+    # Prints *question*, followed by whitespace, to the standard
+    # out. Waits for user's reply. Returns that reply as a Str.
+    def ask(question : Str)
+      print("#{question.value} ")
+
+      (line = gets) ? Str.new(line) : MBool.new(false)
     end
 
     # Dies of *message*. It is a no-return.
@@ -17,6 +25,12 @@ module Ven::Library
     # *value*.
     def define(name : Str, value)
       machine.context[name.value] = value
+    end
+
+    # Returns the *input* string offset to the right by *cut*
+    # characters.
+    def offset(input : Str, cut : Num) : Str
+      input.value[cut.value.to_big_i...]
     end
 
     true_ = MBool.new(true)
@@ -32,6 +46,7 @@ module Ven::Library
     str = Str
     vec = Vec
     bool = MBool
+    regex = MRegex
 
     partial = MPartial
     builtin = MBuiltinFunction

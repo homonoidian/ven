@@ -206,8 +206,11 @@ module Ven
 
       # Parses a list of `parameter`s. Performs all (or most
       # of) the required checks.
-      def self.parameters(parser : Reader)
-        this = parser.repeat(")", ",", unit: -> { parameter(parser) })
+      #
+      # *utility* determines whether to accept '*', '$', etc.,
+      # as parameters.
+      def self.parameters(parser : Reader, utility = true)
+        this = parser.repeat(")", ",", unit: -> { parameter(parser, utility) })
 
         if this.count("*") > 1
           parser.die("more than one '*' in function parameters")
@@ -222,8 +225,14 @@ module Ven
 
       # Reads a parameter. **Does not** check whether there
       # is one or multiple '*'s, etc.
-      macro parameter(parser)
-        {{parser}}.expect("*", "$", "_", "SYMBOL")[:lexeme]
+      #
+      # *utility* determines whether to read '*', '$', etc.
+      def self.parameter(parser : Reader, utility = true)
+        if utility
+          parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
+        else
+          parser.expect("SYMBOL", "_")[:lexeme]
+        end
       end
     end
 
@@ -356,7 +365,7 @@ module Ven
         end
 
         params = parser.word!("(") \
-          ? PFun.parameters(parser)
+          ? PFun.parameters(parser, utility: false)
           : [] of String
 
         given = parser.word!("GIVEN") \
@@ -365,18 +374,17 @@ module Ven
 
         namespace =
           if parser.word!("{")
-            # We do not require the semicolon from now on.
             @semicolon = false
 
             parser.repeat "}", ";", -> do
-              it = parser.led
+              assignment = parser.led
 
               # Box blocks may only contain assignments.
-              unless it.is_a?(QAssign)
-                parser.die("statements other than assignment illegal in box blocks")
+              unless assignment.is_a?(QAssign)
+                parser.die("only assignments are legal inside box blocks")
               end
 
-              {it.target, it.value}
+              { assignment.target, assignment.value }
             end
           else
             {} of String => Quote

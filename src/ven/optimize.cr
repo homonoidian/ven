@@ -97,7 +97,7 @@ module Ven
             break snippet.replace(start, 2, Opcode::VEC, argument pair[0])
           when [Opcode::TAP_ASSIGN, Opcode::POP]
             break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
-          when [Opcode::UPUT, Opcode::UPOP]
+          when [Opcode::POP_UPUT, Opcode::UPOP]
             break snippet.remove(start, 2)
           end
 

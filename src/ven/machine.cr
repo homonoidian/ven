@@ -294,18 +294,9 @@ module Ven
     end
 
     # Matches *args* against *types*.
-    #
-    # Makes the lattermost type cover the excess arguments,
-    # if any.
     def typecheck(types : Models, args : Models) : Bool
-      cover = uninitialized Model
-
-      args.zip?(types) do |arg, type|
-        cover = type if type
-
-        unless arg.of?(cover) || cover.eqv?(arg)
-          return false
-        end
+      args.zip(types) do |arg, type|
+        return false unless arg.of?(type) || type.eqv?(arg)
       end
 
       true
@@ -695,6 +686,9 @@ module Ven
           #  - (... -- ...)
           in Opcode::FALSE_IF_EMPTY
             put bool false if stack.empty?
+          # Puts 'any' onto the stack: (-- any)
+          in Opcode::ANY
+            put MAny.new
           # Negates a num: (x1 -- -x1)
           in Opcode::NEG
             put pop.to_num.neg!
@@ -773,9 +767,9 @@ module Ven
           # `any`s) to be on the stack; it pops them.
           in Opcode::FUN
             defun(myself = function, pop myself.given)
-          # If *x1* is a fun, invokes it. If a vec/str, indexes
-          # it: (x1 a1 a2 a3 ... -- R), where *aN* is an argument,
-          # and R is the returned value.
+          # If *x1* is a fun/box, invokes it. If a vec/str,
+          # indexes it: (x1 a1 a2 a3 ... -- R), where *aN* is
+          # an argument, and R is the returned value.
           in Opcode::CALL
             args = pop static(Int32)
 
@@ -799,6 +793,12 @@ module Ven
               else
                 die("improper arguments for #{callee}: #{args.join(", ")}")
               end
+            when MBox
+              unless callee.arity == args.size && typecheck(callee.given, args)
+                die("improper argument count for #{callee}: #{args.join(", ")}")
+              end
+
+              next invoke(callee.target, args.reverse!)
             else
               die("illegal callee: #{callee}")
             end
@@ -814,9 +814,13 @@ module Ven
               die("void expression")
             end
           # Moves a value onto the underscores stack:
-          #   S: (x1 --) ==> _: (-- x1)
-          in Opcode::UPUT
+          #   oS: (x1 --) ==> _S: (-- x1)
+          in Opcode::POP_UPUT
             underscores << pop
+          # Copies a value onto the underscores stack:
+          #   oS: (x1 -- x1) ==> _S: (-- x1)
+          in Opcode::TAP_UPUT
+            underscores << tap
           # Moves a value from the underscores stack:
           in Opcode::UPOP
             put underscores.pop? || die("'_': no contextual")
@@ -921,6 +925,23 @@ module Ven
                 break it.returns = tap
               end
             end
+          # Makes a box and puts in onto the stack: (...N) -- B,
+          # where N is the number of arguments a box receives
+          # and B is the resulting box.
+          in Opcode::BOX
+            defee = function
+            given = pop defee.given
+
+            put MBox.new(defee.name, given,
+              defee.params,
+              defee.arity,
+              defee.target
+            )
+          # Instantiates a box and puts the instance onto the
+          # stack: (B -- I), where B is the box parent to this
+          # instance, and I is the instance.
+          in Opcode::BOX_INSTANCE
+            put MBoxInstance.new(pop.as(MBox), @context.scopes[static(Int32)].dup)
           end
         rescue error : RuntimeError
           dies = @frames.reverse_each do |it|

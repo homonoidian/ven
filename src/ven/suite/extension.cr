@@ -79,7 +79,10 @@ module Ven::Suite
                 end
               {% end %}
 
-              %result = {{body}}
+              %result =
+                begin
+                  {{body}}
+                end
 
               {% if return_type.is_a?(Path) && return_type.resolve == Nil %}
                 MBool.new(true)

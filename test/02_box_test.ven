@@ -1,0 +1,58 @@
+box A;
+box B;
+
+ensure A is A and A is not B;
+ensure B is B and B is not A;
+
+a = A();
+b = B();
+
+ensure a is a and a is not b;
+ensure b is b and b is not a;
+
+ensure a.name is "A" and b.name is "B";
+ensure a.parent is A and b.parent is B;
+
+
+box Foo(x, y);
+box Bar(i, j, k) given num, str;
+
+foo = Foo(1, 2);
+bar = Bar(3, "4", "5");
+
+ensure foo.x is 1;
+ensure foo.y is 2;
+ensure foo.undefined dies;
+
+ensure bar.i is 3;
+ensure bar.j is "4";
+ensure bar.k is "5";
+
+
+ensure Foo("45", bar);
+ensure Bar("$5", bar, foo) dies;
+
+
+box J(v) given num;
+box I(j) given J;
+
+j = J(3.14);
+i = I(j);
+
+ensure i.j.v is 3.14;
+ensure i.j.undefined dies;
+
+
+box Timeit;
+
+loop (i = 0; i < 1_000_000; i++) {
+  Timeit();
+}
+box Timeit_args(a, b);
+
+loop (i = 0; i < 1_000_000; i++) {
+  timeit = Timeit_args(1, 2);
+
+  timeit.a;
+  timeit.b;
+}

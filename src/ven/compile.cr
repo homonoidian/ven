@@ -306,7 +306,7 @@ module Ven
       emit Opcode::MAP_SETUP
       label start
       emit Opcode::MAP_ITER, stop
-      emit Opcode::UPUT
+      emit Opcode::POP_UPUT
       visit(q.operator)
 
       if q.iterative
@@ -329,6 +329,7 @@ module Ven
       else_b = label
 
       visit(q.cond)
+      emit Opcode::TAP_UPUT
 
       if alt = q.alt
         emit Opcode::JIF_ELSE_POP, else_b
@@ -358,28 +359,31 @@ module Ven
       emit Opcode::ENS
     end
 
+    # Emits the 'given' values.
+    #
+    # If there were no 'given' values, makes an `any` per
+    # each parameter.
+    #
+    # If missing a few 'given' values, repeats the one that
+    # was mentioned lastly.
+    def emit_given(params : Array(String), given : Quotes)
+      repeat = false
+
+      params.zip?(given) do |_, given_quote|
+        if !given_quote && !repeat
+          emit Opcode::ANY
+        elsif !given_quote
+          visit given.last
+        elsif repeat = true
+          visit given_quote
+        end
+      end
+    end
+
     def visit!(q : QFun)
       function = uninitialized VFunction
 
-      # Emit the 'given' values.
-      #
-      # If there were no 'given' values, make an `any` per
-      # each function parameter.
-      #
-      # Otherwise, if missing 'given' values, repeat the
-      # latest mentioned one.
-
-      repeat = false
-
-      q.params.zip?(q.given) do |_, given|
-        if !given && !repeat
-          emit Opcode::SYM, symbol("any", 0)
-        elsif !given
-          visit q.given.last
-        elsif repeat = true
-          visit given
-        end
-      end
+      emit_given(q.params, q.given)
 
       # Make the function visible.
       @context.let(q.name)
@@ -543,6 +547,40 @@ module Ven
 
       visit(q.value)
       emit Opcode::SETUP_RET
+    end
+
+    def visit!(q : QBox)
+      emit_given(q.params, q.given)
+
+      chunk! q.name do |target|
+        @context.child do |nest|
+          q.params.each do |param|
+            emit Opcode::POP_ASSIGN, assign(param)
+          end
+
+          q.namespace.each do |name, value|
+            visit(value)
+            emit Opcode::POP_ASSIGN, assign(name)
+          end
+
+          emit Opcode::SYM, symbol(q.name, nest - 1)
+          emit Opcode::BOX_INSTANCE, nest
+          emit Opcode::RET
+        end
+      end
+
+      # Here we use VFunction intentionally. Boxes and functions
+      # are just too similar to make them distinct kinds of
+      # payloads.
+      emit Opcode::BOX, VFunction.new(
+        q.name,
+        target,
+        q.params,
+        q.params.size,
+        q.params.size,
+        false)
+
+      emit Opcode::POP_ASSIGN, assign(q.name)
     end
   end
 end

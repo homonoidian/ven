@@ -350,6 +350,11 @@ module Ven::Suite
     def callable?
       true
     end
+
+    # Pretty-prints *params* alongside *given*.
+    def self.pretty_given(params : Array(String), given : Models)
+      params.zip(given).map(&.join ": ").join(", ")
+    end
   end
 
   # Ven's most essential function model.
@@ -398,17 +403,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "concrete " << @name << "("
-
-      @params.zip(@given).each_with_index do |pair, index|
-        io << pair[0] << ": " << pair[1]
-
-        unless index == @params.size - 1
-          io << ", "
-        end
-      end
-
-      io << ")"
+      io << "concrete " << @name << "(" << MFunction.pretty_given(@params, @given) << ")"
     end
 
     # Returns whether *param* is an anonymous parameter.
@@ -547,6 +542,93 @@ module Ven::Suite
 
     def to_s(io)
       io << "partial " << @function << "(" << @args.join(", ") << ")"
+    end
+  end
+
+  # Boxes are lightweight (in theory, at least) carriers of
+  # scope. Through box instances (see `MBoxInstance`), they
+  # provide a medium for working with custom fields.
+  #
+  # They also borrow much from functions, namely, semantically
+  # and syntactically, the 'given' appendix & overall parameter/
+  # argument matching infrastructure.
+  #
+  # Boxes are separate from functions, though, and cannot be
+  # members of an `MGenericFunction`.
+  class MBox < MClass
+    getter name : String
+    getter arity : Int32
+    getter given : Models
+    getter target : Int32
+    getter params : Array(String)
+
+    def initialize(@name, @given, @params, @arity, @target)
+    end
+
+    # Returns whether this box is equal-by-value to the
+    # *other* box.
+    #
+    # Just compares the names of the two.
+    def eqv?(other : MBox)
+      @name == other.name
+    end
+
+    # Returns whether this box is the parent of the *other*
+    # box instance.
+    def eqv?(other : MBoxInstance)
+      self == other.parent
+    end
+
+    def to_s(io)
+      io << "box " << @name << "(" << MFunction.pretty_given(@params, @given) << ")"
+    end
+  end
+
+  # An instance of an `MBox`.
+  #
+  # Carries with it its own copy of Scope (`Context::Machine::Scope`),
+  # which was created at instantiation, and allows to access
+  # the entries of that scope through field access.
+  class MBoxInstance < MClass
+    getter parent : MBox
+    getter namespace : Context::Machine::Scope
+
+    def initialize(@parent, @namespace)
+    end
+
+    # Returns one of the fields in the namespace of this box
+    # instance.
+    #
+    # Provides two other, model specific and prioritized
+    # properties: `.name` and `.parent`.
+    def field(name)
+      case name
+      when "name"
+        Str.new(@parent.name)
+      when "parent"
+        @parent
+      else
+        @namespace[name]?
+      end
+    end
+
+    # Returns whether this box instance is equal to the *other*
+    # box instance.
+    #
+    # This box instance and *other* box instance are equal if
+    # and only if their hashes are equal.
+    def eqv?(other : MBoxInstance)
+      hash == other.hash
+    end
+
+    # Returns whether this box instance is parented by
+    # the *other* box.
+    def eqv?(other : MBox)
+      @parent == other
+    end
+
+    def to_s(io)
+      io << "instance of " << @parent
     end
   end
 end

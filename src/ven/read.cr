@@ -20,7 +20,7 @@ module Ven
     {% elsif name == :SPECIAL %}
       /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&$]/
     {% elsif name == :IGNORE %}
-      /([ \n\r\t]+|#\s+[^\n]*)/
+      /([ \n\r\t]+|#([ \t][^\n]*|\n+))/
     {% else %}
       {{ raise "[critical]: no pattern for #{name}" }}
     {% end %}

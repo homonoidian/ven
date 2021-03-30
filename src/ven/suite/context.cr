@@ -5,7 +5,7 @@ module Ven::Suite::Context
   # a symbol was defined, as well as to manage compile-time
   # traceback.
   class Compiler
-    private alias Scope = Hash(String, Bool)
+    alias Scope = Hash(String, Bool)
 
     getter scopes : Array(Scope)
     getter traces = [] of Trace
@@ -76,7 +76,7 @@ module Ven::Suite::Context
 
   # The context for a `Machine`.
   class Machine
-    private alias Scope = Hash(String, Model)
+    alias Scope = Hash(String, Model)
 
     # The scope hierarchy. The rightmost scope is the localmost,
     # and the leftmost - the globalmost.
