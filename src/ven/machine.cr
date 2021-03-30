@@ -4,7 +4,7 @@ module Ven
   class Machine
     include Suite
 
-    alias Timetable = Hash(UInt64, IStatistics)
+    alias Timetable = Hash(Int32, IStatistics)
     alias IStatistics = Hash(Int32, IStatistic)
     alias IStatistic =
       { amount: Int32,
@@ -23,8 +23,14 @@ module Ven
     @inspect = false
     @measure = false
 
-    # Initializes a Machine given *chunks*, *context* and the
-    # starting chunk pointer *cp*.
+    # Initializes a Machine given some *chunks*, a *context*
+    # and a chunk pointer *cp*: in *chunks*, the chunk at *cp*
+    # will be the first to be executed.
+    #
+    # Remember: per each frame there should always be a scope;
+    # if you push a frame, that is, you have to push a scope
+    # as well. This has to be done so the frames and the context
+    # scopes are in sync.
     def initialize(@chunks : Chunks, @context, cp = 0)
       @frames = [Frame.new(cp: cp)]
       @timetable = Timetable.new
@@ -36,8 +42,8 @@ module Ven
       raise RuntimeError.new(chunk.file, fetch.line, message)
     end
 
-    # Builds an `IStatistic` given *amount*, *duration* and
-    # an *instruction*.
+    # Builds an `IStatistic` given some *amount*, *duration*
+    # and an *instruction*.
     private macro stat(amount, duration, instruction)
       { amount: {{amount}},
         duration: {{duration}},
@@ -47,14 +53,13 @@ module Ven
     # Updates the timetable entry for an *instruction* given
     # *duration* - the time it took to execute.
     #
-    # *c_id* is a unique id of the chunk where *instruction*
-    # can be found.
+    # *cp* is a chunk pointer to the chunk where the *instruction*
+    # is found.
     #
-    # *ip* is the instruction pointer at which *instruction*
-    # can be found.
-    def record!(instruction, duration, c_id, ip)
-      if !(stats = @timetable[c_id]?)
-        @timetable[c_id] = { ip => stat(1, duration, instruction) }
+    # *ip* is an instruction pointer to the *instruction*.
+    def record!(instruction, duration, cp, ip)
+      if !(stats = @timetable[cp]?)
+        @timetable[cp] = { ip => stat(1, duration, instruction) }
       elsif !(stat = stats[ip]?)
         stats[ip] = stat(1, duration, instruction)
       else
@@ -186,7 +191,7 @@ module Ven
 
     # Pops multiple values from the stack and passes them to
     # the block, keeping their order. E.g., given (x1 x2 x3 --),
-    # will pass |x1, x2, x3|, not |x3, x2, x1|.
+    # will pass |x1, x2, x3|.
     #
     # The amount of values to pop is determined from the amount
     # of block's arguments.
@@ -246,10 +251,12 @@ module Ven
     # Performs an invokation: pushes a frame, introduces a
     # child context and starts executing the chunk at *cp*.
     #
-    # The frame stack is initialized with values of *import*.
-    # **The order of *import* is kept.**
-    private macro invoke(cp, import values = Models.new, purpose = Frame::Goal::Unknown)
-      @frames << Frame.new({{purpose}}, {{values}}, {{cp}})
+    # The new frame's operand stack is initialized with values
+    # of *import*. **The order of *import* is kept.**
+    #
+    # See `Frame::Goal` to see what *goal* is for.
+    private macro invoke(cp, import values = Models.new, goal = Frame::Goal::Unknown)
+      @frames << Frame.new({{goal}}, {{values}}, {{cp}})
       @context.push
     end
 
@@ -260,14 +267,20 @@ module Ven
     #
     # Returns nil if *export* was requested, but there was no
     # value to export. Returns true otherwise.
+    #
+    # Pops a scope from the context unless there is but one left.
     private macro revoke(export = false)
       %frame = @frames.pop
 
-      @context.pop
+      unless @context.size == 1
+        @context.pop
+      end
 
       {% if export %}
         if %it = %frame.stack.last?
-          put %it; true
+          put %it
+
+          true
         end
       {% else %}
         true
@@ -544,9 +557,8 @@ module Ven
       nil
     end
 
-    # Resolves a field access (see `field?`).
-    #
-    # Dies if found no working field resolution.
+    # Same as `field?`, but dies if found no working field
+    # resolution.
     def field(head, field)
       field?(head, field) || die("#{head}: no such field or function: '#{field}'")
     end
@@ -573,6 +585,10 @@ module Ven
           puts chunk
         when ".f"
           puts frame
+        when ".fs"
+          @frames.each do |it|
+            puts "{\n  #{it}\n}\n"
+          end
         when ".c"
           puts control.join(" ")
         when "._"
@@ -610,9 +626,9 @@ module Ven
         # https://github.com/crystal-lang/crystal/issues/5830#issuecomment-386591044
         sleep 0
 
-        # Remember the chunk we are/(at the end, maybe were)
+        # Remember the chunk we are/(at the end, possibly were)
         # in and the current instruction pointer.
-        ip, c_id = frame.ip, chunk.hash
+        ip, cp = frame.ip, frame.cp
 
         begin
           if interrupt
@@ -759,14 +775,17 @@ module Ven
               put nth(callee, args.size == 1 ? args.first : args)
             when MFunction
               if callee.is_a?(MPartial)
+                # Append the arguments of the call to the
+                # arguments of the partial: partial `1.foo`,
+                # if called like so: `1.foo(2, 3)` - will
+                # after this become `do(1, 2, 3)`.
                 callee, args = callee.function, callee.args + args
               end
 
-              found = variant?(callee, args)
-
-              if found.is_a?(MConcreteFunction)
-                next invoke(found.cp, args.reverse!, Frame::Goal::Function)
-              elsif found.is_a?(MBuiltinFunction)
+              case found = variant?(callee, args)
+              when MConcreteFunction
+                next invoke(found.target, args.reverse!, Frame::Goal::Function)
+              when MBuiltinFunction
                 put found.callee.call(self, args)
               else
                 die("improper arguments for #{callee}: #{args.join(", ")}")
@@ -774,10 +793,15 @@ module Ven
             else
               die("illegal callee: #{callee}")
             end
-          # Returns from a function. Exports last value from
-          # the function's stack beforehand.
+          # Returns from a function. Puts onto the parent stack
+          # the return value defined by the function frame,
+          # unless it wasn't specified. In that case, exports
+          # the last value from the function frame's operand
+          # stack.
           in Opcode::RET
-            unless revoke(export: true)
+            if returns = frame.returns
+              revoke && put returns
+            elsif !revoke(export: true)
               die("void expression")
             end
           # Moves a value onto the underscores stack:
@@ -826,28 +850,24 @@ module Ven
             put field(pop, static)
           # Pops two values, first being the operand and second
           # the field, and, if possible, gets the value of a
-          # field. Alternatively, builds a partial:
-          # (x1 x2 -- x3)
+          # field. Alternatively, builds a partial: (x1 x2 -- x3)
           in Opcode::FIELD_DYNAMIC
             gather do |head, field|
               put field(head, field)
             end
           # Implements the semantics of 'next fun', which is
           # an explicit tail-call (elimination) request. Pops
-          # the callee and N arguments:
-          # (x1 ...N --)
+          # the callee and N arguments: (x1 ...N --)
           in Opcode::NEXT_FUN
             args = pop static(Int32)
             callee = pop.as(MFunction)
 
             # Pop frames until we meet the nearest surrounding
-            # function.
-            #
-            # We know there is one because Compiler let this
-            # NEXT through & we trust the Compiler.
-            @frames.reverse_each do |frame|
-              unless frame.goal == Frame::Goal::Function
-                next @frames.pop
+            # function. We know there is one because we trust
+            # the Compiler.
+            @frames.reverse_each do |it|
+              unless it.goal == Frame::Goal::Function
+                next revoke
               end
 
               variant = variant?(callee, args)
@@ -857,21 +877,45 @@ module Ven
               end
 
               break revoke &&
-                invoke(
-                  variant.cp,
-                  args.reverse!,
-                  Frame::Goal::Function)
+                invoke(variant.target, args.reverse!, Frame::Goal::Function)
             end
 
             next
+          # Sets the 'dies' target of this frame. The 'dies'
+          # target is jumped to whenever a runtime error
+          # occurs.
           in Opcode::SETUP_DIES
             frame.dies = target
+          # Resets the 'dies' target of this frame.
           in Opcode::RESET_DIES
             frame.dies = nil
+          # Pops the return value and returns out of the nearest
+          # surrounding function. Revokes all frames up to &
+          # including the frame of that nearest surrounding
+          # function. Note that it vetoes `SETUP_RET`: (x1 --)
+          in Opcode::FORCE_RET
+            value = pop
+
+            @frames.reverse_each do |it|
+              if it.goal == Frame::Goal::Function
+                break revoke && put value
+              end
+
+              revoke
+            end
+          # Finds the nearest surrounding function and sets
+          # its return value to whatever was tapped. Does
+          # not break the flow: (x1 -- x1)
+          in Opcode::SETUP_RET
+            @frames.reverse_each do |it|
+              if it.goal == Frame::Goal::Function
+                break it.returns = tap
+              end
+            end
           end
         rescue error : RuntimeError
           dies = @frames.reverse_each do |it|
-            break it.dies || next @frames.pop
+            break it.dies || next revoke
           end
 
           unless dies
@@ -887,7 +931,7 @@ module Ven
           jump(dies)
         ensure
           if @measure && began
-            record!(this, Time.monotonic - began, c_id, ip)
+            record!(this, Time.monotonic - began, cp, ip)
           end
 
           if @inspect

@@ -526,5 +526,23 @@ module Ven
         die("'next' outside of a loop or a function")
       end
     end
+
+    def visit!(q : QReturnStatement)
+      unless @fun
+        die("statement 'return' outside of a function")
+      end
+
+      visit(q.value)
+      emit Opcode::FORCE_RET
+    end
+
+    def visit!(q : QReturnExpression)
+      unless @fun
+        die("expression 'return' outside of a function")
+      end
+
+      visit(q.value)
+      emit Opcode::SETUP_RET
+    end
   end
 end

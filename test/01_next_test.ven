@@ -1,0 +1,21 @@
+fun empty(item) given num =
+  item;
+
+fun foo(x) {
+  if x++ < 100_000 {
+    empty(x) and next x
+  };
+
+  x
+}
+
+fun foo(a, b) = {
+  if a < b {
+    empty(+a) and next a + 1, b;
+  };
+
+  a
+};
+
+ensure foo(0) is 100_001;
+ensure foo(0, 1_000_000) is 1_000_000;

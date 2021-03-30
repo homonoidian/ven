@@ -1,0 +1,167 @@
+# Statement return -----------------------------------------
+
+fun return-immediately {
+  return 2 * 4;
+}
+
+fun return-a-if-gt(a, b) {
+  if a > b {
+    return a
+  }
+}
+
+fun break-from-infinity {
+  loop {
+    return 1;
+  }
+}
+
+fun eighty-from-hudred {
+  loop (i = 0; i < 100; i += 1) {
+    if i is 80 {
+      return i;
+    }
+  }
+}
+
+
+fun block_return-immediately = {
+  return 2 * 4;
+}
+
+fun block_return-a-if-gt(a, b) = {
+  if a > b {
+    return a
+  }
+}
+
+fun block_break-from-infinity = {
+  {
+    loop {
+      return 1;
+    }
+  }
+}
+
+fun block_eighty-from-hudred = {
+  if true {
+    loop (i = 0; i < 100; i += 1) {
+      if i is 80 {
+        return { i };
+      }
+    }
+  }
+}
+
+
+ensure return-immediately() is 8;
+ensure return-a-if-gt(4, 16) is false;
+ensure return-a-if-gt(16, 4) is 16;
+ensure break-from-infinity() is 1;
+ensure eighty-from-hudred() is 80;
+
+ensure block_return-immediately() is 8;
+ensure block_return-a-if-gt(4, 16) is false;
+ensure block_return-a-if-gt(16, 4) is 16;
+ensure block_break-from-infinity() is 1;
+ensure block_eighty-from-hudred() is 80;
+
+
+# Expression return ----------------------------------------
+
+SIDE-EFFECT := 0;
+
+fun compute-after-return =
+  return 1 and (SIDE-EFFECT = 1);
+
+fun return-a-if-a-gt-b(a, b) =
+  if (a > b)
+    return a;
+
+fun return-overwrites-value {
+  (return "overwrites");
+
+  "noverwrites"
+}
+
+fun return-overwrites-if-true(value) {
+  if (value)
+    return "overwrites";
+
+  "noverwrites"
+}
+
+
+ensure compute-after-return() is 1 and SIDE-EFFECT is 1;
+ensure return-a-if-a-gt-b(0, 5) is false;
+ensure return-a-if-a-gt-b(5, 0) is 5;
+ensure return-overwrites-value() is "overwrites";
+ensure return-overwrites-if-true("hi") is "overwrites";
+ensure return-overwrites-if-true(0) is "overwrites";
+ensure return-overwrites-if-true(false) is "noverwrites";
+
+
+block_SIDE-EFFECT := 0;
+
+fun block_compute-after-return = {
+  if true {
+    return 1 and (block_SIDE-EFFECT = 1);
+  }
+};
+
+fun block_return-a-if-a-gt-b(a, b) =
+  if (a > b)
+    {
+      {
+        (return a);
+      }
+    }
+
+fun block_return-overwrites-value = {
+  { (return "overwrites"); };
+
+  {
+    "noverwrites"
+  }
+}
+
+fun block_return-overwrites-if-true(value) = {
+  {
+    if (value)
+      {
+        return "overwrites";
+      }
+  };
+
+  {
+    "noverwrites"
+  }
+}
+
+
+ensure block_compute-after-return() is 1 and block_SIDE-EFFECT is 1;
+ensure block_return-a-if-a-gt-b(0, 5) is false;
+ensure block_return-a-if-a-gt-b(5, 0) is 5;
+ensure block_return-overwrites-value() is "overwrites";
+ensure block_return-overwrites-if-true("hi") is "overwrites";
+ensure block_return-overwrites-if-true(0) is "overwrites";
+ensure block_return-overwrites-if-true(false) is "noverwrites";
+
+
+fun set-not-break {
+  loop (i = 0; i < 100; i += 1)
+    if (i is 34)
+      return i;
+
+  ensure i is 100;
+}
+
+ensure set-not-break() is 34;
+
+
+fun statement-return-overrides-expression-return {
+  (return 0);
+  return 1;
+}
+
+ensure statement-return-overrides-expression-return() is 1;

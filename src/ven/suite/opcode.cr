@@ -33,6 +33,8 @@ module Ven::Suite
     FALSE_IF_EMPTY
     FIELD_DYNAMIC
     RESET_DIES
+    FORCE_RET
+    SETUP_RET
 
     # Opcodes that take a static payload.
     NUM = 128

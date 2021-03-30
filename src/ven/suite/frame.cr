@@ -1,22 +1,12 @@
 module Ven::Suite
-  # A frame is a package of state. It is there to simplify
-  # statekeeping. For an instance of `Machine`, it provides:
-  #
-  # - A chunk pointer (chunk index, really)
-  # - An instruction pointer (instruction index, really)
-  # - An operand stack (or just stack)
-  # - A control stack (used, say, to save iteration indices)
-  # - An underscores stack (used for context, i.e., '_' and '&_')
-  # - A Goal (`Frame::Goal`): what the Machine is  trying to
-  # achieve with this frame.
+  # A frame is simply some packed state. It is there to make
+  # statekeeping trivial for the `Machine`.
   class Frame
-    # The goal of this frame. It represents the reason this
-    # frame was created in the first place.
+    # Represents why this frame was created.
     enum Goal
-      # The goal of this frame is unknown.
       Unknown
 
-      # This frame was created in order to evaluate a function.
+      # If created to evaluate a function:
       Function
     end
 
@@ -29,8 +19,12 @@ module Ven::Suite
     property control = [] of Int32
     property underscores = Models.new
 
-    # The IP to jump if there was a death.
+    # The IP to jump if there was a death in or under this
+    # frame.
     property dies : Int32?
+
+    # The model that this frame will return on `RET`.
+    property returns : Model?
 
     def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
     end
@@ -38,11 +32,13 @@ module Ven::Suite
     delegate :last, :last?, to: @stack
 
     def to_s(io)
-      io << "frame@" << @cp << " [goal: " << goal << "] {\n"
+      io << "frame@" << @cp << " [goal: " << goal << "]\n"
       io << "  ip: " << @ip << "\n"
       io << "  oS: " << @stack.join(" ") << "\n"
       io << "  cS: " << @control.join(" ")  << "\n"
       io << "  _S: " << @underscores.join(" ")  << "\n"
+      io << "   R: " << @returns << "\n"
+      io << "   D: " << @dies << "\n"
     end
   end
 end

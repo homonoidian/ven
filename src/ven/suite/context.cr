@@ -86,6 +86,8 @@ module Ven::Suite::Context
       @scopes = [Scope.new]
     end
 
+    delegate :size, to: @scopes
+
     # Deletes all scopes except the globalmost.
     def clear
       @scopes.delete_at(1...)
