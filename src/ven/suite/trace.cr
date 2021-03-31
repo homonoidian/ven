@@ -14,15 +14,19 @@ module Ven::Suite
     def initialize(@file, @line, @name)
     end
 
-    # NOTE: reads the file to provide the excerpt, unless
-    # the file does not exist.
+    # Stringifies this trace.
+    #
+    # Reads the file to provide the excerpt, unless the file
+    # does not exist.
+    #
+    # Colorizes the output.
     def to_s(io)
-      io << "  in #{@name} (#{@file}:#{@line})"
+      io << "  in #{@name.colorize.bold} (#{@file}:#{@line})"
 
       if File.exists?(@file)
         excerpt = File.read_lines(@file)[@line - 1]
 
-        io << "\n    #{@line}| #{excerpt}"
+        io << "\n    #{@line}| #{excerpt.lstrip}"
       end
     end
   end

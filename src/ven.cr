@@ -54,7 +54,7 @@ module Ven
       when CompileError
         error("compile-time error", "#{message}\n#{trace(this.traces)}")
       when RuntimeError
-        error("runtime error", "#{message} (on line #{this.line})")
+        error("runtime error", "#{message}\n#{trace(this.traces)}")
       when InternalError
         error("internal error", message)
       end
@@ -102,7 +102,7 @@ module Ven
         end
       end
 
-      m = Machine.new(@chunks, @context, cp: start_from)
+      m = Machine.new(@context, @chunks, cp: start_from)
 
       m.inspect = @debug
       m.measure = @timetable

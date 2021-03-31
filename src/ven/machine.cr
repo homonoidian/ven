@@ -31,7 +31,7 @@ module Ven
     # if you push a frame, that is, you have to push a scope
     # as well. This has to be done so the frames and the context
     # scopes are in sync.
-    def initialize(@chunks : Chunks, @context, cp = 0)
+    def initialize(@context, @chunks : Chunks, cp = 0)
       @frames = [Frame.new(cp: cp)]
       @timetable = Timetable.new
     end
@@ -39,7 +39,15 @@ module Ven
     # Dies of runtime error with *message*, which should explain
     # why the error happened.
     def die(message : String)
-      raise RuntimeError.new(chunk.file, fetch.line, message)
+      file = chunk.file
+      line = fetch.line
+      traces = @context.traces.dup
+
+      unless traces.last?.try(&.name) == "unit"
+        traces << Trace.new(file, line, "unit")
+      end
+
+      raise RuntimeError.new(traces, file, line, message)
     end
 
     # Builds an `IStatistic` given some *amount*, *duration*
@@ -251,13 +259,16 @@ module Ven
     # Performs an invokation: pushes a frame, introduces a
     # child context and starts executing the chunk at *cp*.
     #
+    # A trace is made. Trace's filename and line number are
+    # figured out automatically, but its *name* must be provided.
+    #
     # The new frame's operand stack is initialized with values
     # of *import*. **The order of *import* is kept.**
     #
     # See `Frame::Goal` to see what *goal* is for.
-    private macro invoke(cp, import values = Models.new, goal = Frame::Goal::Unknown)
+    private macro invoke(name, cp, import values = Models.new, goal = Frame::Goal::Unknown)
       @frames << Frame.new({{goal}}, {{values}}, {{cp}})
-      @context.push
+      @context.push(chunk.file, fetch.line, {{name}})
     end
 
     # Reverts the actions of `invoke`.
@@ -789,7 +800,7 @@ module Ven
 
               case found = variant?(callee, args)
               when MConcreteFunction
-                next invoke(found.target, args.reverse!, Frame::Goal::Function)
+                next invoke(callee.to_s, found.target, args.reverse!, Frame::Goal::Function)
               when MBuiltinFunction
                 put found.callee.call(self, args)
               else
@@ -800,7 +811,7 @@ module Ven
                 die("improper argument count for #{callee}: #{args.join(", ")}")
               end
 
-              next invoke(callee.target, args.reverse!)
+              next invoke(callee.to_s, callee.target, args.reverse!)
             else
               die("illegal callee: #{callee}")
             end
@@ -857,7 +868,7 @@ module Ven
             put reduce(static, pop.as Vec)
           # Goes to the chunk it received as the argument.
           in Opcode::GOTO
-            next invoke(static Int32)
+            next invoke("block", static Int32)
           # Pops an operand and, if possible, gets the value
           # of its field. Alternatively, builds a partial:
           # (x1 -- x2)
@@ -892,7 +903,11 @@ module Ven
               end
 
               break revoke &&
-                invoke(variant.target, args.reverse!, Frame::Goal::Function)
+                invoke(
+                  variant.to_s,
+                  variant.target,
+                  args.reverse!,
+                  Frame::Goal::Function)
             end
 
             next

@@ -52,8 +52,8 @@ fun read(source) given str {
 
   # Parses a prefix expression.
   fun prefix =
-    if it = consume("NUMBER")
-      Num(it(1))
+    if consume("NUMBER")
+      Num(_(1))
     else if consume("+")
       Pos(prefix())
     else if consume("-")

@@ -8,7 +8,11 @@ module Ven::Suite::Context
   class Compiler
     alias Scope = Hash(String, Symbol)
 
+    # The scope hierarchy. The rightmost scope is the localmost,
+    # and the leftmost - the globalmost.
     getter scopes : Array(Scope)
+
+    # An array of traces, which together will form the traceback.
     getter traces = [] of Trace
 
     @toplevel = [] of String
@@ -70,9 +74,12 @@ module Ven::Suite::Context
   class Machine
     alias Scope = Hash(String, Model)
 
-    # The scope hierarchy. The rightmost scope is the localmost,
-    # and the leftmost - the globalmost.
+    # Maximum amount of traceback entries. Clears the traces
+    # if exceeding it.
+    MAX_TRACES = 64
+
     getter scopes : Array(Scope)
+    getter traces = [] of Trace
 
     def initialize
       @scopes = [Scope.new]
@@ -125,14 +132,23 @@ module Ven::Suite::Context
       @scopes[symbol.nest || -1][symbol.name] = value
     end
 
-    # Introduces a child scope.
-    def push
+    # Introduces a child scope and a child trace.
+    #
+    # Deletes all existing traces if the amount of them is
+    # bigger than MAX_TRACES.
+    def push(file, line, name)
+      if @traces.size > MAX_TRACES
+        @traces.clear
+      end
+
       @scopes << Scope.new
+      @traces << Trace.new(file, line, name)
     end
 
-    # Pops the current scope.
+    # Pops the current scope and the current trace.
     def pop
       @scopes.pop
+      @traces.pop?
     end
   end
 end

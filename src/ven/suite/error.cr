@@ -36,8 +36,9 @@ module Ven::Suite
   class RuntimeError < VenError
     getter file : String
     getter line : UInt32
+    getter traces : Traces
 
-    def initialize(@file, @line, @message)
+    def initialize(@traces, @file, @line, @message)
     end
   end
 
