@@ -73,7 +73,7 @@ module Ven::Suite
   # The symbol payload vehicle.
   #
   # It carries and defines the identity of a symbol, whose
-  # nest and name are known at compile-time.
+  # name & (probably) nest are known at compile-time.
   struct VSymbol < Payload
     carries name : String, nest : Int32?
 
@@ -94,7 +94,7 @@ module Ven::Suite
   # of the parameters and the amount of them (arity), the amount
   # of values in the given appendix, and the slurpiness.
   struct VFunction < Payload
-    carries name : String,
+    carries symbol : VSymbol,
       target : Int32,
       params : Array(String),
       given : Int32,
@@ -102,7 +102,7 @@ module Ven::Suite
       slurpy : Bool
 
     def ==(other : VFunction)
-      @name == other.name &&
+      @symbol == other.symbol &&
         @target == other.target &&
         @params == other.params &&
         @given == other.given &&
@@ -111,7 +111,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "fun " << @name << "@" << @target
+      io << "fun " << @symbol << "@" << @target
     end
   end
 end

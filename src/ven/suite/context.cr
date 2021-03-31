@@ -1,58 +1,50 @@
 module Ven::Suite::Context
   # The context for a `Compiler`.
   #
-  # A compiler may use context to determine where (and whether)
-  # a symbol was defined, as well as to manage compile-time
-  # traceback.
+  # A compiler may use context to determine whether a symbol
+  # was defined and whether it is global or local (which means
+  # expensive and cheaper lookup correspondingly), as well as
+  # to manage compile-time traceback.
   class Compiler
-    alias Scope = Hash(String, Bool)
+    alias Scope = Hash(String, Symbol)
 
     getter scopes : Array(Scope)
     getter traces = [] of Trace
+
+    @toplevel = [] of String
 
     def initialize
       @scopes = [Scope.new]
     end
 
-    # Returns the nest of a *symbol* if it exists, or nil if
-    # it does not.
-    def lookup(symbol : String)
-      @scopes.reverse_each.with_index do |scope, depth|
-        if scope.has_key?(symbol)
-          # *depth* is from the end, but we need it from the
-          # start.
-          return @scopes.size - depth - 1
+    # Declares a bound *symbol* in the localmost scope.
+    def bound(symbol : String)
+      @scopes.last[symbol] = :bound
+    end
+
+    # If *symbol* is declared and is bound, returns its nest.
+    # Otherwise, returns nil.
+    def bound?(symbol : String)
+      @scopes.each_with_index do |scope, index|
+        if scope[symbol]? == :bound
+          return index
         end
       end
     end
 
-    # Declares that a local *symbol* exists in the localmost
-    # scope.
-    def let(symbol : String)
-      @scopes[-1][symbol] = false
+    # Declares *symbol* as toplevel.
+    def toplevel(symbol : String)
+      @toplevel << symbol
     end
 
-    # Emulates a lookup assignment to *symbol*. Returns the
-    # resulting nest.
-    #
-    # A lookup assignment is when we literally look up: we
-    # check if there is a symbol in the parent scopes that
-    # has the same name as this one, and whose *global* is
-    # true. If found such one, "assign" to it. If didn't,
-    # make a new entry in the localmost scope.
-    def assign(symbol : String, global = false)
-      @scopes.each_with_index do |scope, nest|
-        if scope.has_key?(symbol) && scope[symbol]
-          return nest
-        end
-      end
-
-      @scopes[-1][symbol] = global
-
-      @scopes.size - 1
+    # Returns whether *symbol* was declared as toplevel.
+    def toplevel?(symbol : String)
+      symbol.in?(@toplevel)
     end
 
-    # Adds a trace for the block.
+    # Adds a trace for the block. This trace will point to
+    # the line set by *tag*, and will be displayed under the
+    # *name*.
     def trace(tag : QTag, name : String)
       @traces << Trace.new(tag, name)
 
@@ -65,10 +57,10 @@ module Ven::Suite::Context
 
     # Evaluates the block inside a child scope. Passes the
     # depth of the child scope to the block.
-    def child(& : Int32 ->)
+    def child
       @scopes << Scope.new
 
-      yield @scopes.size - 1
+      yield
     ensure
       @scopes.pop
     end
@@ -93,52 +85,44 @@ module Ven::Suite::Context
       @scopes.delete_at(1...)
     end
 
-    # Returns the nest of a *symbol* if it exists in one of
-    # the scopes, or nil if it does not.
-    def nest?(symbol : String)
-      @scopes.reverse_each.with_index do |scope, depth|
-        return @scopes.size - depth - 1 if scope.has_key?(symbol)
-      end
-    end
-
-    # Returns the value for a *symbol*.
+    # Returns the value of a *symbol*.
     #
     # Raises if it was not found.
-    def [](symbol : String)
-      @scopes[-1][symbol]
+    def [](symbol : String | VSymbol)
+      self[symbol]? || raise "symbol not found"
     end
 
-    # :ditto:
-    def [](symbol : VSymbol)
-      unless nest = symbol.nest || nest?(symbol.name)
-        raise "symbol not found: #{symbol}"
-      end
-
-      @scopes[nest][symbol.name]
-    end
-
-    # Returns the value for a *symbol*.
+    # Returns the value of a *symbol*.
+    #
+    # Nests *maybe* and -1 will be searched in first.
     #
     # Returns nil if it was not found.
-    def []?(symbol : String)
-      @scopes[nest?(symbol) || return][symbol]?
+    def []?(symbol : String, maybe = nil)
+      if it = @scopes[maybe || -1][symbol]?
+        return it
+      end
+
+      @scopes.reverse_each do |scope|
+        if it = scope[symbol]?
+          return it
+        end
+      end
     end
 
     # :ditto:
     def []?(symbol : VSymbol)
-      @scopes[symbol.nest || nest?(symbol.name) || return][symbol.name]?
+      self[symbol.name, maybe: symbol.nest]?
     end
 
-    # Makes *symbol* be *value* in its nest.
-    #
-    # Assumes *symbol*'s nest is not nil.
+    # Makes *symbol* be *value* in the localmost scope.
     def []=(symbol : String, value : Model)
       @scopes[-1][symbol] = value
     end
 
-    # :ditto:
+    # Makes *symbol* be *value* in its nest, or, if no nest
+    # specified, in the localmost scope.
     def []=(symbol : VSymbol, value : Model)
-      @scopes[symbol.nest.not_nil!][symbol.name] = value
+      @scopes[symbol.nest || -1][symbol.name] = value
     end
 
     # Introduces a child scope.

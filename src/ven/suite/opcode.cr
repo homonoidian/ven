@@ -37,6 +37,7 @@ module Ven::Suite
     FORCE_RET
     SETUP_RET
     ANY
+    BOX_INSTANCE
 
     # Opcodes that take a static payload.
     NUM = 128
@@ -50,7 +51,6 @@ module Ven::Suite
     BINARY_ASSIGN
     FIELD_IMMEDIATE
     NEXT_FUN
-    BOX_INSTANCE
 
     # Opcodes that take a jump payload.
     J = 512

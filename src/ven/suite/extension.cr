@@ -41,9 +41,9 @@ module Ven::Suite
               {% target = target[0...-1] %}
             {% end %}
 
-            # Declare it to the compiler so we get faster
-            # symbol lookups.
-            c_context.let({{target}})
+            # Declare it toplevel so we get faster symbol
+            # lookups.
+            c_context.toplevel({{target}})
 
             {% if value.is_a?(Path) %}
               m_context[{{target}}] = MType.new({{target}}, {{value}})
@@ -57,9 +57,7 @@ module Ven::Suite
             {% arity = args.size %}
             {% return_type = expression.return_type %}
 
-            # Declare it to the compiler so we get faster
-            # symbol lookups.
-            c_context.let({{name}})
+            c_context.toplevel({{name}})
 
             %callee = -> (machine : Machine, args : Models) do
               # Define a variable for each of the received

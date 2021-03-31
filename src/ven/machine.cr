@@ -415,14 +415,16 @@ module Ven
     # Properly defines a function based off an *informer* and
     # some *given* values.
     def defun(informer : VFunction, given : Models)
-      name = informer.name
+      symbol = informer.symbol
+
+      name = symbol.name
       defee = MConcreteFunction.new(name, given,
         informer.arity,
         informer.slurpy,
         informer.params,
         informer.target)
 
-      case existing = @context[name]?
+      case existing = @context[symbol]?
       when MGenericFunction
         return existing.add(defee)
       when MFunction
@@ -930,9 +932,11 @@ module Ven
           # and B is the resulting box.
           in Opcode::BOX
             defee = function
+            name = defee.symbol.name
             given = pop defee.given
 
-            put MBox.new(defee.name, given,
+            put MBox.new(
+              name, given,
               defee.params,
               defee.arity,
               defee.target
@@ -941,7 +945,7 @@ module Ven
           # stack: (B -- I), where B is the box parent to this
           # instance, and I is the instance.
           in Opcode::BOX_INSTANCE
-            put MBoxInstance.new(pop.as(MBox), @context.scopes[static(Int32)].dup)
+            put MBoxInstance.new(pop.as(MBox), @context.scopes[-1].dup)
           end
         rescue error : RuntimeError
           dies = @frames.reverse_each do |it|

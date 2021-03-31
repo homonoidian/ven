@@ -65,7 +65,7 @@ fun read(source) given str {
 
   # Parses an infix expression.
   fun infix(depth) given num {
-    left = prefix();
+    left := prefix();
 
     loop (depth < (level = precedence?())) {
       token-type = consume()(0);
@@ -94,26 +94,14 @@ fun read(source) given str {
 
 
 # Evaluates the *entity*.
-# fun eval(entity) = die("eval(): unknown entity: " ~ entity);
-# fun eval(entity) given Num = +entity.value;
-# fun eval(entity) given Pos = eval(entity.a);
-# fun eval(entity) given Neg = -eval(entity.a);
-# fun eval(entity) given Add = eval(entity.a) + eval(entity.b);
-# fun eval(entity) given Sub = eval(entity.a) - eval(entity.b);
-# fun eval(entity) given Mul = eval(entity.a) * eval(entity.b);
-# fun eval(entity) given Div = eval(entity.a) / eval(entity.b);
-
-fun eval(entity_1) = die("eval(): unknown entity: " ~ entity_1);
-
-fun eval(entity_2) given Num = +entity_2.value;
-fun eval(entity_3) given Pos = eval(entity_3.a);
-fun eval(entity_4) given Neg = -eval(entity_4.a);
-
-fun eval(entity_5) given Add = eval(entity_5.a) + eval(entity_5.b);
-fun eval(entity_6) given Sub = eval(entity_6.a) - eval(entity_6.b);
-fun eval(entity_7) given Mul = eval(entity_7.a) * eval(entity_7.b);
-fun eval(entity_8) given Div = eval(entity_8.a) / eval(entity_8.b);
-
+fun eval(entity) = die("eval(): unknown entity: " ~ entity);
+fun eval(entity) given Num = +entity.value;
+fun eval(entity) given Pos = eval(entity.a);
+fun eval(entity) given Neg = -eval(entity.a);
+fun eval(entity) given Add = eval(entity.a) + eval(entity.b);
+fun eval(entity) given Sub = eval(entity.a) - eval(entity.b);
+fun eval(entity) given Mul = eval(entity.a) * eval(entity.b);
+fun eval(entity) given Div = eval(entity.a) / eval(entity.b);
 
 # Read-eval-print loop:
 loop

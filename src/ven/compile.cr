@@ -18,9 +18,9 @@ module Ven
     # loop. This is mostly useful for `next loop`.
     @loop : Label?
 
-    # The payload vehicle & nest of the nearmost surrounding
-    # function. This is mostly useful for `next fun`.
-    @fun : {VFunction, Int32}?
+    # The payload vehicle of the nearmost surrounding function.
+    # This is mostly useful for `next fun`.
+    @fun : VFunction?
 
     def initialize(@context : Context::Compiler, @file = "<unknown>", @offset = 0)
       @chunks = [Chunk.new(@file, "<unit>")]
@@ -92,36 +92,30 @@ module Ven
       chunk.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
     end
 
-    # Makes a new symbol vehicle (see `VSymbol`).
-    #
-    # If provided with a *nest*, makes it the new symbol's
-    # nest. Otherwise, uses the context to determine the
-    # nest. If couldn't determine, makes the symbol's nest
-    # nil.
-    private macro symbol(name, nest = nil)
-      {% if nest %}
-        VSymbol.new({{name}}, {{nest}})
-      {% else %}
-        VSymbol.new(%name = {{name}}, @context.lookup %name)
-      {% end %}
+    # A shorthand for `VSymbol`.
+    private macro sym!(name, nest = nil)
+      VSymbol.new({{name}}, {{nest}})
     end
 
-    # Emulates an assignment to *symbol*. Returns the resulting
-    # symbol vehicle (`VSymbol`).
-    private macro assign(symbol, global = false)
-      %symbol = {{symbol}}
-      %nest = @context.assign(%symbol, {{global}})
-      symbol(%symbol, %nest)
+    # A smarter shorthand for `VSymbol.new`.
+    private macro sym(name, nest = nil)
+      if @context.toplevel?(%name = {{name}})
+        sym!(%name, 0)
+      elsif nest = @context.bound?(%name)
+        sym!(%name, nest)
+      else
+        sym!(%name, {{nest}})
+      end
     end
 
-    # Returns the raw result of this compiler's work: an
-    # array of unoptimized, unstitched chunks.
+    # Returns the raw result of this compiler's work: an array
+    # of unoptimized, unstitched chunks.
     def result
       @chunks
     end
 
     def visit!(q : QSymbol)
-      emit Opcode::SYM, symbol(q.value)
+      emit Opcode::SYM, sym(q.value)
     end
 
     def visit!(q : QNumber)
@@ -138,6 +132,7 @@ module Ven
 
     def visit!(q : QVector)
       visit(q.items)
+
       emit Opcode::VEC, q.items.size
     end
 
@@ -187,11 +182,16 @@ module Ven
 
     def visit!(q : QAssign)
       visit(q.value)
-      emit Opcode::TAP_ASSIGN, assign(q.target, q.global)
+
+      if q.global
+        @context.bound(q.target)
+      end
+
+      emit Opcode::TAP_ASSIGN, sym(q.target)
     end
 
     def visit!(q : QBinaryAssign)
-      target = symbol(q.target)
+      target = sym(q.target)
 
       visit(q.value)
       emit Opcode::SYM, target
@@ -202,6 +202,7 @@ module Ven
     def visit!(q : QCall)
       visit(q.callee)
       visit(q.args)
+
       emit Opcode::CALL, q.args.size
     end
 
@@ -220,11 +221,12 @@ module Ven
 
     def visit!(q : QIntoBool)
       visit(q.operand)
+
       emit Opcode::TOB
     end
 
     def visit!(q : QReturnIncrement)
-      symbol = symbol(q.target)
+      symbol = sym(q.target)
 
       emit Opcode::SYM, symbol
       emit Opcode::DUP
@@ -234,7 +236,7 @@ module Ven
     end
 
     def visit!(q : QReturnDecrement)
-      symbol = symbol(q.target)
+      symbol = sym(q.target)
 
       emit Opcode::SYM, symbol
       emit Opcode::DUP
@@ -252,6 +254,7 @@ module Ven
     # :ditto:
     private def field(accessor : FADynamic)
       visit(accessor.access)
+
       emit Opcode::FIELD_DYNAMIC
     end
 
@@ -290,6 +293,7 @@ module Ven
 
     def visit!(q : QReduceSpread)
       visit(q.operand)
+
       emit Opcode::TOV
       emit Opcode::REDUCE, q.operator
     end
@@ -348,6 +352,7 @@ module Ven
     def visit!(q : QBlock)
       chunk! "<block>" do |target|
         visit(q.body)
+
         emit Opcode::RET
       end
 
@@ -356,6 +361,7 @@ module Ven
 
     def visit!(q : QEnsure)
       visit(q.expression)
+
       emit Opcode::ENS
     end
 
@@ -373,9 +379,9 @@ module Ven
         if !given_quote && !repeat
           emit Opcode::ANY
         elsif !given_quote
-          visit given.last
+          visit(given.last)
         elsif repeat = true
-          visit given_quote
+          visit(given_quote)
         end
       end
     end
@@ -385,18 +391,18 @@ module Ven
 
       emit_given(q.params, q.given)
 
-      # Make the function visible.
-      @context.let(q.name)
+      @context.bound(q.name)
 
       @context.trace(q.tag, q.name) do
-        @context.child do |nest|
+        @context.child do
           chunk! q.name do |target|
             slurpy = q.slurpy
             params = q.params
             onymous = params.reject("*")
 
             function =
-              VFunction.new(q.name,
+              VFunction.new(
+                sym(q.name),
                 target,
                 params,
                 q.params.size,
@@ -404,7 +410,7 @@ module Ven
                 slurpy)
 
             onymous.each do |parameter|
-              emit Opcode::POP_ASSIGN, assign(parameter)
+              emit Opcode::POP_ASSIGN, sym!(parameter, nest: -1)
             end
 
             # Slurpies eat the rest of the stack's values. It
@@ -412,11 +418,10 @@ module Ven
             # is at the end of the function's parameters.
             if slurpy
               emit Opcode::REM_TO_VEC
-              emit Opcode::POP_ASSIGN, assign("rest")
+              emit Opcode::POP_ASSIGN, sym!("rest", nest: -1)
             end
 
-            # The scope of `nest - 1` encloses this function.
-            under @fun, being: { function, nest - 1 } do
+            under @fun, being: function do
               visit q.body
             end
 
@@ -515,9 +520,7 @@ module Ven
       args, scope = q.args, q.scope
 
       if @fun && scope.in?("fun", nil)
-        function, nest = @fun.not_nil!
-
-        emit Opcode::SYM, symbol(function.name, nest)
+        emit Opcode::SYM, @fun.not_nil!.symbol
         visit(args)
         emit Opcode::NEXT_FUN, args.size
       elsif @loop && scope.in?("loop", nil)
@@ -552,19 +555,24 @@ module Ven
     def visit!(q : QBox)
       emit_given(q.params, q.given)
 
+      @context.bound(q.name)
+
+      symbol = sym(q.name)
+
       chunk! q.name do |target|
-        @context.child do |nest|
+        @context.child do
           q.params.each do |param|
-            emit Opcode::POP_ASSIGN, assign(param)
+            emit Opcode::POP_ASSIGN, sym!(param, nest: -1)
           end
 
           q.namespace.each do |name, value|
             visit(value)
-            emit Opcode::POP_ASSIGN, assign(name)
+
+            emit Opcode::POP_ASSIGN, sym!(name, nest: -1)
           end
 
-          emit Opcode::SYM, symbol(q.name, nest - 1)
-          emit Opcode::BOX_INSTANCE, nest
+          emit Opcode::SYM, symbol
+          emit Opcode::BOX_INSTANCE
           emit Opcode::RET
         end
       end
@@ -573,14 +581,14 @@ module Ven
       # are just too similar to make them distinct kinds of
       # payloads.
       emit Opcode::BOX, VFunction.new(
-        q.name,
+        symbol,
         target,
         q.params,
         q.params.size,
         q.params.size,
         false)
 
-      emit Opcode::POP_ASSIGN, assign(q.name)
+      emit Opcode::POP_ASSIGN, symbol
     end
   end
 end
