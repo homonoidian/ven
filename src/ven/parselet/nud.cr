@@ -246,7 +246,7 @@ module Ven
     # Parses an 'ensure' expression into a QEnsure: `ensure 2 + 2 is 4`.
     class PEnsure < Nud
       def parse(parser, tag, token)
-        QEnsure.new(tag, parser.led)
+        QEnsure.new(tag, parser.led(Precedence::CONVERT.value))
       end
     end
 

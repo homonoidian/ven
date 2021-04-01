@@ -446,7 +446,7 @@ module Ven
         end
       end
 
-      @context[name] = defee
+      @context[symbol] = defee
     end
 
     # Returns the variant of *callee* that understands *args*,

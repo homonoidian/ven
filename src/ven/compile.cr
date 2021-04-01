@@ -391,7 +391,9 @@ module Ven
 
       emit_given(q.params, q.given)
 
-      @context.bound(q.name)
+      unless @context.bound?(q.name)
+        @context.bound(q.name)
+      end
 
       @context.trace(q.tag, q.name) do
         @context.child do
@@ -555,7 +557,9 @@ module Ven
     def visit!(q : QBox)
       emit_given(q.params, q.given)
 
-      @context.bound(q.name)
+      unless @context.bound?(q.name)
+        @context.bound(q.name)
+      end
 
       symbol = sym(q.name)
 

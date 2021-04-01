@@ -347,9 +347,9 @@ module Ven
         common: Parselet::PBinaryAssign,
         precedence: ASSIGNMENT)
 
-      defled("?", Parselet::PIntoBool, precedence: CONVERT)
       defled("DIES", Parselet::PDies, precedence: CONVERT)
       defled("AND", "OR", precedence: JUNCTION)
+      defled("?", Parselet::PIntoBool, precedence: IDENTITY)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("+", "-", "~", "&", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)

@@ -1,0 +1,74 @@
+# In Ven, there are bound variables and local variables.
+#
+#   - *bound* variables are attached to a particular scope in
+#     the scope hierarchy until that scope is destroyed. They
+#     can be updated from any scope below (and in) the scope
+#     of their creation;
+#
+#   - *local* variables are always bound to the scope of their
+#     creation; they cannot be updated from any scope but the
+#     scope of their creation. In any other scope, a new local
+#     variable with the same name will be created.
+
+
+{
+  foo = 1;
+
+  {
+    foo = 2;
+
+    {
+      foo = 3;
+
+      ensure foo is 3
+    };
+
+    ensure foo is 2
+  };
+
+  ensure foo is 1
+};
+
+{
+  foo := 1;
+
+  {
+    foo = 2;
+
+    {
+      foo = 3;
+
+      ensure foo is 3
+    };
+
+    ensure foo is 3
+  };
+
+  ensure foo is 3
+};
+
+
+# Both 'box' and 'fun' make bound variables.
+
+fun a = 1;
+
+{
+  fun a = 2;
+
+  # 'fun' is a void expression; blocks do not allow to return
+  # void expressions.
+  true
+};
+
+ensure a() is 2;
+
+box A;
+
+{
+  box A(i);
+
+  # 'box' is also a void expression.
+  true
+};
+
+ensure A(5).i is 5;

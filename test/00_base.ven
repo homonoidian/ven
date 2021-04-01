@@ -1,0 +1,145 @@
+# Basic 'ensure' behavior: dies only if 'false':
+
+ensure true;
+ensure false dies;
+
+
+# The principles of falsehood (/ truthiness):
+#
+# If conversion to boolean was requested explicitly, the
+# following values must be false (and their inverse, thus,
+# must be true):
+
+ensure 0? is false;
+ensure ""? is false;
+ensure []? is false;
+ensure (false)? is false;
+
+ensure not 0 is true;
+ensure not "" is true;
+ensure not [] is true;
+ensure not false is true;
+
+# However, if conversion to boolean was requested implicitly,
+# all values are true except for `false`:
+
+ensure 0;
+ensure "";
+ensure [];
+ensure false dies;
+
+
+# Data types. Ven has three data types that persist during
+# all stages of program evaluation (reading, compilation and
+# interpretation). These are:
+#   - num
+#   - str
+#   - vec
+
+ensure 0.0 is num;
+ensure 12.345678 is num;
+ensure 1234567890 is num;
+ensure 1_234_567_890 is num;
+
+ensure "foo bar baz" is str;
+ensure "\n\t\r" is str;
+ensure "\"qux\"" is str;
+
+ensure [] is vec;
+ensure [0] is vec;
+ensure [[[]]] is vec;
+ensure [0, "1", "2"] is vec;
+ensure [0, "1", "2", [3],] is vec;
+ensure [[0], [1], [2]] is vec;
+
+
+# There are eight unary operators in Ven:
+#   - '+' (convert to num unless num, else identity)
+#   - '-' (convert to negative num unless num, else negate)
+#   - '~' (convert to str unless str, else identity)
+#   - '#' (measure length)
+#   - '&' (wrap in vec unless vec, else identity)
+#   - 'not' (convert to inverse boolean)
+#   - postfix '?' (convert to boolean)
+#   - postifx 'dies' (true if dies, else identity)
+
+ensure +1 is 1;
+ensure +true is 1;
+ensure +false is 0;
+ensure +"1" is 1;
+ensure +[1, 2] is 2;
+
+ensure -1 is -1;
+ensure -true is -1;
+ensure -"1" is -1;
+ensure -[1, 2] is -2;
+
+ensure ~1 is "1";
+ensure ~"1" is "1";
+ensure ~[1, 2] is "[1, 2]";
+
+ensure #12 is 2;
+ensure #"12" is 2;
+ensure #[1, 2] is 2;
+
+ensure &1 is [1];
+ensure &"1" is ["1"];
+ensure &[1, 2] is [1, 2];
+
+ensure not 1 is false;
+ensure not "1" is false;
+ensure not [1, 2] is false;
+
+ensure (ensure false) dies;
+ensure (ensure "false, of course!") dies is "false, of course!";
+
+
+# There are many binary operators in Ven. A binary operator
+# performs a binary operation, which can be of two forms:
+# normal and abnormal (not normal). Ven tries to convert any
+# abnormal operation into a normal one by performing what is
+# called normalization.
+
+# Normal binary operations:
+
+ensure 1 < 2;
+ensure 2 > 1;
+ensure 2 <= 2;
+ensure 5 >= 4;
+
+ensure 1 + 1 is 2;
+ensure 2 - 2 is 0;
+ensure 2 * 2 is 4;
+ensure 2 / 2 is 1;
+
+ensure [1] & [2] is [1, 2];
+ensure "lead" ~ "tail" is "leadtail";
+
+ensure "a" x 10 is "aaaaaaaaaa";
+ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+ensure [1, 2, 3] x 3 is [1, 2, 3, 1, 2, 3, 1, 2, 3];
+
+# Abnormal binary operations:
+
+ensure [1] < "12";
+ensure "123" > [1, 2];
+ensure [1, 2] <= [1, 2, 3];
+ensure "123" >= 3;
+
+ensure "1" + 1 is 2;
+ensure 2 - "2" is 0;
+ensure "2" * ["two", "items"] is 4;
+ensure "2" / true is 2;
+
+ensure 1 & 2 is [1, 2];
+ensure [1] & 2 is [1, 2];
+ensure 1 & [2] is [1, 2];
+
+ensure 1 ~ 2 is "12";
+ensure "1" ~ 2 is "12";
+ensure 1 ~ "2" is "12";
+
+ensure 10 x "a" is "aaaaaaaaaa";
+ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
