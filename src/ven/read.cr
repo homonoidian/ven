@@ -85,7 +85,7 @@ module Ven
       reset
     end
 
-    # Resets
+    # Resets this reader.
     def reset(@file = "<unknown>", @src = "")
       @pos = 0
       @line = 1_u32

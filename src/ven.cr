@@ -14,15 +14,6 @@ module Ven
     @passes = 8
     @timetable = false
 
-    def initialize
-      @chunks = Chunks.new
-
-      @context = Context::Machine.new
-      @ccontext = Context::Compiler.new
-
-      Library::Internal.new.load(@ccontext, @context)
-    end
-
     # Prints a *message* and quits with exit status 0.
     def error(message : String)
       puts message
@@ -70,79 +61,7 @@ module Ven
     end
 
     def process(file : String, source : String)
-      start_from = @chunks.size
-
-      reader = Reader.new.reset
-      compiler = Compiler.new(@ccontext, file, offset: start_from)
-
-      rt = Time.measure do
-        reader.read(file, source) do |statement|
-          compiler.visit(statement)
-        end
-      end
-
-      @chunks |= compiler.result
-
-      if @quiet == 0
-        puts "preopt:"
-
-        @chunks[start_from...].each do |chunk|
-          puts chunk
-        end
-      end
-
-      opt = Optimizer.new(@chunks[start_from...])
-      opt.optimize(@passes)
-
-      @chunks[start_from...].each do |chunk|
-        chunk.complete!
-
-        if @quiet == 0
-          puts "POSTOPT:", chunk
-        end
-      end
-
-      m = Machine.new(@context, @chunks, cp: start_from)
-
-      m.inspect = @debug
-      m.measure = @timetable
-
-      # # if @quiet == 0
-      # #   puts "after opt:"
-      # #   chunks.each_with_index do |chunk, index|
-      # #     puts "(#{index}) #{chunk}\n"
-      # #   end
-      # # end
-
-      mt = Time.measure do
-        m.start
-      end
-
-      total = 0
-
-      if @timetable
-        m.timetable.each do |c_id, instructions|
-          puts "[#{c_id}]:"
-
-          instructions.each_value do |time|
-            took = "#{time[:amount]} x #{time[:duration].microseconds}us"
-            puts " #{took.ljust(16)} #{time[:instruction]}"
-          end
-
-          total += instructions.values.sum(&.[:duration].microseconds)
-        end
-
-        puts "(total MT (machine time): #{mt.milliseconds}ms)"
-
-        if total
-          puts "(total IT (instruction time): #{total / 1_000}ms)"
-              #  "(MT - IT = #{(mt - total).milliseconds}ms)"
-        end
-      end
-
-      if @quiet <= 1
-        puts m.return!
-      end
+      puts Input.new(file, source).run
     end
 
     def open(path : String)

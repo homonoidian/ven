@@ -1,10 +1,24 @@
 module Ven::Suite::Context
+  # Unites instances of `Context::Machine` and `Context::Compiler`.
+  class Hub
+    getter machine = Context::Machine.new
+    getter compiler = Context::Compiler.new
+
+    @extensions = [] of Extension.class
+
+    # Loads *extension* into this hub.
+    def extend(extension : Extension)
+      unless extension.class.in?(@extensions)
+        extension.load(@compiler, @machine)
+      end
+    end
+  end
+
   # The context for a `Compiler`.
   #
-  # A compiler may use context to determine whether a symbol
-  # was defined and whether it is global or local (which means
-  # expensive and cheaper lookup correspondingly), as well as
-  # to manage compile-time traceback.
+  # It may use context to determine whether a symbol was defined
+  # and whether it is global or local, as well as to manage
+  # compile-time traceback.
   class Compiler
     alias Scope = Hash(String, Symbol)
 
