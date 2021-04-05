@@ -14,6 +14,10 @@ module Ven
     @passes = 8
     @timetable = false
 
+    def initialize
+      @master = Master.new
+    end
+
     # Prints a *message* and quits with exit status 0.
     def error(message : String)
       puts message
@@ -61,7 +65,7 @@ module Ven
     end
 
     def process(file : String, source : String)
-      puts Input.new(file, source).run
+      puts @master.load(file, source)
     end
 
     def open(path : String)

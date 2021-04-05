@@ -1,4 +1,20 @@
 module Ven
+  alias Distinct = Array(String)
+
+  # An abstraction over a Ven file, and one of the highest
+  # Ven abstractions overall.
+  #
+  # Implements common context. This means that any new input
+  # is evaluated in the same context where all other inputs
+  # were evaluated before.
+  #
+  # ```
+  # foo = Ven::Input.new("foo", "x = 2 + 2")
+  # bar = Ven::Input.new("bar", "x + 1")
+  #
+  # puts foo.run # ==> 4 : Num
+  # puts bar.run 3 ==> 5 : Num
+  # ```
   struct Input
     include Suite
 
@@ -9,45 +25,94 @@ module Ven
     getter file : String
     getter source : String
 
+    getter exposes = [] of Distinct
+    getter distinct : Distinct?
+
     def initialize(@file, @source)
       @@context.extend(Library::Internal.new)
+
+      # Rather expensive to read twice, but nah!
+      connect
     end
 
-    # Interprets this input.
-    #
-    # *passes* is the amount of optimization passes to perform.
-    def run(passes = 8)
-      offset = @@chunks.size
-
-      # This compiler will emit chunks whose cross-chunk
-      # references account with the *offset*.
-      compiler = Compiler.new(@@context.compiler, @file, offset)
-
+    # Parses this input and passes each consequtive quote to
+    # the block.
+    private def quotes
       @@reader.read(@file, @source) do |quote|
-        compiler.visit(quote)
+        yield quote
+      end
+    end
+
+    # Retrieves the distinct name of this input; makes a list
+    # of names this input requires exposed.
+    private def connect
+      quotes do |quote|
+        if quote.is_a?(QDistinct)
+          @distinct = quote.pieces
+        elsif quote.is_a?(QExpose)
+          @exposes << quote.pieces
+        end
+      end
+    end
+
+    # Reads and compiles the resulting quotes into chunks,
+    # which are then returned.
+    #
+    # The compiler will emit chunks with cross-chunk references
+    # respecting the *offset*.
+    private macro chunkize(offset)
+      %compiler = Compiler.new(@@context.compiler, @file, {{offset}})
+
+      quotes do |%quote|
+        %compiler.visit(%quote)
       end
 
-      result = compiler.result
+      %compiler.result
+    end
 
-      # After it emitted the chunks, we will optimize them.
-      optimizer = Optimizer.new(result)
-      optimizer.optimize(passes)
+    # Optimizes the *chunks*, with *passes* being the desired
+    # amount of optimization passes.
+    #
+    # Returns the chunks back.
+    private macro optimize(chunks, passes)
+      %optimizer = Optimizer.new(%chunks = {{chunks}})
+      %optimizer.optimize({{passes}})
+      %chunks
+    end
 
-      # After the chunks were optimized, we have to complete
-      # them (resolve jumps, stitch snippets, etc.).
-      result.each(&.complete!)
+    # Completes the *chunks* by calling `complete!` on every
+    # one of them, and contributes the completed chunks to
+    # the list of common chunks (`@@chunks`).
+    private macro complete(chunks)
+      %chunks = {{chunks}}
+      %chunks.each(&.complete!)
+      @@chunks += %chunks
+    end
 
-      # Now contribute.
-      @@chunks += result
+    # Goes through the full pipeline of compilation. See macros
+    # `chunkize`, `optimize`, `complete`.
+    private macro compile(offset, passes)
+      complete optimize(chunkize({{offset}}), {{passes}})
+    end
 
-      machine = Machine.new(@@context.machine, @@chunks, offset)
+    # Evaluates the chunks (i.e., `@@chunks`) starting at
+    # *offset*. Returns the result of the evaluation.
+    private macro evaluate(offset)
+      %machine = Machine.new(@@context.machine, @@chunks, {{offset}})
+      %machine.start
+      %machine.return!
+    end
 
-      machine.start
-      machine.return!
+    # Interprets this input. *passes* is the amount of
+    # optimization passes to perform.
+    def run(passes = 8)
+      offset = @@chunks.size
+      compile(offset, passes)
+      evaluate(offset)
     end
 
     def to_s(io)
-      io << "<input file " << @file << ">"
+      io << @file << " (" << (@distinct || "script") << ")"
     end
   end
 end

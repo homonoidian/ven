@@ -306,8 +306,14 @@ module Ven
 
     # Matches *args* against *types*.
     def typecheck(types : Models, args : Models) : Bool
-      args.zip(types) do |arg, type|
-        return false unless arg.of?(type) || type.eqv?(arg)
+      last = uninitialized Model
+
+      args.zip?(types) do |arg, type|
+        last = type if type
+
+        unless arg.of?(last) || last.eqv?(arg)
+          return false
+        end
       end
 
       true

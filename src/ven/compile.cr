@@ -594,5 +594,11 @@ module Ven
 
       emit Opcode::POP_ASSIGN, symbol
     end
+
+    def visit!(q : QDistinct)
+    end
+
+    def visit!(q : QExpose)
+    end
   end
 end

@@ -2,10 +2,11 @@ module Ven::Library
   include Suite
 
   extension Internal do
-    # Prints *message* to STDOUT. Returns Ven true (through
-    # `extension` semantics).
-    def say(message) : Nil
+    # Prints *message* to STDOUT. Returns it back.
+    def say(message)
       puts message.to_str.value
+
+      message
     end
 
     # Prints *question*, followed by whitespace, to the standard
