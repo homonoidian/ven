@@ -1,4 +1,18 @@
 module Ven
+  # An abstraction over an implicit collection of `Input`s.
+  #
+  # Implements Ven module system (e.g., `distinct` and `expose`).
+  #
+  # Note that all files in the current directory (CD), as well
+  # as the files of `homes`, are made into `Input`s. But only
+  # those that were `expose`d are compiled and executed.
+  #
+  # ```
+  # master = Master.new
+  # master.load("a", "x = 1 + 1")
+  # master.load("b", "y = 2 + x")
+  # master.load("c", "say(x, y)") # STDOUT: 2 \n 4
+  # ```
   class Master
     include Suite
 
@@ -94,14 +108,16 @@ module Ven
       @imported << expose
     end
 
+    # Reads, compiles and executes *source* under the name
+    # *file* under this Master.
     def load(file : String, source : String)
       input = Input.new(file, source)
-
-      input.exposes.each do |expose|
-        import(expose)
-      end
-
+      input.exposes.each { |expose| import(expose) }
       input.run
+    end
+
+    def to_s(io)
+      io << "master with " << @imported.size << " imports"
     end
   end
 end
