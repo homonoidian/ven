@@ -16,11 +16,17 @@ module Ven
   class Master
     include Suite
 
+    # See the `Input.measure` property.
+    property measure = false
+
     # Currently, there are several levels of verbosity:
     #   - `0`: totally quiet;
     #   - `1`: only issue warnings (default);
-    #   - `2`: totally verbose.
-    getter verbosity = 2
+    #   - `2`: issue warnings and debug prints.
+    property verbosity = 1
+
+    # See the `Input.disassemble` property.
+    property disassemble = false
 
     # Directories where this Master will search for '.ven'
     # files.
@@ -29,21 +35,23 @@ module Ven
     # The distincts this Master imported.
     @imported = Set(Distinct).new
 
-    # Initializes a new Master.
-    #
-    # *homes* is a list of directories where this Master will
-    # search for '.ven' files. A new `Input` is created in
-    # the repository for each such '.ven' file.
-    #
-    # A warning will be shown if one (or more) Ven file in
-    # one (or more) home directory cannot be read (see
-    # `verbosity`).
     def initialize(@homes = [Dir.current])
       @repository = [] of Input
+    end
 
+    # Gathers all '.ven' files from this Master's homes.
+    #
+    # A new `Input` is created in the repository for each such
+    # '.ven' file.
+    #
+    # A warning will be shown if one (or more) Ven file in
+    # one (or more) home directory cannot be read, respecting
+    # `verbosity`.
+    #
+    # Gathering all Ven files may seem to be ineffective,
+    # but it allows to abstract away from the file system.
+    def gather
       @homes.each do |home|
-        # Gathering all Ven files may seem to be ineffective,
-        # but it allows to abstract away from the file system.
         Dir["#{home}/**/*.ven"].each do |file|
           begin
             @repository << Input.new file, File.read(file)
@@ -112,7 +120,17 @@ module Ven
     # *file* under this Master.
     def load(file : String, source : String)
       input = Input.new(file, source)
-      input.exposes.each { |expose| import(expose) }
+
+      # Pass these switches down, as only Input deals with
+      # raw Compiler, Machine, etc., which provide the
+      # necessary APIs.
+      input.measure = @measure
+      input.disassemble = @disassemble
+
+      input.exposes.each do |expose|
+        import(expose)
+      end
+
       input.run
     end
 

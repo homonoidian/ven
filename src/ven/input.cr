@@ -28,6 +28,13 @@ module Ven
     getter exposes = [] of Distinct
     getter distinct : Distinct?
 
+    # Whether to print the instruction time table after executing
+    # this input.
+    property measure = false
+
+    # Whether to disassemble chunks (and print the disassembly).
+    property disassemble = false
+
     @quotes = Quotes.new
 
     def initialize(@file, @source)
@@ -67,9 +74,23 @@ module Ven
     #
     # The compiler will emit chunks with cross-chunk references
     # respecting the *offset*.
+    #
+    # Respects `disassemble`.
     private macro chunkize(offset)
       %compiler = Compiler.new(@@context.compiler, @file, {{offset}})
-      @quotes.each { |%quote| %compiler.visit(%quote) }
+
+      @quotes.each do |%quote|
+        %compiler.visit(%quote)
+      end
+
+      if @disassemble
+        puts "[pre-optimize disassembly]".colorize(:blue)
+
+        %compiler.result.each do |chunk|
+          puts chunk
+        end
+      end
+
       %compiler.result
     end
 
@@ -86,9 +107,20 @@ module Ven
     # Completes the *chunks* by calling `complete!` on every
     # one of them, and contributes the completed chunks to
     # the list of common chunks (`@@chunks`).
+    #
+    # Respects `disassemble`.
     private macro complete(chunks)
       %chunks = {{chunks}}
       %chunks.each(&.complete!)
+
+      if @disassemble
+        puts "[post-optimize disassembly]".colorize(:blue)
+
+        %chunks.each do |chunk|
+          puts chunk
+        end
+      end
+
       @@chunks += %chunks
     end
 
@@ -100,9 +132,34 @@ module Ven
 
     # Evaluates the chunks (i.e., `@@chunks`) starting at
     # *offset*. Returns the result of the evaluation.
+    #
+    # Respects `measure`.
     private macro evaluate(offset)
       %machine = Machine.new(@@context.machine, @@chunks, {{offset}})
+      %machine.measure = @measure
       %machine.start
+
+      if @measure
+        puts "[measure]".colorize(:blue)
+
+        %machine.timetable.each do |cp, stats|
+          puts "chunk at #{cp} {"
+
+          stats.each do |ip, stat|
+            amount = stat[:amount]
+            duration = stat[:duration]
+            instruction = stat[:instruction]
+
+            took = "#{duration.microseconds}us"
+            lead = "  #{amount} x #{took}"
+
+            puts "  #{lead.colorize.bold}\t#{ip}| #{instruction}"
+          end
+
+          puts "}"
+        end
+      end
+
       %machine.return!
     end
 
