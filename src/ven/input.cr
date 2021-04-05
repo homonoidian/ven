@@ -28,14 +28,16 @@ module Ven
     getter exposes = [] of Distinct
     getter distinct : Distinct?
 
+    @quotes = Quotes.new
+
     def initialize(@file, @source)
       @@context.extend(Library::Internal.new)
 
-      # Rather expensive to read twice, but nah!
-      connect
+      # Pre-read, once.
+      read
     end
 
-    # Parses this input and passes each consequtive quote to
+    # Reads this input and passes each consequtive quote to
     # the block.
     private def quotes
       @@reader.read(@file, @source) do |quote|
@@ -43,15 +45,20 @@ module Ven
       end
     end
 
-    # Retrieves the distinct name of this input; makes a list
-    # of names this input requires exposed.
-    private def connect
+    # Reads this input, caching each consequtive quote.
+    #
+    # Fills the `distinct` and `expose` of this input in case
+    # this quote is a distinct statement or an expose statement,
+    # correspondingly.
+    private def read
       quotes do |quote|
         if quote.is_a?(QDistinct)
           @distinct = quote.pieces
         elsif quote.is_a?(QExpose)
           @exposes << quote.pieces
         end
+
+        @quotes << quote
       end
     end
 
@@ -62,11 +69,7 @@ module Ven
     # respecting the *offset*.
     private macro chunkize(offset)
       %compiler = Compiler.new(@@context.compiler, @file, {{offset}})
-
-      quotes do |%quote|
-        %compiler.visit(%quote)
-      end
-
+      @quotes.each { |%quote| %compiler.visit(%quote) }
       %compiler.result
     end
 

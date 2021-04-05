@@ -39,9 +39,10 @@ module Ven
     # Dies of runtime error with *message*, which should explain
     # why the error happened.
     def die(message : String)
+      traces = @context.traces.dup
+
       file = chunk.file
       line = fetch.line
-      traces = @context.traces.dup
 
       unless traces.last?.try(&.name) == "unit"
         traces << Trace.new(file, line, "unit")
