@@ -13,7 +13,7 @@ module Ven
   # bar = Ven::Input.new("bar", "x + 1")
   #
   # puts foo.run # ==> 4 : Num
-  # puts bar.run 3 ==> 5 : Num
+  # puts bar.run # ==> 5 : Num
   # ```
   struct Input
     include Suite

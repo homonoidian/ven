@@ -305,21 +305,6 @@ module Ven
         die("symbol not found: '#{%symbol.name}'")
     end
 
-    # Matches *args* against *types*.
-    def typecheck(types : Models, args : Models) : Bool
-      last = uninitialized Model
-
-      args.zip?(types) do |arg, type|
-        last = type if type
-
-        unless arg.of?(last) || last.eqv?(arg)
-          return false
-        end
-      end
-
-      true
-    end
-
     # Performs a binary operation on *left*, *right*.
     #
     # Tries to normalize if *left*, *right* cannot be used
@@ -454,45 +439,6 @@ module Ven
       end
 
       @context[symbol] = defee
-    end
-
-    # Returns the variant of *callee* that understands *args*,
-    # or false if such variant wasn't found.
-    def variant?(callee : MFunction, args : Models)
-      index = -1
-      found = false
-      count = args.size
-      current = callee
-
-      until found
-        if callee.is_a?(MGenericFunction)
-          # Break if we're at the end of the variant
-          # list.
-          break if index >= callee.size - 1
-
-          current = callee[index += 1]
-        end
-
-        if current.is_a?(MConcreteFunction)
-          arity = current.arity
-          slurpy = current.slurpy
-          found =
-            ((slurpy && count >= arity) ||
-            (!slurpy && count == arity)) &&
-            typecheck(current.given, args)
-        elsif current.is_a?(MBuiltinFunction)
-          arity = current.arity
-          found = count == arity
-        end
-
-        # If at this point index is -1, we're certainly not
-        # an MGenericFunction. Thus, if found is false, the
-        # function that the user asked for was not and could
-        # not be found.
-        break if index == -1 && !found
-      end
-
-      found && current
     end
 
     # Returns *index*th item of *operand*.
@@ -805,7 +751,9 @@ module Ven
                 callee, args = callee.function, callee.args + args
               end
 
-              case found = variant?(callee, args)
+              case found = callee.variant?(args)
+              when MBox
+                next invoke(callee.to_s, found.target, args.reverse!)
               when MConcreteFunction
                 next invoke(callee.to_s, found.target, args.reverse!, Frame::Goal::Function)
               when MBuiltinFunction
@@ -813,12 +761,6 @@ module Ven
               else
                 die("improper arguments for #{callee}: #{args.join(", ")}")
               end
-            when MBox
-              unless callee.arity == args.size && typecheck(callee.given, args)
-                die("improper argument count for #{callee}: #{args.join(", ")}")
-              end
-
-              next invoke(callee.to_s, callee.target, args.reverse!)
             else
               die("illegal callee: #{callee}")
             end
@@ -903,7 +845,7 @@ module Ven
                 next revoke
               end
 
-              variant = variant?(callee, args)
+              variant = callee.variant?(args)
 
               unless variant.is_a?(MConcreteFunction)
                 die("improper 'next fun': #{callee}: #{args.join(", ")}")
@@ -926,7 +868,7 @@ module Ven
           # Resets the 'dies' target of this frame.
           in Opcode::RESET_DIES
             frame.dies = nil
-          # Pops the return value and returns out of the nearest
+          # Pops a return value and returns out of the nearest
           # surrounding function. Revokes all frames up to &
           # including the frame of that nearest surrounding
           # function. Note that it vetoes `SETUP_RET`: (x1 --)

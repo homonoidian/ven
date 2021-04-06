@@ -89,6 +89,12 @@ module Ven::Suite
       false
     end
 
+    # Returns whether this model is of the type *other*, or
+    # is equal-by-value to *other*.
+    def match(other : Model)
+      of?(other) || eqv?(other)
+    end
+
     # Returns whether this model is callable.
     def callable? : Bool
       false
@@ -347,12 +353,18 @@ module Ven::Suite
       0
     end
 
+    # Performs the checks that ensure this function can
+    # receive *args*. Returns nil if it cannot.
+    def variant?(args : Models)
+      self
+    end
+
     def callable?
       true
     end
 
     # Pretty-prints *params* alongside *given*.
-    def self.pretty_given(params : Array(String), given : Models)
+    def pg(params : Array(String), given : Models)
       params.zip(given).map(&.join ": ").join(", ")
     end
   end
@@ -383,6 +395,18 @@ module Ven::Suite
       end.sum
     end
 
+    def variant?(args)
+      count = args.size
+
+      return unless (@slurpy && count >= @arity) || count == @arity
+
+      args.zip?(@given) do |arg, type|
+        return unless arg.match(type || @given.last)
+      end
+
+      self
+    end
+
     def field(name)
       case name
       when "name"
@@ -403,7 +427,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "concrete " << @name << "(" << MFunction.pretty_given(@params, @given) << ")"
+      io << "concrete " << @name << "(" << pg(@params, @given) << ")"
     end
 
     # Returns whether *param* is an anonymous parameter.
@@ -441,6 +465,10 @@ module Ven::Suite
     # all arguments have the weight of `MWeight::ANY`.
     getter specificity do
       MWeight::ANY.value * @arity
+    end
+
+    def variant?(args) : self | Bool
+      args.size == @arity ? self : false
     end
 
     def field(name)
@@ -507,6 +535,10 @@ module Ven::Suite
       add!(variant)
     end
 
+    def variant?(args) : MFunction?
+      @variants.find &.variant?(args)
+    end
+
     def field(name)
       case name
       when "name"
@@ -548,14 +580,7 @@ module Ven::Suite
   # Boxes are lightweight (in theory, at least) carriers of
   # scope. Through box instances (see `MBoxInstance`), they
   # provide a medium for working with custom fields.
-  #
-  # They also borrow much from functions, namely, semantically
-  # and syntactically, the 'given' appendix & overall parameter/
-  # argument matching infrastructure.
-  #
-  # Boxes are separate from functions, though, and cannot be
-  # members of an `MGenericFunction`.
-  class MBox < MClass
+  class MBox < MFunction
     getter name : String
     getter arity : Int32
     getter given : Models
@@ -563,6 +588,16 @@ module Ven::Suite
     getter params : Array(String)
 
     def initialize(@name, @given, @params, @arity, @target)
+    end
+
+    def variant?(args) : (self)?
+      return unless args.size == @arity
+
+      args.zip?(@given) do |arg, type|
+        return unless arg.match(type || @given.last)
+      end
+
+      self
     end
 
     # Returns whether this box is equal-by-value to the
@@ -580,7 +615,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "box " << @name << "(" << MFunction.pretty_given(@params, @given) << ")"
+      io << "box " << @name << "(" << pg(@params, @given) << ")"
     end
   end
 
