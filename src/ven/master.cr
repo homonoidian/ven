@@ -33,7 +33,7 @@ module Ven
     getter homes : Array(String)
 
     # The distincts this Master imported.
-    @imported = Set(Distinct).new
+    @imported = Set(String).new
 
     def initialize(@homes = [Dir.current])
       @repository = [] of Input
@@ -86,16 +86,12 @@ module Ven
     def import(expose : Distinct)
       debug "import #{expose}"
 
-      if expose.in?(@imported)
-        return debug "#{expose} already imported"
-      end
-
       @repository.each do |input|
         next unless distinct = input.distinct
 
         debug "trying '#{input.file}'"
 
-        if distinct.in?(@imported)
+        if input.file.in?(@imported)
           next debug "#{distinct} already imported"
         end
 
@@ -105,15 +101,11 @@ module Ven
           debug "success: importing #{distinct}"
 
           input.run
+
+          # Remember the file that we actually imported.
+          @imported << input.file
         end
-
-        # Add the input that we actually imported.
-        @imported << distinct
       end
-
-      # Now, add the umbrella (maybe, and maybe not; Set will
-      # take care though).
-      @imported << expose
     end
 
     # Reads, compiles and executes *source* under the name
