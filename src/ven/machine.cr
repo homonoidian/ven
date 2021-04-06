@@ -491,31 +491,29 @@ module Ven
       end
     end
 
-    # Spreads field access on *head*. Returns a Vec of the
-    # resulting field values.
-    #
-    # Returns nil if one or more of these accesses weren't
-    # resolved correctly.
-    def field?(head : Vec, field : String)
-      vec (head.value.map { |item| field?(item, field) || return })
-    end
-
     # Resolves a field access.
+    #
+    # Provides the 'callable?' field for any *head*, which
+    # calls `Model.callable?`.
     #
     # If *head* has a field named *field*, returns the value
     # of that field.
     #
     # Otherwise, tries to construct a partial from a function
-    # called *field*, if such one exists.
+    # called *field*, if it exists.
     #
-    # Returns nil if found no working field resolution.
-    def field?(head : Model, field : String)
-      head.field(field) || field?(head, @context[field]?)
+    # Returns nil if found no valid field resolution.
+    def field?(head : Model, field : Str)
+      if field.value == "callable?"
+        return bool head.callable?
+      end
+
+      head.field(field.value) || field?(head, @context[field.value]?)
     end
 
     # :ditto:
     def field?(head, field : MFunction)
-      MPartial.new(field, [head])
+      MPartial.new(field, [head.as(Model)])
     end
 
     # :ditto:
@@ -523,10 +521,19 @@ module Ven
       nil
     end
 
+    # If *head*, a vector, has a field *field*, returns the
+    # value of that field.
+    #
+    # Otherwise, spreads the field access on the items of
+    # *head*. E.g., `[1, 2, 3].a is [1.a, 2.a, 3.a]`
+    def field(head : Vec, field)
+      field?(head, field) || vec (head.map { |item| field(item, field) })
+    end
+
     # Same as `field?`, but dies if found no working field
     # resolution.
-    def field(head, field)
-      field?(head, field) || die("#{head}: no such field or function: '#{field}'")
+    def field(head : Model, field : Model)
+      field?(head, field) || die("#{head}: no such field or function: #{field}")
     end
 
     # Starts a primitive state inspector prompt.
@@ -822,7 +829,7 @@ module Ven
           # of its field. Alternatively, builds a partial:
           # (x1 -- x2)
           in Opcode::FIELD_IMMEDIATE
-            put field(pop, static)
+            put field(pop, str static)
           # Pops two values, first being the operand and second
           # the field, and, if possible, gets the value of a
           # field. Alternatively, builds a partial: (x1 x2 -- x3)

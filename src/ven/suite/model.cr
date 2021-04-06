@@ -272,7 +272,7 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
-    delegate :[], :<<, to: @value
+    delegate :[], :<<, :map, :each, to: @value
 
     # Returns the length of this vector.
     def to_num
