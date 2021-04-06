@@ -90,8 +90,8 @@ module Ven
     # Makes sure that *file* is a file and can be opened &
     # executed, and, if so, executes it. Otherwise, dies.
     def open(file : String)
-      unless File.exists?(file) && File.file?(file) File.readable?(file)
-        die("'#{file}' does not exist or is not a file")
+      unless File.exists?(file) && File.file?(file) && File.readable?(file)
+        die("'#{file}' does not exist or is not a readable file")
       end
 
       @master.gather

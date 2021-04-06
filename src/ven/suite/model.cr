@@ -92,7 +92,7 @@ module Ven::Suite
     # Returns whether this model is of the type *other*, or
     # is equal-by-value to *other*.
     def match(other : Model)
-      of?(other) || eqv?(other)
+      of?(other) || other.eqv?(self)
     end
 
     # Returns whether this model is callable.
@@ -238,6 +238,14 @@ module Ven::Suite
 
     def to_str
       Str.new(@source)
+    end
+
+    def eqv?(other : MRegex)
+      @value == other.value
+    end
+
+    def eqv?(other : Str)
+      @value =~ other.value
     end
 
     def true?

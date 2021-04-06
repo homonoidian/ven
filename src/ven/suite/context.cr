@@ -115,17 +115,25 @@ module Ven::Suite::Context
 
     # Returns the value of a *symbol*.
     #
+    # Respects `$`, the meta-context box instance.
+    #
     # Nests *maybe* and -1 will be searched in first.
     #
     # Returns nil if it was not found.
     def []?(symbol : String, maybe = nil)
-      if it = @scopes[maybe || -1][symbol]?
-        return it
+      if value = @scopes[maybe || -1][symbol]?
+        return value
       end
 
       @scopes.reverse_each do |scope|
-        if it = scope[symbol]?
-          return it
+        if value = scope[symbol]?
+          return value
+        end
+
+        meta = scope["$"]?
+
+        if meta.is_a?(MBoxInstance) && (value = meta.namespace[symbol]?)
+          return value
         end
       end
     end
@@ -136,14 +144,26 @@ module Ven::Suite::Context
     end
 
     # Makes *symbol* be *value* in the localmost scope.
-    def []=(symbol : String, value : Model)
+    #
+    # Respects '$': if the localmost scope contains a
+    # meta-context, and that meta-context has a field
+    # named *symbol*, this field will be set to *value*.
+    def []=(symbol : String, value : Model, nest = nil)
+      return @scopes[nest][symbol] = value if nest
+
+      meta = @scopes[-1]["$"]?
+
+      if meta.is_a?(MBoxInstance) && meta.namespace[symbol]
+        return meta.namespace[symbol] = value
+      end
+
       @scopes[-1][symbol] = value
     end
 
     # Makes *symbol* be *value* in its nest, or, if no nest
     # specified, in the localmost scope.
     def []=(symbol : VSymbol, value : Model)
-      @scopes[symbol.nest || -1][symbol.name] = value
+      self[symbol.name, nest: symbol.nest] = value
     end
 
     # Introduces a child scope and a child trace.
