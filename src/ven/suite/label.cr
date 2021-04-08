@@ -1,8 +1,8 @@
 module Ven::Suite
-  # A reference to a snippet.
+  # An offset reference to a snippet (called target).
   #
-  # Note that labels are (and must be) eliminated after
-  # optimization. `VJump` payloads are used instead.
+  # Note that labels are (and must be) replaced with `VJump`s
+  # after optimization.
   class Label
     property target : Int32?
 

@@ -9,11 +9,11 @@ module Ven::Suite
   # An abstraction that gives a payload identity is called
   # payload vehicle.
   #
-  # There are various kinds of payloads: jump payloads, static
-  # data payloads, etc.
+  # There are various kinds of payload vehicles: jump, static
+  # data payload vehicles, etc.
   abstract struct Payload
     # Defines the appropriate getters and the initialize method
-    # for this payload, keeping the order.
+    # for this payload, keeping the order of *props*.
     macro carries(*props)
       {% for prop in props %}
         getter {{prop}}

@@ -80,7 +80,7 @@ module Ven
       err("general error", error.to_s)
     end
 
-    # Runs the *source* of some *file*, respecting `@result`.
+    # Runs *source* under the filename *file*, respecting `@result`.
     #
     # Rescues all `VenError`s and forwards them to `die`.
     def run(file : String, source : String)

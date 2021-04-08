@@ -89,7 +89,7 @@ module Ven::Suite::Context
     alias Scope = Hash(String, Model)
 
     # Maximum amount of traceback entries. Clears the traces
-    # if exceeding it.
+    # if exceeds.
     MAX_TRACES = 64
 
     getter scopes : Array(Scope)
@@ -108,18 +108,18 @@ module Ven::Suite::Context
 
     # Returns the value of a *symbol*.
     #
-    # Raises if it was not found.
+    # Raises if *symbol* was not found.
     def [](symbol : String | VSymbol)
       self[symbol]? || raise "symbol not found"
     end
 
-    # Returns the value of a *symbol*.
+    # Returns the value of *symbol*.
     #
-    # Respects `$`, the meta-context box instance.
+    # Respects the meta-context (`$`).
     #
     # Nests *maybe* and -1 will be searched in first.
     #
-    # Returns nil if it was not found.
+    # Returns nil *symbol* it was not found.
     def []?(symbol : String, maybe = nil)
       if value = @scopes[maybe || -1][symbol]?
         return value
@@ -145,9 +145,9 @@ module Ven::Suite::Context
 
     # Makes *symbol* be *value* in the localmost scope.
     #
-    # Respects '$': if the localmost scope contains a
-    # meta-context, and that meta-context has a field
-    # named *symbol*, this field will be set to *value*.
+    # If the localmost scope contains a meta-context (`$`),
+    # and that meta-context has a field named *symbol*, this
+    # field will be set to *value*.
     def []=(symbol : String, value : Model, nest = nil)
       return @scopes[nest][symbol] = value if nest
 
@@ -169,7 +169,7 @@ module Ven::Suite::Context
     # Introduces a child scope and a child trace.
     #
     # Deletes all existing traces if the amount of them is
-    # bigger than MAX_TRACES.
+    # bigger than `MAX_TRACES`.
     def push(file, line, name)
       if @traces.size > MAX_TRACES
         @traces.clear

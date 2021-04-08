@@ -1,5 +1,5 @@
 module Ven::Suite
-  # The base class of all Ven-related exceptions.
+  # The base class of all Ven exceptions.
   class VenError < Exception
   end
 
@@ -46,7 +46,7 @@ module Ven::Suite
   # interpreter implementation itself. InternalErrors are not
   # as bad (nor as dangerous) as standard Crystal errors: if
   # a standard Crystal error is raised, something is **very**
-  # wrong.
+  # wrong (for the user, at least).
   class InternalError < VenError
   end
 

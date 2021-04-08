@@ -1,10 +1,11 @@
 module Ven::Suite
   # The list of all opcodes.
   #
-  # NOTE: sectioning matters. Please add opcodes to the
+  # NOTE: Sectioning matters. Please add opcodes to the
   # appropriate sections.
   enum Opcode
     # Opcodes that take no payload.
+
     POP = 16
     POP2
     SWAP
@@ -40,6 +41,7 @@ module Ven::Suite
     BOX_INSTANCE
 
     # Opcodes that take a static payload.
+
     NUM = 128
     STR
     VEC
@@ -53,6 +55,7 @@ module Ven::Suite
     NEXT_FUN
 
     # Opcodes that take a jump payload.
+
     J = 512
     JIT
     JIF
@@ -62,11 +65,13 @@ module Ven::Suite
     SETUP_DIES
 
     # Opcodes that take a symbol payload.
+
     SYM = 1024
     POP_ASSIGN
     TAP_ASSIGN
 
     # Opcodes that take a function payload.
+
     FUN = 2048
     BOX
 

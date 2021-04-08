@@ -1,5 +1,6 @@
 module Ven
-  # Returns the regex pattern for word *name*, which can be:
+  # Returns the regex pattern for word *name*. *name* may be:
+  #
   #   * `:SYMBOL`
   #   * `:STRING`
   #   * `:REGEX`
@@ -36,8 +37,7 @@ module Ven
   private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
 
   # A word is a tagged lexeme. A lexeme is an excerpt from
-  # the source code. The patterns above explain how to extract
-  # these excerpts.
+  # the source code.
   alias Word = {type: String, lexeme: String, line: UInt32}
 
   # The levels of LED precedence in ascending order (lowest

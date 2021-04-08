@@ -14,18 +14,17 @@ module Ven::Suite
   # Assignments (`x = y`) are converted into Ven symbol
   # assignments.
   #
-  # Omits '_' at the end of the assignment target, allowing
-  # to name Ven symbols the same as some Crystal keywords.
+  # Omits '_' at the end of an assignment target, allowing
+  # to name Ven symbols like Crystal keywords (`if_ = 1`).
   #
   # If there is an assignment to a `Path` (e.g., `foo = Bar`),
-  # an appropriate `MType` is created.
+  # the appropriate `MType` is created.
   #
   # `def`s are converted into Ven builtins. Argument types
-  # count; unspecified will default to `Model`.
-  #
-  # Unspecified return type means return a `Model`. `Nil`
-  # return type means return a Ven bool true. Return type
-  # T means return `T.new(value_returned_by_def)`.
+  # count; unspecified will default to `Model`. Unspecified
+  # return type means return a `Model`. `Nil` return type
+  # means return a Ven bool true. Return type T means return
+  # `T.new(value_returned_by_def)`.
   macro extension(name, &block)
     class {{name}} < Extension
       def load(c_context, m_context)

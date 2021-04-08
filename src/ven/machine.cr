@@ -14,7 +14,10 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
+    # Whether to run the inspector.
     property inspect : Bool
+
+    # Whether to measure instruction evaluation time.
     property measure : Bool
 
     getter context : Context::Machine
@@ -848,7 +851,7 @@ module Ven
             # function. We know there is one because we trust
             # the Compiler.
             @frames.reverse_each do |it|
-              unless it.goal == Frame::Goal::Function
+              unless it.goal.function?
                 next revoke
               end
 
@@ -883,7 +886,7 @@ module Ven
             value = pop
 
             @frames.reverse_each do |it|
-              if it.goal == Frame::Goal::Function
+              if it.goal.function?
                 break revoke && put value
               end
 
@@ -894,7 +897,7 @@ module Ven
           # not break the flow: (x1 -- x1)
           in Opcode::SETUP_RET
             @frames.reverse_each do |it|
-              if it.goal == Frame::Goal::Function
+              if it.goal.function?
                 break it.returns = tap
               end
             end

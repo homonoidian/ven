@@ -19,9 +19,9 @@ module Ven::Suite
   alias Str = MString
   alias Vec = MVector
 
-  # Different kinds of model weight. Model weight is, essentially,
-  # the evaluation priority a model has. Models with higher
-  # priorities must evaluate first.
+  # Model weight is, simply speaking, the priority, or defineness,
+  # of a model. A model with higher weight should be evaluated
+  # first, though it really depends on the context.
   enum MWeight
     ANON_ANY = 1
     ANY
@@ -263,8 +263,8 @@ module Ven::Suite
     end
   end
 
-  # The parent of all `Model`s represented by a Crystal class;
-  # often Models that have no particular value.
+  # The parent of all `Model`s that are represented by a Crystal
+  # class; often Models that have no particular value.
   abstract class MClass
     Suite.model_template?
   end

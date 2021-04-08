@@ -6,7 +6,7 @@ module Ven
   #
   # Implements common context. This means that any new input
   # is evaluated in the same context where all other inputs
-  # were evaluated before.
+  # were evaluated.
   #
   # ```
   # foo = Ven::Input.new("foo", "x = 2 + 2")
@@ -172,7 +172,7 @@ module Ven
     end
 
     def to_s(io)
-      io << @file << " (" << (@distinct || "script") << ")"
+      io << @file << " (" << (@distinct.join(".") || "script") << ")"
     end
   end
 end
