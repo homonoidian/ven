@@ -49,4 +49,9 @@ module Ven::Suite
   # wrong.
   class InternalError < VenError
   end
+
+  # An exception that is raised when there is an error in the
+  # process of exposing a distinct.
+  class ExposeError < VenError
+  end
 end

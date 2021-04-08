@@ -28,12 +28,15 @@ module Ven
     # See the `Input.disassemble` property.
     property disassemble = false
 
+    # The amount of optimization passes.
+    property passes = 8
+
     # Directories where this Master will search for '.ven'
     # files.
     getter homes : Array(String)
 
-    # The distincts this Master imported.
-    @imported = Set(String).new
+    # The distincts this Master exposed.
+    @exposed = Set(String).new
 
     def initialize(@homes = [Dir.current])
       @repository = [] of Input
@@ -84,6 +87,8 @@ module Ven
     # `Input`s having a common context (through class vars,
     # that is; see `Input`).
     def import(expose : Distinct)
+      success = false
+
       debug "import #{expose}"
 
       @repository.each do |input|
@@ -91,20 +96,26 @@ module Ven
 
         debug "trying '#{input.file}'"
 
-        if input.file.in?(@imported)
-          next debug "#{distinct} already imported"
-        end
-
         # If an input's distinct starts with *expose*, run
         # that input in the common context.
         if distinct[0, expose.size]? == expose
-          debug "success: importing #{distinct}"
+          success = true
 
-          input.run
+          if input.file.in?(@exposed)
+            next debug "#{distinct} already exposed"
+          end
 
-          # Remember the file that we actually imported.
-          @imported << input.file
+          debug "found: importing #{distinct}"
+
+          input.run(@passes)
+
+          # Remember the file that was exposed, not the distinct.
+          @exposed << input.file
         end
+      end
+
+      unless success
+        raise ExposeError.new("could not expose '#{expose.join(".")}'")
       end
     end
 
@@ -123,7 +134,7 @@ module Ven
         import(expose)
       end
 
-      input.run
+      input.run(@passes)
     end
 
     def to_s(io)

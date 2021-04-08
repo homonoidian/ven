@@ -578,7 +578,7 @@ module Ven::Suite
     def initialize(@function, @args)
     end
 
-    delegate :field, :length, :specificity, to: @function
+    delegate :name, :field, :length, :specificity, to: @function
 
     def to_s(io)
       io << "partial " << @function << "(" << @args.join(", ") << ")"
@@ -633,7 +633,7 @@ module Ven::Suite
   # which was created at instantiation, and allows to access
   # the entries of that scope through field access.
   class MBoxInstance < MClass
-    getter parent : MBox
+    getter parent : MFunction
     getter namespace : Context::Machine::Scope
 
     def initialize(@parent, @namespace)

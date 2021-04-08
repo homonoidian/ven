@@ -6,14 +6,15 @@ require "./ven/**"
 module Ven
   VERSION = "0.1.1-rev11"
 
-  # Help messages describing various commands.
+  # Help messages describing various commands/switches/etc.
   module Help
     HELP = "Display this help and exit"
     RESULT = "Display result after execution"
     VERSION = "Display Ven version and exit"
     MEASURE = "Display time measurements after execution"
+    OPTIMIZE = "Amount of optimize passes (default: 1, actually LEVEL * 8)"
     DISASSEMBLE = "Display bytecode before execution"
-    VERBOSE_MASTER = "Set master's verbosity (0, 1, 2)"
+    VERBOSE_EXPOSE = "Set expose verbosity (0 [no], 1 [warn, default], 2 [debug+warn])"
   end
 
   class CLI
@@ -22,7 +23,7 @@ module Ven
     # All files & REPL inputs go to and through this Master.
     @master = Master.new
 
-    # Various flags and options.
+    # Flags and options important to this CLI.
     @quit = true
     @result = false
 
@@ -67,6 +68,11 @@ module Ven
     # :ditto:
     private def die(error e : InternalError)
       err("internal error", e.message.not_nil!)
+    end
+
+    # :ditto:
+    private def die(error e : ExposeError)
+      err("expose error", e.message.not_nil!)
     end
 
     # :ditto:
@@ -134,14 +140,21 @@ module Ven
         me.banner = "Usage: ven [options] [argument]"
 
         me.separator("\nSwitches:")
+
         me.on("-m", "--measure", Help::MEASURE) { @master.measure = true }
         me.on("-d", "--disassemble", Help::DISASSEMBLE) { @master.disassemble = true }
         me.on("-r", "--print-result", Help::RESULT) { @result = true }
-        me.on("-M LEVEL", "--verbose-master=LEVEL", Help::VERBOSE_MASTER) do |level|
+
+        me.on("-e LEVEL", "--verbose-expose=LEVEL", Help::VERBOSE_EXPOSE) do |level|
           @master.verbosity = level.to_i
         end
 
+        me.on("-O LEVEL", Help::OPTIMIZE) do |level|
+          @master.passes = level.to_i * 8
+        end
+
         me.separator("\nGeneral options:")
+
         me.on("-h", "--help", Help::HELP) { quit me.to_s }
         me.on("-v", "--version", Help::VERSION) { quit VERSION }
 

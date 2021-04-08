@@ -916,7 +916,7 @@ module Ven
           # stack: (B -- I), where B is the box parent to this
           # instance, and I is the instance.
           in Opcode::BOX_INSTANCE
-            put MBoxInstance.new(pop.as(MBox), @context.scopes[-1].dup)
+            put MBoxInstance.new(pop.as(MFunction), @context.scopes[-1].dup)
           end
         rescue error : RuntimeError
           dies = @frames.reverse_each do |it|

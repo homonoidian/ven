@@ -10,7 +10,7 @@ module Ven
     {% if name == :SYMBOL %}
       # `&_` and `_` are here as they should be handled as
       # if they were keywords
-      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_/
+      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
     {% elsif name == :STRING %}
       /"([^\n"\\]|\\[ntr\\"])*"/
     {% elsif name == :REGEX %}
@@ -18,7 +18,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&$]/
+      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
       /([ \n\r\t]+|#([ \t][^\n]*|\n+))/
     {% else %}
