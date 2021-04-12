@@ -612,7 +612,7 @@ module Ven
 
             die("interrupted")
           elsif @inspect
-            puts this
+            puts "(did) #{this}"
           end
 
           began = Time.monotonic
@@ -852,9 +852,7 @@ module Ven
             # function. We know there is one because we trust
             # the Compiler.
             @frames.reverse_each do |it|
-              unless it.goal.function?
-                next revoke
-              end
+              next revoke unless it.goal.function?
 
               variant = callee.variant?(args)
 
@@ -863,11 +861,7 @@ module Ven
               end
 
               break revoke &&
-                invoke(
-                  variant.to_s,
-                  variant.target,
-                  args,
-                  Frame::Goal::Function)
+                invoke(variant.to_s, variant.target, args, Frame::Goal::Function)
             end
 
             next
@@ -887,11 +881,9 @@ module Ven
             value = pop
 
             @frames.reverse_each do |it|
-              if it.goal.function?
-                break revoke && put value
-              end
-
               revoke
+
+              break put value if it.goal.function?
             end
           # Finds the nearest surrounding function and sets
           # its return value to whatever was tapped. Does

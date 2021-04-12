@@ -28,9 +28,11 @@ module Ven
     getter exposes = [] of Distinct
     getter distinct : Distinct?
 
-    # Whether to print the instruction time table after executing
-    # this input.
+    # See `Machine.measure`.
     property measure = false
+
+    # See `Machine.inspect`.
+    property inspect = false
 
     # Whether to disassemble chunks (and print the disassembly).
     property disassemble = false
@@ -138,11 +140,12 @@ module Ven
 
     # Evaluates the chunks (i.e., `@@chunks`) starting at
     # *offset*. Returns the result of the evaluation.
-    #
-    # Respects `measure`.
     private macro evaluate(offset)
       %machine = Machine.new(@@context.machine, @@chunks, {{offset}})
+
       %machine.measure = @measure
+      %machine.inspect = @inspect
+
       %machine.start
 
       if @measure

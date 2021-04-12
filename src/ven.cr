@@ -187,6 +187,7 @@ module Ven
 
         me.separator("\nSwitches:")
 
+        me.on("-i", "--inspect", "Enable inspector") { @master.inspect = true }
         me.on("-m", "--measure", Help::MEASURE) { @master.measure = true }
         me.on("-d", "--disassemble", Help::DISASSEMBLE) { @master.disassemble = true }
         me.on("-r", "--print-result", Help::RESULT) { @result = true }

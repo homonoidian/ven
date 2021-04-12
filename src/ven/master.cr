@@ -16,8 +16,11 @@ module Ven
   class Master
     include Suite
 
-    # See the `Input.measure` property.
+    # See `Input.measure`.
     property measure = false
+
+    # See `Input.inspect`.
+    property inspect = false
 
     # Currently, there are several levels of verbosity:
     #   - `0`: totally quiet;
@@ -124,10 +127,8 @@ module Ven
     def load(file : String, source : String)
       input = Input.new(file, source)
 
-      # Pass these switches down, as only Input deals with
-      # raw Compiler, Machine, etc., which provide the
-      # necessary APIs.
       input.measure = @measure
+      input.inspect = @inspect
       input.disassemble = @disassemble
 
       input.exposes.each do |expose|
