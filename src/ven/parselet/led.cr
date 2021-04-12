@@ -44,11 +44,27 @@ module Ven
     # `foo := "bar"`, `foo = 123.456`, etc.
     class PAssign < Led
       def parse(parser, tag, left, token)
-        kind = token[:type]
+        QAssign.new(tag,
+          PAssign
+            .validate(parser, left)
+            .value,
+          parser.led,
+          token[:type] == ":=")
+      end
 
-        !left.is_a?(QSymbol) \
-          ? parser.die("left-hand side of '#{kind}' must be a symbol")
-          : QAssign.new(tag, left.value, parser.led, kind == ":=")
+      # Returns whether *left* is a valid assignment target.
+      def self.validate?(left : Quote) : Bool
+        left.is_a?(QSymbol) && left.value != "*"
+      end
+
+      # Returns *left* if it is a valid assignment target.
+      # Otherwise, dies of read error.
+      def self.validate(parser, left : Quote)
+        unless self.validate?(left)
+          parser.die("illegal assignment target")
+        end
+
+        left.as(QSymbol)
       end
     end
 
@@ -56,13 +72,12 @@ module Ven
     # `x += 2`, `foo ~= 3`, etc.
     class PBinaryAssign < Led
       def parse(parser, tag, left, token)
-        operator = token[:type].chars.first.to_s
-
-        unless left.is_a?(QSymbol)
-          parser.die("left-hand side of '#{token[:type]}' must be a symbol")
-        end
-
-        QBinaryAssign.new(tag, operator, left.value, parser.led)
+        QBinaryAssign.new(tag,
+          token[:type][0].to_s,
+          PAssign
+            .validate(parser, left)
+            .value,
+          parser.led)
       end
     end
 

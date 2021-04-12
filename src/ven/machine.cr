@@ -735,9 +735,10 @@ module Ven
           # (x1 -- x1)
           in Opcode::DEC
             put num pop.as(Num).value - 1
-          # Converts the stack into a vector: (... -- [...])
-          in Opcode::REM_TO_VEC
-            put vec pop(stack.size).reverse!
+          # Defines the `*` variable. Pops stack.size - static
+          # values.
+          in Opcode::REST
+            @context["*"] = vec pop(stack.size - static Int32)
           # Defines a function. Requires the values of the
           # given appendix (orelse the appropriate number of
           # `any`s) to be on the stack; it pops them.
@@ -763,9 +764,9 @@ module Ven
 
               case found = callee.variant?(args)
               when MBox
-                next invoke(callee.to_s, found.target, args.reverse!)
+                next invoke(callee.to_s, found.target, args)
               when MConcreteFunction
-                next invoke(callee.to_s, found.target, args.reverse!, Frame::Goal::Function)
+                next invoke(callee.to_s, found.target, args, Frame::Goal::Function)
               when MBuiltinFunction
                 put found.callee.call(self, args)
               else
@@ -865,7 +866,7 @@ module Ven
                 invoke(
                   variant.to_s,
                   variant.target,
-                  args.reverse!,
+                  args,
                   Frame::Goal::Function)
             end
 

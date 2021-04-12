@@ -71,8 +71,8 @@ module Ven::Suite
                 # specified by the extension.
                 unless {{argument.name}}.is_a?({{restriction}})
                   machine.die(
-                    "'#{{{name}}}': wrong type for argument " \
-                    "no. #{{{index}} + 1} ({{argument.name}})")
+                    "'#{{{name}}}': '{{argument.name}}' (no. #{{{index}} + 1}):" \
+                    " expected {{restriction}}, found #{{{argument.name}}.class}")
                 end
               {% end %}
 

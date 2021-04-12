@@ -11,7 +11,7 @@ module Ven
     {% if name == :SYMBOL %}
       # `&_` and `_` are here as they should be handled as
       # if they were keywords
-      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
+      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$|\*/
     {% elsif name == :STRING %}
       /"([^\n"\\]|\\[ntr\\"])*"/
     {% elsif name == :REGEX %}
@@ -21,7 +21,7 @@ module Ven
     {% elsif name == :SPECIAL %}
       /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
-      /([ \n\r\t]+|#([ \t][^\n]*|\n+))/
+      /[ \n\r\t]+|#([ \t][^\n]*|\n+)/
     {% else %}
       {{ raise "[critical]: no pattern for #{name}" }}
     {% end %}
@@ -29,12 +29,12 @@ module Ven
 
   # Compile these so there is no regex compilation performance
   # loss each lexical pass.
-  private RX_SYMBOL  = /^#{regex_for(:SYMBOL)}/
-  private RX_STRING  = /^#{regex_for(:STRING)}/
-  private RX_REGEX   = /^#{regex_for(:REGEX)}/
-  private RX_NUMBER  = /^#{regex_for(:NUMBER)}/
-  private RX_IGNORE  = /^#{regex_for(:IGNORE)}/
-  private RX_SPECIAL = /^#{regex_for(:SPECIAL)}/
+  private RX_SYMBOL  = /^(#{regex_for(:SYMBOL)})/
+  private RX_STRING  = /^(#{regex_for(:STRING)})/
+  private RX_REGEX   = /^(#{regex_for(:REGEX)})/
+  private RX_NUMBER  = /^(#{regex_for(:NUMBER)})/
+  private RX_IGNORE  = /^(#{regex_for(:IGNORE)})/
+  private RX_SPECIAL = /^(#{regex_for(:SPECIAL)})/
 
   # A word is a tagged lexeme. A lexeme is an excerpt from
   # the source code.
@@ -112,7 +112,7 @@ module Ven
       @pos += $0.size if @src[@pos..] =~ {{pattern}}
     end
 
-    # Consumes a fresh word and returns the former word.
+    # Returns the current word and consumes the next one.
     def word!
       fresh =
         loop do
@@ -190,6 +190,12 @@ module Ven
     # Returns the precedence of the current word. Returns 0
     # if it has no precedence.
     private macro precedence?
+      if @word[:lexeme] == "x"
+        @word = word("X", "x")
+      elsif @word[:lexeme] == "*"
+        @word = word("*", "*")
+      end
+
       @led[(@word[:type])]?.try(&.precedence) || 0
     end
 
@@ -201,14 +207,6 @@ module Ven
 
       left = @nud[(@word[:type])].parse(self, tag?, word!)
 
-      # 'x' is a symbol by default; But when used in this very
-      # position (after a nud), it's an operator. E.g.:
-      #   x x x
-      #   ^     left
-      #     ^   <operator>
-      #       ^ <right>
-      @word = word("X", "x") if @word[:lexeme] == "x"
-
       while level < precedence?
         left = @led[(@word[:type])].parse(self, tag?, left, word!)
       end
@@ -218,7 +216,7 @@ module Ven
 
     # Returns whether this token is a valid statement delimiter.
     def eoi?
-      {"EOF", "}", ";"}.includes?(word[:type])
+      word[:type].in?("EOF", "}", ";")
     end
 
     # Parses a single statament.
@@ -250,28 +248,30 @@ module Ven
       last
     end
 
-    # Returns an array of nuds that are of `.class` *only*.
-    # If given no *only*, or *only* is nil, returns all nuds.
-    def nud?(only pick : (Parselet::Nud.class)? = nil)
-      @nud.reject { |_, nud| pick.nil? ? false : nud.class != pick }
-    end
-
     # Returns whether this word is a nud. *pick* may be provided
     # to check only certain parselet classes.
-    def is_nud?(only pick : (Parselet::Nud.class)? = nil)
-      nud?(pick).has_key?(@word[:type])
+    def is_nud?(only pick : Parselet::Nud.class)
+      @nud.each do |k, v|
+        return true if k == @word[:type] && v.class == pick
+      end
     end
 
-    # Returns an array of leds that are of `.class` *only*.
-    # If given no *only*, or *only* is nil, returns all leds.
-    def led?(only pick : (Parselet::Led.class)? = nil)
-      @led.reject { |_, led| pick.nil? ? false : led.class != pick }
+    # :ditto:
+    def is_nud?
+      @nud.has_key?(@word[:type])
     end
 
     # Returns whether this word is a led. *pick* may be provided
     # to check only certain parselet classes.
-    def is_led?(only pick : (Parselet::Led.class)? = nil)
-      led?(pick).has_key?(@word[:type])
+    def is_led?(only pick : Parselet::Led.class)
+      @led.each do |k, v|
+        return true if k == @word[:type] && v.class == pick
+      end
+    end
+
+    # :ditto:
+    def is_led?
+      @led.has_key?(@word[:type])
     end
 
     # Returns whether this word is a statement.

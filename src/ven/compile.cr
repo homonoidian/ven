@@ -411,16 +411,17 @@ module Ven
                 onymous.size,
                 slurpy)
 
-            onymous.each do |parameter|
-              emit Opcode::POP_ASSIGN, sym!(parameter, nest: -1)
+            if slurpy
+              emit Opcode::REST, onymous.size
             end
 
-            # Slurpies eat the rest of the stack's values. It
-            # must, however, be proven that the slurpie (`*`)
-            # is at the end of the function's parameters.
-            if slurpy
-              emit Opcode::REM_TO_VEC
-              emit Opcode::POP_ASSIGN, sym!("rest", nest: -1)
+            onymous.reverse_each do |name|
+              case name
+              when "_"
+                emit Opcode::POP_UPUT
+              else
+                emit Opcode::POP_ASSIGN, sym!(name, nest: -1)
+              end
             end
 
             under @fun, being: function do
@@ -565,7 +566,7 @@ module Ven
 
       chunk! q.name do |target|
         @context.child do
-          q.params.each do |param|
+          q.params.reverse_each do |param|
             emit Opcode::POP_ASSIGN, sym!(param, nest: -1)
           end
 

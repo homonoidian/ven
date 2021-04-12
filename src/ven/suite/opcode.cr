@@ -31,7 +31,6 @@ module Ven::Suite
     DEC
     MAP_SETUP
     MAP_APPEND
-    REM_TO_VEC
     FALSE_IF_EMPTY
     FIELD_DYNAMIC
     RESET_DIES
@@ -53,6 +52,7 @@ module Ven::Suite
     BINARY_ASSIGN
     FIELD_IMMEDIATE
     NEXT_FUN
+    REST
 
     # Opcodes that take a jump payload.
 

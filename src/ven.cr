@@ -25,6 +25,7 @@ module Ven
 
     # Flags and options important to this CLI.
     @quit = true
+    @gather = true
     @result = false
 
     # Prints *message* and quits with status 0.
@@ -100,19 +101,64 @@ module Ven
         die("'#{file}' does not exist or is not a readable file")
       end
 
-      @master.gather
+      if @gather
+        @master.gather
+      end
 
       run file, File.read(file)
+    end
+
+    # Highlights a *snippet* of Ven code.
+    private def highlight(snippet)
+      state = :default
+
+      snippet.split(/(?<!\-)\b(?!\-)/).flat_map do |word|
+        if word[0]?.try(&.alphanumeric?)
+          word
+        else
+          word.chars.map(&.to_s)
+        end
+      end.map do |word|
+        case state
+        when :string
+          state = :default if word.ends_with?('"')
+          next word.colorize.yellow
+        when :pattern
+          state = :default if word.ends_with?('`')
+          next word.colorize.yellow
+        end
+
+        case word
+        when /^"/
+          state = :string
+          word.colorize.yellow
+        when /^`/
+          state = :pattern
+          word.colorize.yellow
+        when /^#{Ven.regex_for(:NUMBER)}$/
+          word.colorize.magenta
+        when .in?(Reader::KEYWORDS)
+          word.colorize.blue
+        else
+          word.colorize.bold.toggle(Input.context[word]?)
+        end
+      end.join
     end
 
     # Launches the read-eval-print loop.
     def repl
       fancy = Fancyline.new
 
+      fancy.display.add do |ctx, line, yielder|
+        yielder.call ctx, highlight(line)
+      end
+
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
 
-      @master.gather
+      if @gather
+        @master.gather
+      end
 
       loop do
         begin
@@ -144,6 +190,7 @@ module Ven
         me.on("-m", "--measure", Help::MEASURE) { @master.measure = true }
         me.on("-d", "--disassemble", Help::DISASSEMBLE) { @master.disassemble = true }
         me.on("-r", "--print-result", Help::RESULT) { @result = true }
+        me.on("-G", "Disable gathering") { @gather = false }
 
         me.on("-e LEVEL", "--verbose-expose=LEVEL", Help::VERBOSE_EXPOSE) do |level|
           @master.verbosity = level.to_i

@@ -44,6 +44,12 @@ module Ven
       read
     end
 
+    # Returns the class-level (aka common, super-Input)
+    # context hub (see `Context::Hub`).
+    def self.context
+      @@context
+    end
+
     # Reads this input and passes each consequtive quote to
     # the block.
     private def quotes

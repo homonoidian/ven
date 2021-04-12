@@ -6,6 +6,8 @@ module Ven::Suite::Context
 
     @extensions = [] of Extension.class
 
+    delegate :[], :[]?, to: @machine
+
     # Loads *extension* into this hub.
     def extend(extension : Extension)
       unless extension.class.in?(@extensions)
