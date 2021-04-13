@@ -515,6 +515,19 @@ module Ven
     end
 
     # :ditto:
+    def field?(head : Vec, field : MFunction)
+      if field.leading?(head)
+        return MPartial.new(field, [head.as(Model)])
+      end
+
+      result = head.map do |item|
+        MPartial.new(field, [item.as(Model)])
+      end
+
+      vec result
+    end
+
+    # :ditto:
     def field?(head, field : MFunction)
       MPartial.new(field, [head.as(Model)])
     end

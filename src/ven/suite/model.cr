@@ -367,6 +367,12 @@ module Ven::Suite
       self
     end
 
+    # Returns whether this function may take *type* as its
+    # leading (first-expected) parameter.
+    def leading?(type : Model)
+      false
+    end
+
     def callable?
       true
     end
@@ -413,6 +419,10 @@ module Ven::Suite
       end
 
       self
+    end
+
+    def leading?(type)
+      type.match(@given.first)
     end
 
     def field(name)
@@ -547,6 +557,10 @@ module Ven::Suite
       @variants.find &.variant?(args)
     end
 
+    def leading?(type)
+      @variants.any? &.leading?(type)
+    end
+
     def field(name)
       case name
       when "name"
@@ -579,6 +593,14 @@ module Ven::Suite
     end
 
     delegate :name, :field, :length, :specificity, to: @function
+
+    def leading?(type)
+      unless (callee = @function).is_a?(MConcreteFunction)
+        return false
+      end
+
+      type.match(callee.given[@args.size])
+    end
 
     def to_s(io)
       io << "partial " << @function << "(" << @args.join(", ") << ")"
