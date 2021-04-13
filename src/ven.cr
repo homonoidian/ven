@@ -1,21 +1,10 @@
 require "fancyline"
-require "option_parser"
+require "commander"
 
 require "./ven/**"
 
 module Ven
   VERSION = "0.1.1-rev11"
-
-  # Help messages describing various commands/switches/etc.
-  module Help
-    HELP = "Display this help and exit"
-    RESULT = "Display result after execution"
-    VERSION = "Display Ven version and exit"
-    MEASURE = "Display time measurements after execution"
-    OPTIMIZE = "Amount of optimize passes (default: 1, actually LEVEL * 8)"
-    DISASSEMBLE = "Display bytecode before execution"
-    VERBOSE_EXPOSE = "Set expose verbosity (0 [no], 1 [warn, default], 2 [debug+warn])"
-  end
 
   class CLI
     include Suite
@@ -25,8 +14,8 @@ module Ven
 
     # Flags and options important to this CLI.
     @quit = true
-    @gather = true
     @result = false
+    @isolate = true
 
     # Prints *message* and quits with status 0.
     private def quit(message : String)
@@ -101,7 +90,7 @@ module Ven
         die("'#{file}' does not exist or is not a readable file")
       end
 
-      if @gather
+      unless @isolate
         @master.gather
       end
 
@@ -156,7 +145,7 @@ module Ven
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
 
-      if @gather
+      unless @isolate
         @master.gather
       end
 
@@ -179,57 +168,86 @@ module Ven
       end
     end
 
-    # Parses the command line arguments and dispatches to
-    # the appropriate entry method.
     def parse
-      OptionParser.parse do |me|
-        me.banner = "Usage: ven [options] [argument]"
+      Commander::Command.new do |cmd|
+        cmd.use = "ven"
+        cmd.long = VERSION
 
-        me.separator("\nSwitches:")
-
-        me.on("-i", "--inspect", "Enable inspector") { @master.inspect = true }
-        me.on("-m", "--measure", Help::MEASURE) { @master.measure = true }
-        me.on("-d", "--disassemble", Help::DISASSEMBLE) { @master.disassemble = true }
-        me.on("-r", "--print-result", Help::RESULT) { @result = true }
-        me.on("-G", "Disable gathering") { @gather = false }
-
-        me.on("-e LEVEL", "--verbose-expose=LEVEL", Help::VERBOSE_EXPOSE) do |level|
-          @master.verbosity = level.to_i
+        cmd.flags.add do |flag|
+          flag.name = "result"
+          flag.short = "-r"
+          flag.default = false
+          flag.description = "Display result of the program."
         end
 
-        me.on("-O LEVEL", Help::OPTIMIZE) do |level|
-          @master.passes = level.to_i * 8
+        cmd.flags.add do |flag|
+          flag.name = "disassemble"
+          flag.short = "-d"
+          flag.default = false
+          flag.description = "Display pre-opt & post-opt bytecode."
         end
 
-        me.separator("\nGeneral options:")
+        cmd.flags.add do |flag|
+          flag.name = "measure"
+          flag.short = "-m"
+          flag.default = false
+          flag.description = "Display instruction timetable."
+        end
 
-        me.on("-h", "--help", Help::HELP) { quit me.to_s }
-        me.on("-v", "--version", Help::VERSION) { quit VERSION }
+        cmd.flags.add do |flag|
+          flag.name = "isolate"
+          flag.short = "-i"
+          flag.default = false
+          flag.description = "Run in isolation."
+        end
 
-        me.unknown_args do |args|
-          case args.size
+        cmd.flags.add do |flag|
+          flag.name = "verbose"
+          flag.short = "-v"
+          flag.default = 1
+          flag.description = "Set verbosity level (0, 1, 2)."
+        end
+
+        cmd.flags.add do |flag|
+          flag.name = "optimize"
+          flag.short = "-O"
+          flag.default = 1
+          flag.description = "Set optimization level."
+        end
+
+        cmd.flags.add do |flag|
+          flag.name = "inspect"
+          flag.short = "-s"
+          flag.default = false
+          flag.description = "Enable step-by-step inspection."
+        end
+
+        cmd.run do |options, arguments|
+          @result = options.bool["result"]
+          @isolate = options.bool["isolate"]
+
+          @master.passes = options.int["optimize"].as(Int32) * 8
+          @master.inspect = options.bool["inspect"]
+          @master.measure = options.bool["measure"]
+          @master.verbosity = options.int["verbose"].as(Int32)
+          @master.disassemble = options.bool["disassemble"]
+
+          case arguments.size
           when 0
-            # `repl` requires a couple of flags to be set
-            # before it actually runs.
             @quit = false
             @result = true
-
             repl
           when 1
-            open(args.first)
+            open(arguments.first)
           else
-            die("unrecognized arguments: #{args.join(", ")}")
+            die("illegal arguments: #{arguments.join(", ")}")
           end
-        end
-
-        me.invalid_option do |option|
-          die("unrecognized option: #{option}")
         end
       end
     end
 
     def self.start
-      new.parse
+      Commander.run(new.parse, ARGV)
     end
   end
 end
