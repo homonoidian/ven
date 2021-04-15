@@ -32,7 +32,9 @@ module Ven::Suite
           \{% end %})
         end
 
-        # Fallback pretty-printing.
+        # Lisp-like pretty-printing.
+        #
+        # Use `Qtos` for Ven-like results.
         def to_s(io)
           io << "(" << {{@type.name.split("::").last}}
 

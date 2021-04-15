@@ -16,11 +16,17 @@ module Ven
   class Master
     include Suite
 
+    # See `Input.tree`.
+    property tree = false
+
     # See `Input.measure`.
     property measure = false
 
     # See `Input.inspect`.
     property inspect = false
+
+    # See `Input.tree_only`.
+    property tree_only = false
 
     # Currently, there are several levels of verbosity:
     #   - `0`: totally quiet;
@@ -127,8 +133,10 @@ module Ven
     def load(file : String, source : String)
       input = Input.new(file, source)
 
+      input.tree = @tree
       input.measure = @measure
       input.inspect = @inspect
+      input.tree_only = @tree_only
       input.disassemble = @disassemble
 
       input.exposes.each do |expose|

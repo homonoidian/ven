@@ -28,13 +28,19 @@ module Ven
     getter exposes = [] of Distinct
     getter distinct : Distinct?
 
+    # Whether to print the quote tree after reading.
+    property tree = false
+
     # See `Machine.measure`.
     property measure = false
 
     # See `Machine.inspect`.
     property inspect = false
 
-    # Whether to disassemble chunks (and print the disassembly).
+    # Whether to only display the tree.
+    property tree_only = false
+
+    # Whether to print the disassembled chunks.
     property disassemble = false
 
     @quotes = Quotes.new
@@ -175,6 +181,12 @@ module Ven
     # Interprets this input. *passes* is the amount of
     # optimization passes to perform.
     def run(passes = 8)
+      if @tree || @tree_only
+        puts Detree.detree(@quotes)
+
+        return if @tree_only
+      end
+
       offset = @@chunks.size
       compile(offset, passes)
       evaluate(offset)

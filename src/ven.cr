@@ -62,7 +62,7 @@ module Ven
 
     # :ditto:
     private def die(error e : ExposeError)
-      err("expose error", e.message.not_nil!)
+      err("expose error", "#{e.message} #{@isolate ? "(you are isolated)" : ""}")
     end
 
     # :ditto:
@@ -222,13 +222,29 @@ module Ven
           flag.description = "Enable step-by-step inspection."
         end
 
+        cmd.flags.add do |flag|
+          flag.name = "tree"
+          flag.short = "-t"
+          flag.default = false
+          flag.description = "Display quote tree."
+        end
+
+        cmd.flags.add do |flag|
+          flag.name = "tree-only"
+          flag.short = "-T"
+          flag.default = false
+          flag.description = "Only read and display quote tree"
+        end
+
         cmd.run do |options, arguments|
           @result = options.bool["result"]
           @isolate = options.bool["isolate"]
 
+          @master.tree = options.bool["tree"]
           @master.passes = options.int["optimize"].as(Int32) * 8
           @master.inspect = options.bool["inspect"]
           @master.measure = options.bool["measure"]
+          @master.tree_only = options.bool["tree-only"]
           @master.verbosity = options.int["verbose"].as(Int32)
           @master.disassemble = options.bool["disassemble"]
 
