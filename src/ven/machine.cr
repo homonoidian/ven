@@ -582,11 +582,20 @@ module Ven
           puts control.join(" ")
         when "._"
           puts underscores.join(" ")
+        when ".s"
+          @context.scopes.each do |scope|
+            scope.each do |name, value|
+              puts "#{name} = #{value}"
+            end
+
+            puts "-" * 32
+          end
         when /^(\.h(elp)?|\?)$/
           puts "?  : .h(elp) : display this",
                ".  : display stack",
                ".. : display chunk",
                ".f : display frame",
+               ".s : display scopes",
                ".c : display control",
                "._ : display underscores",
                "CTRL-C : step",
