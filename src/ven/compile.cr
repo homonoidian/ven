@@ -303,7 +303,6 @@ module Ven
     def visit!(q : QReduceSpread)
       visit(q.operand)
 
-      emit Opcode::TOV
       emit Opcode::REDUCE, q.operator
     end
 

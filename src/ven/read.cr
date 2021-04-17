@@ -11,7 +11,7 @@ module Ven
     {% if name == :SYMBOL %}
       # `&_` and `_` are here as they should be handled as
       # if they were keywords
-      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$|\*/
+      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
     {% elsif name == :STRING %}
       /"([^\n"\\]|\\[ntr\\"])*"/
     {% elsif name == :REGEX %}
@@ -19,7 +19,7 @@ module Ven
     {% elsif name == :NUMBER %}
       /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&]/
+      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*]/
     {% elsif name == :IGNORE %}
       /[ \n\r\t]+|#([ \t][^\n]*|\n+)/
     {% else %}
@@ -39,6 +39,7 @@ module Ven
     CONVERT
     JUNCTION
     IDENTITY
+    RANGE
     ADDITION
     PRODUCT
     POSTFIX
@@ -62,7 +63,7 @@ module Ven
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
       given loop next queue ensure expose
-      distinct box and or return dies)
+      distinct box and or return dies to)
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
@@ -188,22 +189,18 @@ module Ven
     # Returns the precedence of the current word. Returns 0
     # if it has no precedence.
     private macro precedence?
-      if @word[:lexeme] == "x"
-        @word = word("X", "x")
-      elsif @word[:lexeme] == "*"
-        @word = word("*", "*")
-      end
-
       @led[(@word[:type])]?.try(&.precedence) || 0
     end
 
     # Parses a led expression with precedence *level*.
     def led(level = Precedence::ZERO.value) : Quote
-      unless is_nud?
-        die("strange expression instead of a nud")
-      end
+      die("strange expression instead of a nud") unless is_nud?
 
       left = @nud[(@word[:type])].parse(self, tag?, word!)
+
+      if @word[:lexeme] == "x"
+        @word = word("X", "x")
+      end
 
       while level < precedence?
         left = @led[(@word[:type])].parse(self, tag?, left, word!)
@@ -324,6 +321,7 @@ module Ven
       defnud("RETURN", Parselet::PReturnExpression)
       defnud("QUEUE", Parselet::PQueue)
       defnud("ENSURE", Parselet::PEnsure)
+      defnud("*", Parselet::PSymbol)
       defnud("SYMBOL", Parselet::PSymbol)
       defnud("NUMBER", Parselet::PNumber)
       defnud("STRING", Parselet::PString)
@@ -349,6 +347,7 @@ module Ven
       defled("AND", "OR", precedence: JUNCTION)
       defled("?", Parselet::PIntoBool, precedence: IDENTITY)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
+      defled("TO", precedence: RANGE)
       defled("+", "-", "~", "&", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
       defled("++", Parselet::PReturnIncrement, precedence: POSTFIX)

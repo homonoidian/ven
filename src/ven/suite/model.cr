@@ -156,6 +156,10 @@ module Ven::Suite
       self
     end
 
+    def match(range : MRange)
+      range.includes?(@value)
+    end
+
     def true?
       @value != 0
     end
@@ -260,6 +264,77 @@ module Ven::Suite
 
     def to_s(io)
       io << "`" << @source << "`"
+    end
+  end
+
+  # Ven's range data type.
+  struct MRange < MStruct
+    # Maximum amount of values a range can include.
+    RANGE_SAFE_CAP = 100_000
+
+    getter end : Num
+    getter start : Num
+
+    @distance : BigDecimal
+
+    def initialize(@start : Num, @end : Num)
+      @distance = (@end.value - @start.value).abs + 1
+    end
+
+    # Computes this range.
+    #
+    # Will raise ModelCastException if this range is too large.
+    def to_vec
+      if @distance > RANGE_SAFE_CAP
+        raise ModelCastException.new("range #{self} is too large to be a vector")
+      end
+
+      # These will not overflow because there is RANGE_SAFE_CAP,
+      # which is much lower than max i32.
+      end_ = @end.value.to_i
+      start = @start.value.to_i
+
+      result = Vec.new
+
+      if start > end_
+        start.downto(end_) do |it|
+          result << Num.new(it)
+        end
+      elsif start < end_
+        start.upto(end_) do |it|
+          result << Num.new(it)
+        end
+      end
+
+      result
+    end
+
+    def field(name)
+      case name
+      when "end"
+        @end
+      when "start"
+        @start
+      when "empty?"
+        MBool.new(@start.value == @end.value)
+      end
+    end
+
+    def eqv?(other : MRange)
+      @start.eqv?(other.start) && @end.eqv?(other.end)
+    end
+
+    def length
+      @distance.to_i
+    end
+
+    def to_s(io)
+      io << @start << " to " << @end
+    end
+
+    # Returns whether this range includes *num*.
+    def includes?(num : BigDecimal)
+      num >= @start.value && num <= @end.value
     end
   end
 

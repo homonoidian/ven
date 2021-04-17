@@ -169,7 +169,7 @@ module Ven
         when Reader::RX_REGEX
           result += $0.colorize.yellow.to_s
         when Reader::RX_SYMBOL
-          if Reader::KEYWORDS.any? { |keyword| pad.starts_with?(keyword) }
+          if Reader::KEYWORDS.any?($0)
             result += $0.colorize.blue.to_s
           else
             result += $0.colorize.bold.toggle(Input.context[$0]?).to_s
