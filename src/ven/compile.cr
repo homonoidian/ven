@@ -316,6 +316,7 @@ module Ven
       end
 
       visit(q.operand)
+      emit Opcode::TOV
       emit Opcode::MAP_SETUP
       label start
       emit Opcode::MAP_ITER, stop
