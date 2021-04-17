@@ -13,17 +13,15 @@ module Ven
 
     # Assumes *source* is a static payload carrying *type*.
     #
-    # ** *chunk* (variable) must be in the scope prior to
-    # a call to this.**
+    # **Assumes that *chunk* is in the scope.**
     private macro static(source, type)
       chunk.resolve({{source}}).as(VStatic).value.as({{type}})
     end
 
-    # Computes the offset of *value*.
+    # Returns the data offset of *value*.
     #
-    # ** *chunk* (variable) must be in the scope prior to
-    # a call to this.**
-    private macro offsetize(value)
+    # **Assumes that *chunk* is in the scope.**
+    private macro data(value)
       chunk.offset({{value}})
     end
 
@@ -51,15 +49,13 @@ module Ven
       end
     end
 
-    # Optimizes every one of the *chunk*'s snippets once.
+    # Goes over *chunk*'s snippets, performing exactly one
+    # optimization first for threes, and then for twos of
+    # instructions in each snippet.
     #
     # This method performs what's known as **peephole optimization**.
     # It finds blobs of redundant or readily computable instructions,
-    # and gets rid of them in various ways.
-    #
-    # Note that certain optimizations may require multiple
-    # `optimize` passes. E.g., it is impossible to compute
-    # `2 + 2 + 2` in 1 pass (2 passes are required).
+    # and eliminates them in various ways.
     def optimize(chunk : Chunk)
       chunk.snippets.each do |snippet|
         snippet.for(3) do |triplet, start|
@@ -72,7 +68,7 @@ module Ven
                 static(triplet[1], BigDecimal))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::NUM, offsetize resolution)
+              break snippet.replace(start, 3, Opcode::NUM, data resolution)
             end
           when [Opcode::STR, Opcode::STR, Opcode::BINARY]
             resolution =
@@ -82,7 +78,7 @@ module Ven
                 static(triplet[1], String))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::STR, offsetize resolution)
+              break snippet.replace(start, 3, Opcode::STR, data resolution)
             end
           end
         end
@@ -117,12 +113,19 @@ module Ven
     end
 
     # Optimizes the chunks of this Optimizer in several *passes*.
-    def optimize(passes = 1)
+    def optimize(passes)
       passes.times do
         @chunks.each do |chunk|
           optimize(chunk)
         end
       end
+    end
+
+    # Returns the *chunks* optimized in several *passes*.
+    def self.optimize(chunks, passes = 1)
+      new(chunks).optimize(passes)
+
+      chunks
     end
   end
 end

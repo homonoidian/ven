@@ -964,6 +964,8 @@ module Ven
 
         jump
       end
+
+      self
     end
 
     # Cleans up and returns the last value on the operand
@@ -972,6 +974,18 @@ module Ven
       @context.clear
 
       stack.delete_at(..).last?
+    end
+
+    # Makes an instance of Machine given *context*, *chunks*
+    # and *offset* (see `Machine`). Yields this instance to
+    # the block.
+    #
+    # After the block was executed, starts the Machine and
+    # returns the resulting value.
+    def self.start(context, chunks, offset)
+      machine = new(context, chunks, offset)
+      yield machine
+      machine.start.return!
     end
   end
 end

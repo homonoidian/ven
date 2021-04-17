@@ -9,13 +9,22 @@ module Ven
   class CLI
     include Suite
 
+    # Whether to quit after a Ven error.
+    @quit = true
+    # The step that we will stop on.
+    @step = :eval
     # All files & REPL inputs go to and through this Master.
     @master = Master.new
-
-    # Flags and options important to this CLI.
-    @quit = true
+    # Whether to display the result.
     @result = false
-    @isolate = true
+    # The amount of optimization passes.
+    @passes = 8
+    # Whether we run isolated.
+    @isolated = false
+
+    def initialize
+      Colorize.on_tty_only!
+    end
 
     # Prints *message* and quits with status 0.
     private def quit(message : String)
@@ -62,7 +71,7 @@ module Ven
 
     # :ditto:
     private def die(error e : ExposeError)
-      err("expose error", "#{e.message} #{@isolate ? "(you are isolated)" : ""}")
+      err("expose error", "#{e.message} #{@isolated ? "(isolated)" : ""}")
     end
 
     # :ditto:
@@ -70,15 +79,68 @@ module Ven
       err("general error", error.to_s)
     end
 
-    # Runs *source* under the filename *file*, respecting `@result`.
-    #
-    # Rescues all `VenError`s and forwards them to `die`.
-    def run(file : String, source : String)
-      result = @master.load(file, source)
+    # Displays *quotes*.
+    def display(quotes : Quotes)
+      puts Detree.detree(quotes)
+    end
 
-      if @result && !result.nil?
-        puts result
+    # Displays *chunks*.
+    def display(chunks : Chunks)
+      chunks.each { |chunk| puts chunk }
+    end
+
+    # Displays *timetable*.
+    def display(timetable : Machine::Timetable)
+      timetable.each do |cidx, stats|
+        puts "chunk #{cidx}".colorize.underline
+
+        stats.each do |ip, report|
+          amount = report[:amount]
+          duration = report[:duration].total_microseconds
+
+          amount =
+            if amount < 100
+              amount.colorize.green
+            elsif amount < 1_000
+              amount.colorize.yellow
+            elsif amount < 10_000
+              amount.colorize.light_red
+            else
+              amount.colorize.red
+            end
+
+          duration =
+            if duration < 100
+              "#{duration}us".colorize.green
+            elsif duration < 1_000
+              "#{duration}us".colorize.yellow
+            elsif duration < 10_000
+              "#{duration}us".colorize.light_red
+            else
+              "#{duration}us".colorize.red
+            end
+
+          puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration}]"
+        end
       end
+    end
+
+    # Displays *entity*.
+    def display(entity)
+      puts entity if @result && entity
+    end
+
+    # Runs *source* named *file* up to the step requested by
+    # the user (orelse eval), and `display`s whatever that
+    # step returns.
+    def run(file : String, source : String)
+      unless @step == :eval
+        return display Input.run(file, source, until: @step, passes: @passes)
+      end
+
+      value = @master.load(file, source)
+      display @master.timetable
+      display value
     rescue error : VenError
       die(error)
     end
@@ -90,48 +152,45 @@ module Ven
         die("'#{file}' does not exist or is not a readable file")
       end
 
-      unless @isolate
+      unless @isolated
         @master.gather
       end
 
       run file, File.read(file)
     end
 
-    # Highlights a *snippet* of Ven code.
+    # A tiny lexer that highlights a *snippet* of Ven code.
     private def highlight(snippet)
-      state = :default
+      offset = 0
+      result = ""
 
-      snippet.split(/(?<!\-)\b(?!\-)/).flat_map do |word|
-        if word[0]?.try(&.alphanumeric?)
-          word
+      loop do
+        case pad = snippet[offset..]
+        when Reader::RX_REGEX
+          result += $0.colorize.yellow.to_s
+        when Reader::RX_SYMBOL
+          if Reader::KEYWORDS.any? { |keyword| pad.starts_with?(keyword) }
+            result += $0.colorize.blue.to_s
+          else
+            result += $0.colorize.bold.toggle(Input.context[$0]?).to_s
+          end
+        when Reader::RX_STRING
+          result += $0.colorize.yellow.to_s
+        when Reader::RX_NUMBER
+          result += $0.colorize.magenta.to_s
+        when .empty?
+          break
         else
-          word.chars.map(&.to_s)
-        end
-      end.map do |word|
-        case state
-        when :string
-          state = :default if word.ends_with?('"')
-          next word.colorize.yellow
-        when :pattern
-          state = :default if word.ends_with?('`')
-          next word.colorize.yellow
+          # Pass over unknown characters.
+          result += snippet[offset]
+          offset += 1
+          next
         end
 
-        case word
-        when /^"/
-          state = :string
-          word.colorize.yellow
-        when /^`/
-          state = :pattern
-          word.colorize.yellow
-        when /^#{Ven.regex_for(:NUMBER)}$/
-          word.colorize.magenta
-        when .in?(Reader::KEYWORDS)
-          word.colorize.blue
-        else
-          word.colorize.bold.toggle(Input.context[word]?)
-        end
-      end.join
+        offset += $0.size
+      end
+
+      result
     end
 
     # Launches the read-eval-print loop.
@@ -145,7 +204,7 @@ module Ven
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
 
-      unless @isolate
+      unless @isolated
         @master.gather
       end
 
@@ -174,79 +233,85 @@ module Ven
         cmd.long = VERSION
 
         cmd.flags.add do |flag|
-          flag.name = "result"
-          flag.short = "-r"
-          flag.default = false
-          flag.description = "Display result of the program."
+          flag.name = "just"
+          flag.short = "-j"
+          flag.long = "--just"
+          flag.default = "eval"
+          flag.description = "Halt at a certain step (read, compile, optimize)."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "disassemble"
-          flag.short = "-d"
+          flag.name = "isolated"
+          flag.short = "-i"
+          flag.long = "--isolated"
           flag.default = false
-          flag.description = "Display pre-opt & post-opt bytecode."
+          flag.description = "Do not look up other Ven files."
+        end
+
+        cmd.flags.add do |flag|
+          flag.name = "result"
+          flag.short = "-r"
+          flag.long = "--result"
+          flag.default = false
+          flag.description = "Display the output of the final step."
         end
 
         cmd.flags.add do |flag|
           flag.name = "measure"
           flag.short = "-m"
+          flag.long = "--measure"
           flag.default = false
           flag.description = "Display instruction timetable."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "isolate"
-          flag.short = "-i"
-          flag.default = false
-          flag.description = "Run in isolation."
-        end
-
-        cmd.flags.add do |flag|
-          flag.name = "verbose"
-          flag.short = "-v"
-          flag.default = 1
-          flag.description = "Set verbosity level (0, 1, 2)."
-        end
-
-        cmd.flags.add do |flag|
           flag.name = "optimize"
           flag.short = "-O"
+          flag.long = "--optimize"
           flag.default = 1
-          flag.description = "Set optimization level."
+          flag.description = "Set the amount of optimization passes."
         end
 
         cmd.flags.add do |flag|
           flag.name = "inspect"
           flag.short = "-s"
+          flag.long = "--inspect"
           flag.default = false
-          flag.description = "Enable step-by-step inspection."
+          flag.description = "Enable step-by-step evaluation inspector."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "tree"
-          flag.short = "-t"
-          flag.default = false
-          flag.description = "Display quote tree."
-        end
-
-        cmd.flags.add do |flag|
-          flag.name = "tree-only"
-          flag.short = "-T"
-          flag.default = false
-          flag.description = "Only read and display quote tree"
+          flag.name = "verbose"
+          flag.short = "-v"
+          flag.long = "--verbose"
+          flag.default = 1
+          flag.description = "Set master verbosity (0: quiet, 1: warn, 2: warn + debug)."
         end
 
         cmd.run do |options, arguments|
           @result = options.bool["result"]
-          @isolate = options.bool["isolate"]
 
-          @master.tree = options.bool["tree"]
-          @master.passes = options.int["optimize"].as(Int32) * 8
+          @master.passes = @passes = options.int["optimize"].as(Int32) * 8
           @master.inspect = options.bool["inspect"]
           @master.measure = options.bool["measure"]
-          @master.tree_only = options.bool["tree-only"]
           @master.verbosity = options.int["verbose"].as(Int32)
-          @master.disassemble = options.bool["disassemble"]
+
+          case just = options.string["just"]
+          when "eval"
+            # pass
+          when "read"
+            @step = :read
+          when "compile"
+            @step = :compile
+          when "optimize"
+            @step = :optimize
+          else
+            die("'just': invalid step: #{just}").not_nil!
+          end
+
+          # We are isolated if: (a) `-i` was passed; or (b)
+          # we are never going to evaluate.
+          @isolated = options.bool["isolated"] || @step != :eval
 
           case arguments.size
           when 0

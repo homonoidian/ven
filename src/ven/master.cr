@@ -16,57 +16,54 @@ module Ven
   class Master
     include Suite
 
-    # See `Input.tree`.
-    property tree = false
+    # Directories where this Master will search for '.ven' files.
+    getter homes : Array(String)
+    # The timetable produced by the latest `load`.
+    getter timetable : Machine::Timetable?
 
+    # The amount of optimization passes.
+    property passes = 8
     # See `Input.measure`.
     property measure = false
-
     # See `Input.inspect`.
     property inspect = false
-
-    # See `Input.tree_only`.
-    property tree_only = false
-
     # Currently, there are several levels of verbosity:
     #   - `0`: totally quiet;
     #   - `1`: only issue warnings (default);
     #   - `2`: issue warnings and debug prints.
     property verbosity = 1
 
-    # See the `Input.disassemble` property.
-    property disassemble = false
-
-    # The amount of optimization passes.
-    property passes = 8
-
-    # Directories where this Master will search for '.ven'
-    # files.
-    getter homes : Array(String)
-
-    # The distincts this Master exposed.
+    # The files that this Master has already exposed.
     @exposed = Set(String).new
 
     def initialize(@homes = [Dir.current])
       @repository = [] of Input
     end
 
-    # Gathers all '.ven' files from this Master's homes.
+    # Prints a colorized *warning* if `verbosity` allows.
+    def warn(warning : String)
+      if @verbosity >= 1
+        puts "#{"[warning]".colorize(:yellow)} #{warning}"
+      end
+    end
+
+    # Prints a colorized debug *message* if `verbosity` allows.
+    def debug(message : String)
+      if @verbosity >= 2
+        puts "#{"[debug]".colorize(:blue)} #{message}"
+      end
+    end
+
+    # Searches for '.ven' files in this Master's homes.
     #
-    # A new `Input` is created in the repository for each such
-    # '.ven' file.
-    #
-    # A warning will be shown if one (or more) Ven file in
-    # one (or more) home directory cannot be read, respecting
-    # `verbosity`.
-    #
-    # Gathering all Ven files may seem to be ineffective,
-    # but it allows to abstract away from the file system.
+    # A new `Input` is added to the repository for each '.ven'
+    # file. A warning will be shown if it cannot be read (if
+    # allowed by `verbosity`).
     def gather
       @homes.each do |home|
         Dir["#{home}/**/*.ven"].each do |file|
           begin
-            @repository << Input.new file, File.read(file)
+            @repository << Input.new(file, File.read(file), @passes)
           rescue error : ReadError
             warn "read error: #{error} (near #{file}:#{error.line})"
           end
@@ -74,27 +71,10 @@ module Ven
       end
     end
 
-    # Prints a colorized *warning*, with respect to
-    # `verbosity`.
-    def warn(warning : String)
-      if @verbosity >= 1
-        puts "#{"[warning]".colorize(:yellow)} #{warning}"
-      end
-    end
-
-    # Prints a colorized debug *message*, with respect to
-    # `verbosity`.
-    def debug(message : String)
-      if @verbosity >= 2
-        puts "#{"[debug]".colorize(:blue)} #{message}"
-      end
-    end
-
     # Imports a distinct *expose*.
     #
-    # The behavioral output of this method is based on all
-    # `Input`s having a common context (through class vars,
-    # that is; see `Input`).
+    # This method will only work if all `Input`s are being
+    # evaluated in a common environment.
     def import(expose : Distinct)
       success = false
 
@@ -116,7 +96,7 @@ module Ven
 
           debug "found: importing #{distinct}"
 
-          input.run(@passes)
+          input.run
 
           # Remember the file that was exposed, not the distinct.
           @exposed << input.file
@@ -128,26 +108,25 @@ module Ven
       end
     end
 
-    # Reads, compiles and executes *source* under the name
-    # *file* under this Master.
+    # Reads, compiles and executes *source* under filename *file*.
     def load(file : String, source : String)
-      input = Input.new(file, source)
+      input = Input.new(file, source, @passes)
 
-      input.tree = @tree
+      input.exposes.each { |expose| import(expose) }
       input.measure = @measure
       input.inspect = @inspect
-      input.tree_only = @tree_only
-      input.disassemble = @disassemble
 
-      input.exposes.each do |expose|
-        import(expose)
-      end
+      result = input.run
 
-      input.run(@passes)
+      # For some reason, `Input.run(&)` beauty won't export
+      # @timetable like `Machine.start(&)` (see `eval`).
+      @timetable = input.timetable
+
+      result
     end
 
     def to_s(io)
-      io << "master with " << @imported.size << " imports"
+      io << "master with " << @exposed.size << " imports"
     end
   end
 end

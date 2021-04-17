@@ -18,7 +18,7 @@ module Ven::Suite
 
     # Fallback visitor (subclass has no such visitor).
     def visit!(quote : _)
-      raise InternalError.new("could not visit: #{quote}")
+      raise InternalError.new("#{self.class}: could not visit: #{quote}")
     end
   end
 end

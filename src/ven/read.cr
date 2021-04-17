@@ -19,22 +19,13 @@ module Ven
     {% elsif name == :NUMBER %}
       /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
     {% elsif name == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+*\/()[\]{},:;=?.|#&]/
+      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&]/
     {% elsif name == :IGNORE %}
       /[ \n\r\t]+|#([ \t][^\n]*|\n+)/
     {% else %}
       {{ raise "[critical]: no pattern for #{name}" }}
     {% end %}
   end
-
-  # Compile these so there is no regex compilation performance
-  # loss each lexical pass.
-  private RX_SYMBOL  = /^(#{regex_for(:SYMBOL)})/
-  private RX_STRING  = /^(#{regex_for(:STRING)})/
-  private RX_REGEX   = /^(#{regex_for(:REGEX)})/
-  private RX_NUMBER  = /^(#{regex_for(:NUMBER)})/
-  private RX_IGNORE  = /^(#{regex_for(:IGNORE)})/
-  private RX_SPECIAL = /^(#{regex_for(:SPECIAL)})/
 
   # A word is a tagged lexeme. A lexeme is an excerpt from
   # the source code.
@@ -59,6 +50,13 @@ module Ven
   # A reader based on Pratt's parsing algorithm.
   class Reader
     include Suite
+
+    RX_REGEX   = /^(#{Ven.regex_for(:REGEX)})/
+    RX_SYMBOL  = /^(#{Ven.regex_for(:SYMBOL)})/
+    RX_STRING  = /^(#{Ven.regex_for(:STRING)})/
+    RX_NUMBER  = /^(#{Ven.regex_for(:NUMBER)})/
+    RX_IGNORE  = /^(#{Ven.regex_for(:IGNORE)})/
+    RX_SPECIAL = /^(#{Ven.regex_for(:SPECIAL)})/
 
     # A list of keywords protected by the reader.
     KEYWORDS = %w(

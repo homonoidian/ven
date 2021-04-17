@@ -1,78 +1,39 @@
 module Ven
   alias Distinct = Array(String)
 
-  # An abstraction over a Ven file, and one of the highest
-  # Ven abstractions overall.
-  #
-  # Implements common context. This means that any new input
-  # is evaluated in the same context where all other inputs
-  # were evaluated.
-  #
-  # ```
-  # foo = Ven::Input.new("foo", "x = 2 + 2")
-  # bar = Ven::Input.new("bar", "x + 1")
-  #
-  # puts foo.run # ==> 4 : Num
-  # puts bar.run # ==> 5 : Num
-  # ```
-  struct Input
+  class Input
     include Suite
+
+    # Common reader, chunk bank and common context are class
+    # variables so as to provide common execution environment
+    # for every Input.
 
     @@chunks = Chunks.new
     @@reader = Reader.new
     @@context = Context::Hub.new
 
-    getter file : String
-    getter source : String
-
-    getter exposes = [] of Distinct
-    getter distinct : Distinct?
-
-    # Whether to print the quote tree after reading.
-    property tree = false
-
-    # See `Machine.measure`.
+    # Whether to record the timetable.
     property measure = false
-
-    # See `Machine.inspect`.
+    # Whether to run inspector after this input evaluates.
     property inspect = false
 
-    # Whether to only display the tree.
-    property tree_only = false
+    # The name of the file this Input is in.
+    getter file : String
+    # The source code for this Input.
+    getter source : String
+    # This Input's quotes.
+    getter quotes = Quotes.new
+    # The distincts this Input exposes.
+    getter exposes = [] of Distinct
+    # This Input's distinct.
+    getter distinct : Distinct?
+    # This Input's timetable.
+    getter timetable : Machine::Timetable?
 
-    # Whether to print the disassembled chunks.
-    property disassemble = false
-
-    @quotes = Quotes.new
-
-    def initialize(@file, @source)
+    def initialize(@file, @source, @passes = 8)
       @@context.extend(Library::Internal.new)
 
-      # Pre-read, once.
-      read
-    end
-
-    # Returns the class-level (aka common, super-Input)
-    # context hub (see `Context::Hub`).
-    def self.context
-      @@context
-    end
-
-    # Reads this input and passes each consequtive quote to
-    # the block.
-    private def quotes
       @@reader.read(@file, @source) do |quote|
-        yield quote
-      end
-    end
-
-    # Reads this input, caching each consequtive quote.
-    #
-    # Fills the `distinct` and `expose` of this input in case
-    # this quote is a distinct statement or an expose statement,
-    # correspondingly.
-    private def read
-      quotes do |quote|
         if quote.is_a?(QDistinct)
           @distinct = quote.pieces
         elsif quote.is_a?(QExpose)
@@ -83,117 +44,86 @@ module Ven
       end
     end
 
-    # Reads and compiles the resulting quotes into chunks,
-    # which are then returned.
+    # Returns the class-level (aka common, super-Input)
+    # context hub (see `Context::Hub`).
+    def self.context
+      @@context
+    end
+
+    # Compiles the quotes of this input.
     #
-    # The compiler will emit chunks with cross-chunk references
-    # respecting the *offset*.
+    # Returns the resulting chunks.
+    private def compile(offset : Int32)
+      Compiler.compile(@@context.compiler, @quotes, @file, offset)
+    end
+
+    # Optimizes the *chunks*.
     #
-    # Respects `disassemble`.
-    private macro chunkize(offset)
-      %compiler = Compiler.new(@@context.compiler, @file, {{offset}})
-
-      @quotes.each do |%quote|
-        %compiler.visit(%quote)
-      end
-
-      if @disassemble
-        puts "[pre-optimize disassembly]".colorize(:blue)
-
-        %compiler.result.each do |chunk|
-          puts chunk
-        end
-      end
-
-      %compiler.result
+    # Returns *chunks*.
+    private def optimize(chunks : Chunks)
+      Optimizer.optimize(chunks, @passes)
     end
 
-    # Optimizes the *chunks*, with *passes* being the desired
-    # amount of optimization passes.
+    # Appends *chunks* to the chunks bank.
     #
-    # Returns the chunks back.
-    private macro optimize(chunks, passes)
-      %optimizer = Optimizer.new(%chunks = {{chunks}})
-      %optimizer.optimize({{passes}})
-      %chunks
+    # Returns *chunks*.
+    private def publish(chunks : Chunks)
+      @@chunks += chunks.map(&.complete!)
+
+      chunks
     end
 
-    # Completes the *chunks* by calling `complete!` on every
-    # one of them, and contributes the completed chunks to
-    # the list of common chunks (`@@chunks`).
+    # Evaluates the chunks bank, starting at *offset*.
     #
-    # Respects `disassemble`.
-    private macro complete(chunks)
-      %chunks = {{chunks}}
-      %chunks.each(&.complete!)
-
-      if @disassemble
-        puts "[post-optimize disassembly]".colorize(:blue)
-
-        %chunks.each do |chunk|
-          puts chunk
-        end
+    # Returns the resulting value or nil.
+    private def eval(offset : Int32)
+      Machine.start(@@context.machine, @@chunks, offset) do |m|
+        m.measure = @measure
+        m.inspect = @inspect
+        @timetable = m.timetable
       end
-
-      @@chunks += %chunks
     end
 
-    # Goes through the full pipeline of compilation. See macros
-    # `chunkize`, `optimize`, `complete`.
-    private macro compile(offset, passes)
-      complete optimize(chunkize({{offset}}), {{passes}})
-    end
-
-    # Evaluates the chunks (i.e., `@@chunks`) starting at
-    # *offset*. Returns the result of the evaluation.
-    private macro evaluate(offset)
-      %machine = Machine.new(@@context.machine, @@chunks, {{offset}})
-
-      %machine.measure = @measure
-      %machine.inspect = @inspect
-
-      %machine.start
-
-      if @measure
-        puts "[measure]".colorize(:blue)
-
-        %machine.timetable.each do |cp, stats|
-          puts "chunk at #{cp} {"
-
-          stats.each do |ip, stat|
-            amount = stat[:amount]
-            duration = stat[:duration]
-            instruction = stat[:instruction]
-
-            took = "#{duration.microseconds}us"
-            lead = "  #{amount} x #{took}"
-
-            puts "  #{lead.colorize.bold}\t#{ip}| #{instruction}"
-          end
-
-          puts "}"
-        end
-      end
-
-      %machine.return!
-    end
-
-    # Interprets this input. *passes* is the amount of
-    # optimization passes to perform.
-    def run(passes = 8)
-      if @tree || @tree_only
-        puts Detree.detree(@quotes)
-
-        return if @tree_only
-      end
-
+    # Evaluates this input up until some *step*.
+    #
+    # Raises if *step* is not a valid step.
+    #
+    # ```
+    # a = Input.new("a", "1 + 1")
+    # a.run(:read) # -> Quotes
+    # a.run(:compile) # -> Chunks
+    # a.run(:optimize) # -> Chunks
+    # a.run(:eval) # -> Model
+    # ```
+    def run(until step = :eval)
       offset = @@chunks.size
-      compile(offset, passes)
-      evaluate(offset)
+
+      case step
+      when :read
+        @quotes
+      when :compile
+        compile(offset)
+      when :optimize
+        publish optimize compile(offset)
+      when :eval
+        run(:optimize); eval(offset)
+      else
+        raise "invalid step: #{step}"
+      end
     end
 
     def to_s(io)
-      io << @file << " (" << (@distinct.join(".") || "script") << ")"
+      io << @file << " (" << (@distinct.try &.join(".") || "script") << ")"
+    end
+
+    # Makes an instance of `Input`, runs it up to *step* and
+    # returns the result.
+    #
+    # ```
+    # puts Input.run("foo", "2 + 2") # 4 : Num
+    # ```
+    def self.run(file, source, until step = :eval, passes = 8)
+      new(file, source, passes).run(step)
     end
   end
 end

@@ -6,21 +6,14 @@ module Ven
   class Compiler < Suite::Visitor
     include Suite
 
-    # Points to the chunk this Compiler is currently
-    # emitting into.
+    # Points to the chunk this Compiler is currently emitting into.
     @cp = 0
-
-    # How much chunks that the compiler does not know about
-    # already exist.
-    @offset : Int32
-
-    # A label pointing to the body of the nearmost surrounding
-    # loop. This is mostly useful for `next loop`.
-    @loop : Label?
-
-    # The payload vehicle of the nearmost surrounding function.
-    # This is mostly useful for `next fun`.
+    # The closest surrounding function.
     @fun : VFunction?
+    # A label pointing to the body of the closest surrounding loop.
+    @loop : Label?
+    # How many chunks exist prior to this compilation.
+    @offset : Int32
 
     def initialize(@context : Context::Compiler, @file = "<unknown>", @offset = 0)
       @chunks = [Chunk.new(@file, "<unit>")]
@@ -92,26 +85,83 @@ module Ven
       chunk.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
     end
 
-    # A shorthand for `VSymbol`.
-    private macro sym!(name, nest = nil)
-      VSymbol.new({{name}}, {{nest}})
-    end
-
-    # A smarter shorthand for `VSymbol.new`.
+    # Makes a symbol *name*, trying to compute its nest first.
+    # If failed to do this, fallbacks to `symbol`.
     private macro sym(name, nest = nil)
       if @context.toplevel?(%name = {{name}})
-        sym!(%name, 0)
+        mksym(%name, 0)
       elsif nest = @context.bound?(%name)
-        sym!(%name, nest)
+        mksym(%name, nest)
       else
-        sym!(%name, {{nest}})
+        mksym(%name, {{nest}})
       end
     end
 
-    # Returns the raw result of this compiler's work: an array
-    # of unoptimized, unstitched chunks.
-    def result
-      @chunks
+    # A shorthand for `VSymbol.new`.
+    private macro mksym(name, nest = nil)
+      VSymbol.new({{name}}, {{nest}})
+    end
+
+    # Emits the appropriate field gathering instructions
+    # for *accessor*.
+    private def field!(accessor : FAImmediate)
+      emit Opcode::FIELD_IMMEDIATE, accessor.access
+    end
+
+    # :ditto:
+    private def field!(accessor : FADynamic)
+      visit(accessor.access)
+
+      emit Opcode::FIELD_DYNAMIC
+    end
+
+    # :ditto:
+    private def field!(accessor : FABranches)
+      branches = accessor.access.items
+
+      branches.each_with_index do |branch, index|
+        emit Opcode::SWAP unless index == 0
+        emit Opcode::DUP unless index == branches.size -  1
+
+        if branch.is_a?(QAccessField)
+          field! [FADynamic.new(branch.head)] + branch.tail
+        elsif branch.is_a?(QSymbol)
+          field! FAImmediate.new(branch.value)
+        else
+          field! FADynamic.new(branch)
+        end
+      end
+
+      emit Opcode::VEC, branches.size
+    end
+
+    # Emits the appropriate field gathering instructions
+    # for *accessors*.
+    private def field!(accessors : FieldAccessors)
+      accessors.each do |accessor|
+        field!(accessor)
+      end
+    end
+
+    # Emits the 'given' values.
+    #
+    # If there were no 'given' values, makes an `any` per
+    # each parameter.
+    #
+    # If missing a few 'given' values, repeats the one that
+    # was mentioned lastly.
+    private def given!(params : Array(String), given : Quotes)
+      repeat = false
+
+      params.zip?(given) do |_, given_quote|
+        if !given_quote && !repeat
+          emit Opcode::ANY
+        elsif !given_quote
+          visit(given.last)
+        elsif repeat = true
+          visit(given_quote)
+        end
+      end
     end
 
     def visit!(q : QSymbol)
@@ -245,50 +295,9 @@ module Ven
       emit Opcode::POP_ASSIGN, symbol
     end
 
-    # Emits the appropriate field gathering instructions for
-    # a field accessor *accessor*.
-    private def field(accessor : FAImmediate)
-      emit Opcode::FIELD_IMMEDIATE, accessor.access
-    end
-
-    # :ditto:
-    private def field(accessor : FADynamic)
-      visit(accessor.access)
-
-      emit Opcode::FIELD_DYNAMIC
-    end
-
-    # :ditto:
-    private def field(accessor : FABranches)
-      branches = accessor.access.items
-
-      branches.each_with_index do |branch, index|
-        emit Opcode::SWAP unless index == 0
-        emit Opcode::DUP unless index == branches.size -  1
-
-        if branch.is_a?(QAccessField)
-          field [FADynamic.new(branch.head)] + branch.tail
-        elsif branch.is_a?(QSymbol)
-          field FAImmediate.new(branch.value)
-        else
-          field FADynamic.new(branch)
-        end
-      end
-
-      emit Opcode::VEC, branches.size
-    end
-
-    # Emits the appropriate field gathering instructions for
-    # each field accessor of *accessors*.
-    private def field(accessors : FieldAccessors)
-      accessors.each do |accessor|
-        field(accessor)
-      end
-    end
-
     def visit!(q : QAccessField)
       visit(q.head)
-      field(q.tail)
+      field!(q.tail)
     end
 
     def visit!(q : QReduceSpread)
@@ -365,31 +374,10 @@ module Ven
       emit Opcode::ENS
     end
 
-    # Emits the 'given' values.
-    #
-    # If there were no 'given' values, makes an `any` per
-    # each parameter.
-    #
-    # If missing a few 'given' values, repeats the one that
-    # was mentioned lastly.
-    def emit_given(params : Array(String), given : Quotes)
-      repeat = false
-
-      params.zip?(given) do |_, given_quote|
-        if !given_quote && !repeat
-          emit Opcode::ANY
-        elsif !given_quote
-          visit(given.last)
-        elsif repeat = true
-          visit(given_quote)
-        end
-      end
-    end
-
     def visit!(q : QFun)
       function = uninitialized VFunction
 
-      emit_given(q.params, q.given)
+      given!(q.params, q.given)
 
       unless @context.bound?(q.name)
         @context.bound(q.name)
@@ -420,7 +408,7 @@ module Ven
               when "_"
                 emit Opcode::POP_UPUT
               else
-                emit Opcode::POP_ASSIGN, sym!(name, nest: -1)
+                emit Opcode::POP_ASSIGN, mksym(name, nest: -1)
               end
             end
 
@@ -449,9 +437,6 @@ module Ven
       emit Opcode::J, start
     end
 
-    # Base loops, step loops and complex loops return false
-    # if there were no iterations; otherwise, they return
-    # the result of the last iteration.
     def visit!(q : QBaseLoop)
       stop = label
       start = label
@@ -474,7 +459,6 @@ module Ven
       emit Opcode::FALSE_IF_EMPTY
     end
 
-    # :ditto:
     def visit!(q : QStepLoop)
       stop = label
       start = label
@@ -496,7 +480,6 @@ module Ven
       emit Opcode::FALSE_IF_EMPTY
     end
 
-    # :ditto:
     def visit!(q : QComplexLoop)
       stop = label
       start = label
@@ -556,7 +539,7 @@ module Ven
     end
 
     def visit!(q : QBox)
-      emit_given(q.params, q.given)
+      given!(q.params, q.given)
 
       unless @context.bound?(q.name)
         @context.bound(q.name)
@@ -567,13 +550,13 @@ module Ven
       chunk! q.name do |target|
         @context.child do
           q.params.reverse_each do |param|
-            emit Opcode::POP_ASSIGN, sym!(param, nest: -1)
+            emit Opcode::POP_ASSIGN, mksym(param, nest: -1)
           end
 
           q.namespace.each do |name, value|
             visit(value)
 
-            emit Opcode::POP_ASSIGN, sym!(name, nest: -1)
+            emit Opcode::POP_ASSIGN, mksym(name, nest: -1)
           end
 
           emit Opcode::SYM, symbol
@@ -600,6 +583,15 @@ module Ven
     end
 
     def visit!(q : QExpose)
+    end
+
+    # Compiles *quotes* under a `Context::Compiler` *context*.
+    #
+    # Returns the resulting chunks.
+    def self.compile(context, quotes, file = "<unknown>", offset = 0)
+      it = new(context, file, offset)
+      it.visit(quotes)
+      it.@chunks
     end
   end
 end
