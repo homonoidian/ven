@@ -1,9 +1,4 @@
 distinct std.vec;
 
-# Returns the length of the *vector*.
-fun length(vector) given vec =
-  #vector;
-
-# Returns the sum of *vector*'s elements.
-fun sum(vector) given vec =
-  |+| vector;
+fun<vec> __iter =
+  |if (u = _).callable? u() else u| $;

@@ -302,10 +302,39 @@ module Ven
       {% end %}
     end
 
-    # Looks up the symbol *name* and dies if was not found.
-    private macro lookup(name)
-      @context[%symbol = {{name}}]? ||
-        die("symbol not found: '#{%symbol.name}'")
+    # Searches for a domestic function and evaluates it.
+    #
+    # A domestic function is a function implemented in Ven
+    # and called by the interpreter to perform a particular
+    # task (which might be near to impossible to perform by
+    # Machine's means).
+    private macro domestic(name, args)
+      if !(%callee = @context[%name = {{name}}]?)
+        die("domestic '#{%name}' not found")
+      elsif !%callee.is_a?(MFunction)
+        die("domestic '#{%name}' is not a function")
+      end
+
+      %variant = %callee.variant?(%args = {{args}})
+
+      unless %variant.is_a?(MConcreteFunction)
+        die("domestic '#{%name}' has no proper variant for #{%args.join(", ")}")
+      end
+
+      invoke(%callee.to_s, %variant.target, %args, Frame::Goal::Function)
+    end
+
+    # Looks up for an underscores value in the frames above
+    # the current; depending on *pop*, will either return it,
+    # or pop it in the appropriate frame and return it.
+    #
+    # Returns nil if no underscores value was found.
+    private macro u_lookup(pop = true)
+      @frames.reverse_each do |above|
+        if it = {{pop}} ? above.underscores.pop? : above.underscores.last?
+          break it
+        end
+      end
     end
 
     # Performs a binary operation on *left*, *right*.
@@ -448,36 +477,6 @@ module Ven
       end
 
       @context[symbol] = defee
-    end
-
-    # Returns *index*th item of *operand*.
-    def nth(operand : Vec, index : Num)
-      if operand.length <= index.value
-        die("indexable: index out of range: #{index}")
-      end
-
-      operand[index.value.to_big_i]
-    end
-
-    # :ditto:
-    def nth(operand : Str, index : Num)
-      if operand.length <= index.value
-        die("indexable: index out of range: #{index}")
-      end
-
-      operand[index.value.to_big_i]
-    end
-
-    # :ditto:
-    def nth(operand, index)
-      die("value not indexable: #{operand}")
-    end
-
-    # Gathers multiple *indices* of an *operand*.
-    #
-    # Returns a `Vec` of the gathered values.
-    def nth(operand : Model, indices : Models)
-      vec indices.map { |index| nth(operand, index) }
     end
 
     # Reduces vector *operand* using a binary *operator*.
@@ -680,7 +679,7 @@ module Ven
               stack.clear
             # Puts the value of a symbol: (-- x)
             in Opcode::SYM
-              put lookup(symbol)
+              put @context[it = symbol]? || die("symbol not found: #{it.name}")
             # Puts a number: (-- x)
             in Opcode::NUM
               put num static(BigDecimal)
@@ -793,8 +792,16 @@ module Ven
               args = pop static(Int32)
 
               case callee = pop
-              when Vec, Str
-                put nth(callee, args.size == 1 ? args.first : args)
+              when .indexable?
+                if args.size == 1
+                  put callee.nth(args.first)
+                elsif args.size > 1
+                  put vec args.map { |arg| callee.nth(arg) }
+                else
+                  # Argumentless indexable call is a call spread:
+                  #   `[1, 2, 3].say() # ==> 1\n2\n3\n`
+                  next domestic("__iter", [callee.as(Model)])
+                end
               when MFunction
                 if callee.is_a?(MPartial)
                   # Append the arguments of the call to the
@@ -838,18 +845,19 @@ module Ven
               underscores << tap
             # Moves a value from the underscores stack:
             in Opcode::UPOP
-              put underscores.pop? || die("'_': no contextual")
+              put u_lookup || die("'_': no contextual")
             # Moves a copy of a value from the underscores stack
             # to the stack:
             in Opcode::UREF
-              put underscores.last? || die("'&_': no contextual")
+              put u_lookup(pop: false) || die("'&_': no contextual")
             # Prepares for a series of `MAP_ITER`s on a vector.
             in Opcode::MAP_SETUP
               control << tap.length << 0 << stack.size - 2
-            # Executed each map iteration. It assumes:
-            #   - that control[-2] is the index, and
-            #   - control[-3] is the length of the vector we
-            #   iterate on;
+            # Executes each map iteration. Assumes:
+            #   - that control[-2] is the current item index
+            #     in an operand vector;
+            #   - that control[-3] is the length of that
+            #     operand vector;
             in Opcode::MAP_ITER
               length, index, _ = control.last(3)
 
@@ -860,9 +868,8 @@ module Ven
               end
 
               control[-2] += 1
-            # A variation of "&" exclusive to maps. Assumes
-            # the last value of the control stack is a stack
-            # pointer to the destination vector.
+            # A variation of "&" for maps. Assumes that control[-1]
+            # is a stack pointer to a destination vector.
             in Opcode::MAP_APPEND
               stack[control.last].as(Vec) << pop
             # Reduces a vector using a binary operator: ([...] -- x1)

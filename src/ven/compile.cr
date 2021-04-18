@@ -345,7 +345,7 @@ module Ven
       emit Opcode::TAP_UPUT
 
       if alt = q.alt
-        emit Opcode::JIF_ELSE_POP, else_b
+        emit Opcode::JIF, else_b
         visit(q.suc)
         emit Opcode::J, finish
         label else_b
@@ -359,13 +359,15 @@ module Ven
     end
 
     def visit!(q : QBlock)
-      chunk! "<block>" do |target|
-        visit(q.body)
+      @context.child do
+        chunk! "<block>" do |target|
+          visit(q.body)
 
-        emit Opcode::RET
+          emit Opcode::RET
+        end
+
+        emit Opcode::GOTO, target
       end
-
-      emit Opcode::GOTO, target
     end
 
     def visit!(q : QEnsure)

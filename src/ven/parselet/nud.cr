@@ -141,7 +141,7 @@ module Ven
         kind, body =
           parser.is_led?(only: PBinary) \
             ? {:reduce, parser.word![:lexeme]}
-            : {:map, parser.led}
+            : {:map, QBlock.new(tag, [parser.led])}
 
         _, iterative = parser.expect("|"), !parser.word!(":").nil?
 
