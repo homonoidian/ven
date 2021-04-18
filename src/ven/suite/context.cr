@@ -1,4 +1,6 @@
 module Ven::Suite::Context
+  class VenAssignmentError < Exception; end
+
   # Unites instances of `Context::Machine` and `Context::Compiler`.
   class Hub
     getter machine = Context::Machine.new
@@ -12,6 +14,7 @@ module Ven::Suite::Context
     def extend(extension : Extension)
       unless extension.class.in?(@extensions)
         extension.load(@compiler, @machine)
+        @extensions << extension.class
       end
     end
   end
@@ -31,8 +34,6 @@ module Ven::Suite::Context
     # An array of traces, which together will form the traceback.
     getter traces = [] of Trace
 
-    @toplevel = [] of String
-
     def initialize
       @scopes = [Scope.new]
     end
@@ -50,16 +51,6 @@ module Ven::Suite::Context
           return index
         end
       end
-    end
-
-    # Declares *symbol* as toplevel.
-    def toplevel(symbol : String)
-      @toplevel << symbol
-    end
-
-    # Returns whether *symbol* was declared as toplevel.
-    def toplevel?(symbol : String)
-      symbol.in?(@toplevel)
     end
 
     # Adds a trace for the block. This trace will point to
@@ -150,16 +141,20 @@ module Ven::Suite::Context
     # If the localmost scope contains a meta-context (`$`),
     # and that meta-context has a field named *symbol*, this
     # field will be set to *value*.
-    def []=(symbol : String, value : Model, nest = nil)
-      return @scopes[nest][symbol] = value if nest
-
+    #
+    # Will raise `VenAssignmentError` if *symbol* already exists
+    # and is an `MFunction`, whilst *value* is not.
+    def []=(symbol : String, value : Model, nest = -1)
       meta = @scopes[-1]["$"]?
+      prev = @scopes[nest][symbol]?
 
-      if meta.is_a?(MBoxInstance) && meta.namespace[symbol]
+      if meta.is_a?(MBoxInstance) && meta.namespace[symbol]?
         return meta.namespace[symbol] = value
+      elsif prev.is_a?(MFunction) && !value.is_a?(MFunction)
+        raise VenAssignmentError.new("invalid assignment target: #{prev}")
       end
 
-      @scopes[-1][symbol] = value
+      return @scopes[nest][symbol] = value
     end
 
     # Makes *symbol* be *value* in its nest, or, if no nest

@@ -956,7 +956,7 @@ module Ven
             in Opcode::BOX_INSTANCE
               put MBoxInstance.new(pop.as(MFunction), @context.scopes[-1].dup)
             end
-          rescue error : ModelCastException
+          rescue error : ModelCastException | Context::VenAssignmentError
             die(error.message.not_nil!)
           end
         rescue error : RuntimeError

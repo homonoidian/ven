@@ -87,10 +87,10 @@ module Ven
 
     # Makes a symbol *name*, trying to compute its nest first.
     # If failed to do this, fallbacks to `symbol`.
-    private macro sym(name, nest = nil)
-      if @context.toplevel?(%name = {{name}})
-        mksym(%name, 0)
-      elsif nest = @context.bound?(%name)
+    private macro sym(name, nest = -1)
+      %name = {{name}}
+
+      if nest = @context.bound?(%name)
         mksym(%name, nest)
       else
         mksym(%name, {{nest}})
@@ -98,7 +98,7 @@ module Ven
     end
 
     # A shorthand for `VSymbol.new`.
-    private macro mksym(name, nest = nil)
+    private macro mksym(name, nest = -1)
       VSymbol.new({{name}}, {{nest}})
     end
 
