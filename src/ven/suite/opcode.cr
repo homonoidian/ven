@@ -27,8 +27,6 @@ module Ven::Suite
     UREF
     CLEAR
     RET
-    INC
-    DEC
     MAP_SETUP
     MAP_APPEND
     FALSE_IF_EMPTY
@@ -69,6 +67,8 @@ module Ven::Suite
     SYM = 1024
     POP_ASSIGN
     TAP_ASSIGN
+    INC
+    DEC
 
     # Opcodes that take a function payload.
 

@@ -112,7 +112,7 @@ module Ven::Suite::Context
     #
     # Nests *maybe* and -1 will be searched in first.
     #
-    # Returns nil *symbol* it was not found.
+    # Returns nil if *symbol* was not found.
     def []?(symbol : String, maybe = nil)
       if value = @scopes[maybe || -1][symbol]?
         return value

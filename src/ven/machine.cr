@@ -302,6 +302,11 @@ module Ven
       {% end %}
     end
 
+    # Looks up a `VSymbol` *symbol* and dies if it was not found.
+    private macro lookup(symbol)
+      @context[%it = {{symbol}}]? || die("symbol not found: #{%it.name}")
+    end
+
     # Searches for a hook function and evaluates it.
     #
     # A hook function is a function implemented in Ven and
@@ -679,7 +684,7 @@ module Ven
               stack.clear
             # Puts the value of a symbol: (-- x)
             in Opcode::SYM
-              put @context[it = symbol]? || die("symbol not found: #{it.name}")
+              put lookup(symbol)
             # Puts a number: (-- x)
             in Opcode::NUM
               put num static(BigDecimal)
@@ -769,13 +774,16 @@ module Ven
             # Taps and assigns it to a symbol: (x1 -- x1)
             in Opcode::TAP_ASSIGN
               @context[symbol] = tap
-            # Pops and adds one. Raises if not a number: (x1 -- x1)
+            # Implements inplace-increment semantics: (-- x1)
             in Opcode::INC
-              put num pop.as(Num).value + 1
-            # Pops and subtracts one. Raises if not a number:
-            # (x1 -- x1)
+              operand = lookup(symbol)
+              @context[symbol] = num operand.to_num.value + 1
+              put operand
+            # Implements inplace-decrement semantics: (-- x1)
             in Opcode::DEC
-              put num pop.as(Num).value - 1
+              operand = lookup(symbol)
+              @context[symbol] = num operand.to_num.value - 1
+              put operand
             # Defines the `*` variable. Pops stack.size - static
             # values.
             in Opcode::REST

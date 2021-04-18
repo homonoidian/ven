@@ -276,23 +276,11 @@ module Ven
     end
 
     def visit!(q : QReturnIncrement)
-      symbol = sym(q.target)
-
-      emit Opcode::SYM, symbol
-      emit Opcode::DUP
-      emit Opcode::TON
-      emit Opcode::INC
-      emit Opcode::POP_ASSIGN, symbol
+      emit Opcode::INC, sym(q.target)
     end
 
     def visit!(q : QReturnDecrement)
-      symbol = sym(q.target)
-
-      emit Opcode::SYM, symbol
-      emit Opcode::DUP
-      emit Opcode::TON
-      emit Opcode::DEC
-      emit Opcode::POP_ASSIGN, symbol
+      emit Opcode::DEC, sym(q.target)
     end
 
     def visit!(q : QAccessField)
