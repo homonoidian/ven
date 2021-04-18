@@ -96,6 +96,13 @@ module Ven
 
           debug "found: importing #{distinct}"
 
+          # Expose everything the input that we expose itself
+          # exposes. Make sure not to import itself in the
+          # process.
+          input.exposes.each do |subexpose|
+            import(subexpose) unless expose == subexpose
+          end
+
           input.run
 
           # Remember the file that was exposed, not the distinct.

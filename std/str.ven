@@ -1,78 +1,64 @@
 distinct std.str;
 
+expose std;
 
-# Returns the string *self* offset by *offset* characters.
-fun offset(self, offset) given str, num =
-  slice(self, offset, -1);
-
-
-# Returns whether the string *self* starts with a *prefix*.
-fun starts-with?(self, prefix) given str {
+# Returns whether this string starts with a string *prefix*.
+#
+# ```
+# ensure "foobar".starts-with?("foo") is true;
+# ensure "foobar".starts-with?("bar") is false;
+# ```
+fun<str> starts-with?(prefix) {
   size = #prefix;
 
-  if size > #self or size is 0 {
+  if size > #$ or size is 0 {
     return false
   };
 
-  loop (i = 0; i < size; i += 1)
-    if self(i) is not prefix(i) {
+  loop (i = 0; i < size; i++)
+    if $(i) is not prefix(i) {
       return false
     };
 
   true
 }
 
+# Returns whether this string starts with a regex *pattern*.
+#
+# ```
+# ensure "aaa".starts-with?(`a+`) is true;
+# ensure "baa".starts-with?(`a+`) is false;
+# ```
+fun<str> starts-with?(pattern) given regex =
+  true?($ is pattern);
 
-# Returns whether the prefix of the string *self* matches
-# the *pattern*.
-fun starts-with?(self, pattern) given str, regex =
-  (self is pattern)?
+# Returns whether this string is empty.
+#
+# ```
+# ensure "".empty?() is true;
+# ensure "foo".empty?() is false;
+# ```
+fun<str> empty? =
+  true?(#$ is 0);
 
+# Returns whether all characters in this string are the same.
+#
+# ```
+# ensure "aaa".same?() is true;
+# ensure "".same?() is false;
+# ensure "aba".same?() is false;
+# ```
+fun<str> same? {
+  if $.empty?() {
+    return false;
+  };
 
-# Splits the string *self* on *delimiter*. Returns a vector
-# of the chunks.
-fun split(self, delimiter) given str {
-  chunks = [];
+  first = $(0);
 
-  loop (index = 0; index < #self; index += 1)
-    if self.offset(index).starts-with?(delimiter) {
-      chunks &= self.slice(0, index - 1);
-      self   = self.offset(index + #delimiter);
-      index  = 0;
+  loop (i = 0; i < #$; i++)
+    if $(i) is not first {
+      return false
     };
 
-  # '&' the remaining string
-  chunks & self
-}
-
-
-# Splits the string *self* when the *pattern* matches. Returns
-# a vector of the chunks.
-fun split(self, pattern) given str, regex {
-  chunks = [];
-
-  loop (index = 0; index < #self; index += 1)
-    if self.offset(index) is pattern {
-      chunks &= self.slice(0, index - 1);
-      self   = self.offset(index + #_);
-      index  = 0;
-    };
-
-  chunks & self
-}
-
-
-# Splits the string *self* into *parts* parts. Returns a
-# vector of the chunks.
-fun split(self, parts) given str, num {
-  chunks = [];
-
-  loop (index = 0; index < #self; index += 1)
-    if index is parts {
-      chunks &= self.slice(0, index - 1);
-      self   = self.offset(index);
-      index  = 0;
-    };
-
-  chunks & self
+  true
 }

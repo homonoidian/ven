@@ -178,6 +178,8 @@ module Ven
           result += $0.colorize.yellow.to_s
         when Reader::RX_NUMBER
           result += $0.colorize.magenta.to_s
+        when /^#([ \t][^\n]*|\n+)/
+          result += $0.colorize.dark_gray.to_s
         when .empty?
           break
         else

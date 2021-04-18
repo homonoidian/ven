@@ -302,23 +302,23 @@ module Ven
       {% end %}
     end
 
-    # Searches for a domestic function and evaluates it.
+    # Searches for a hook function and evaluates it.
     #
-    # A domestic function is a function implemented in Ven
-    # and called by the interpreter to perform a particular
-    # task (which might be near to impossible to perform by
-    # Machine's means).
-    private macro domestic(name, args)
+    # A hook function is a function implemented in Ven and
+    # called by the interpreter to perform a particular task
+    # (which might be near to impossible to perform by Machine's
+    # means).
+    private macro hook(name, args)
       if !(%callee = @context[%name = {{name}}]?)
-        die("domestic '#{%name}' not found")
+        die("hook '#{%name}' not found")
       elsif !%callee.is_a?(MFunction)
-        die("domestic '#{%name}' is not a function")
+        die("hook '#{%name}' is not a function")
       end
 
       %variant = %callee.variant?(%args = {{args}})
 
       unless %variant.is_a?(MConcreteFunction)
-        die("domestic '#{%name}' has no proper variant for #{%args.join(", ")}")
+        die("hook '#{%name}' has no proper variant for #{%args.join(", ")}")
       end
 
       invoke(%callee.to_s, %variant.target, %args, Frame::Goal::Function)
@@ -800,7 +800,7 @@ module Ven
                 else
                   # Argumentless indexable call is a call spread:
                   #   `[1, 2, 3].say() # ==> 1\n2\n3\n`
-                  next domestic("__iter", [callee.as(Model)])
+                  next hook("__iter", [callee.as(Model)])
                 end
               when MFunction
                 if callee.is_a?(MPartial)

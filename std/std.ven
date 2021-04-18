@@ -1,1 +1,12 @@
 distinct std;
+
+# Returns whether this value is not false.
+#
+# ```
+# ensure true?(0) is true;
+# ensure true?("") is true;
+# ensure true?([]) is true;
+# ensure true?(false) is false;
+# ```
+fun<any> true? =
+  $ is not false;

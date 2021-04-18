@@ -1,0 +1,16 @@
+expose std;
+
+# starts-with?():
+ensure "foobar".starts-with?("foo") is true;
+ensure "foobar".starts-with?("bar") is false;
+ensure "aaa".starts-with?(`a+`) is true;
+ensure "baa".starts-with?(`a+`) is false;
+
+# empty?():
+ensure "".empty?() is true;
+ensure "foo".empty?() is false;
+
+# same?():
+ensure "aaa".same?() is true;
+ensure "".same?() is false;
+ensure "aba".same?() is false;

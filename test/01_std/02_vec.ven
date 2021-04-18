@@ -1,0 +1,15 @@
+expose std;
+
+fun foo = 1;
+
+# __iter():
+ensure __iter([foo, 2, 3]) is [1, 2, 3];
+ensure [foo, 2, 3]() is [1, 2, 3];
+
+# empty?():
+ensure [].empty?() is true;
+ensure [1, 2, 3].empty?() is false;
+
+# same?():
+ensure [1, 1, 1].same?() is true;
+ensure [1, 2, 3].same?() is false;

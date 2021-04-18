@@ -1,4 +1,39 @@
 distinct std.vec;
 
+expose std;
+
+# Invokes all callable items in this vector.
+#
+# ```
+# fun foo {
+#  1
+# }
+#
+# ensure __iter([foo, 2, 3]) is [1, 2, 3]
+# ```
+#
+# Or, if used as a hook,
+#
+# ```
+# ensure [foo, 2, 3]() is [1, 2, 3]
+# ```
 fun<vec> __iter =
-  |if (u = _).callable? u() else u| $;
+  |if (it = _).callable? it() else it| $;
+
+# Returns whether this vector is empty.
+#
+# ```
+# ensure [].empty?() is true;
+# ensure [1, 2, 3].empty?() is false;
+# ```
+fun<vec> empty? =
+  true?(#$ is 0);
+
+# Returns whether all items in this vector are the same.
+#
+# ```
+# ensure [1, 1, 1].same?() is true;
+# ensure [1, 2, 3].same?() is false;
+# ```
+fun<vec> same? =
+  |is| $;

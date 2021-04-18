@@ -28,6 +28,8 @@ module Ven
     # Computes, if possible, an *operator* with *left*, *right*
     # being known BigDecimals (in Ven, nums).
     def binary2n(operator : String, left : BigDecimal, right : BigDecimal)
+      return if right == 0
+
       case operator
       when "+"
         left + right
