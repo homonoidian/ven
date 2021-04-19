@@ -32,8 +32,9 @@ fun<vec> empty? =
 # Returns whether all items in this vector are the same.
 #
 # ```
+# ensure [].same?() is true;
 # ensure [1, 1, 1].same?() is true;
 # ensure [1, 2, 3].same?() is false;
 # ```
 fun<vec> same? =
-  |is| $;
+  true?(|is| $)

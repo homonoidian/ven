@@ -44,18 +44,18 @@ fun<str> empty? =
 # Returns whether all characters in this string are the same.
 #
 # ```
+# ensure "".same?() is true;
 # ensure "aaa".same?() is true;
-# ensure "".same?() is false;
 # ensure "aba".same?() is false;
 # ```
 fun<str> same? {
   if $.empty?() {
-    return false;
+    return true;
   };
 
   first = $(0);
 
-  loop (i = 0; i < #$; i++)
+  loop (i = 1; i < #$; i++)
     if $(i) is not first {
       return false
     };

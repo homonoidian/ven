@@ -793,7 +793,7 @@ module Ven
             # `any`s) to be on the stack; it pops them.
             in Opcode::FUN
               defun(myself = function, pop myself.given)
-            # If *x1* is a fun/box, invokes it. If a vec/str,
+            # If *x1* is a fun/box, invokes it. If an indexable,
             # indexes it: (x1 a1 a2 a3 ... -- R), where *aN* is
             # an argument, and R is the returned value.
             in Opcode::CALL

@@ -122,9 +122,23 @@ module Ven::Suite
     #
     # Raises `ModelCastException` if index is improper.
     def nth(index : Num)
-      self[index.to_i]? || raise ModelCastException.new(
-        "#{self} is not indexable or was " \
-        "given improper index: #{index}")
+      self[index.to_i]? ||
+        raise ModelCastException.new(
+          "#{self} is not indexable or was " \
+          "given improper index: #{index}")
+    end
+
+    # Returns a subset of items in this model.
+    #
+    # Subclasses should not generally override this method.
+    # They should override `[]?` instead.
+    #
+    # Raises `ModelCastException` if index is improper.
+    def nth(range : MRange)
+      self[range.start.to_i...range.end.to_i]? ||
+        raise ModelCastException.new(
+          "#{self} is not indexable or was " \
+          "given improper index: #{range}")
     end
 
     # :ditto:
@@ -134,9 +148,16 @@ module Ven::Suite
 
     # Returns *index*-th item of this model.
     #
-    # Subclasses should override this method instead of `nth`,
-    # unless they care about non-Int indices.
+    # Subclasses should rather override this method instead
+    # of `nth`.
     def []?(index : Int)
+    end
+
+    # Returns a subset of items in this model.
+    #
+    # Subclasses should rather override this method instead
+    # of `nth`.
+    def []?(index : Range)
     end
 
     # Returns whether this model is indexable (i.e., properly
@@ -259,6 +280,10 @@ module Ven::Suite
       @value[index]?.try { |it| Str.new(it.to_s) }
     end
 
+    def []?(range : Range)
+      @value[range]?.try { |substring| Str.new(substring) }
+    end
+
     def to_s(io)
       @value.inspect(io)
     end
@@ -365,7 +390,7 @@ module Ven::Suite
       true
     end
 
-    def []?(index)
+    def []?(index : Int)
       start = @start.value
       end_ = @end.value
 
@@ -414,7 +439,7 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
-    delegate :[], :[]?, :<<, :map, :each, to: @value
+    delegate :[], :<<, :map, :each, to: @value
 
     # Returns the length of this vector.
     def to_num
@@ -445,6 +470,14 @@ module Ven::Suite
 
     def length
       @value.size
+    end
+
+    def []?(index : Int)
+      @value[index]?
+    end
+
+    def []?(range : Range)
+      @value[range]?.try { |subset| Vec.new(subset) }
     end
 
     def to_s(io)
