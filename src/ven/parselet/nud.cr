@@ -9,15 +9,13 @@ module Ven
 
       # Parses a block (requiring opening '{' if *opening* is true).
       private macro block(parser, opening = true)
-        begin
-          @semicolon = false
+        @semicolon = false
 
-          {% if opening %}
-            {{parser}}.expect("{")
-          {% end %}
+        {% if opening %}
+          {{parser}}.expect("{")
+        {% end %}
 
-          {{parser}}.repeat("}", unit: ->{{parser}}.statement)
-        end
+        {{parser}}.repeat("}", unit: ->{{parser}}.statement)
       end
 
       # Returns whether this nud requires a semicolon.
@@ -52,8 +50,8 @@ module Ven
       end
     end
 
-    # Parses a symbol into a QSymbol: `quux`, `foo-bar_baz-123`.
-    defatom(PSymbol, QSymbol)
+    # Parses a symbol into a QRuntimeSymbol: `quux`, `foo-bar_baz-123`.
+    defatom(PSymbol, QRuntimeSymbol)
 
     # Parses a number into a QNumber: 1.23, 1234, 1_000.
     class PNumber < Nud
@@ -213,7 +211,7 @@ module Ven
         this = parser.repeat(")", ",", unit: -> { parameter(parser, utility) })
 
         if this.count("*") > 1
-          parser.die("more than one '*' in function parameters")
+          parser.die("more than one '*' in the parameter list")
         elsif this.index("*").try(&.< this.size - 1)
           parser.die("slurpie ('*') must be at the end of the parameter list")
         elsif this.count("$") > 1
@@ -360,7 +358,7 @@ module Ven
       def parse(parser, tag, token)
         name = parser.expect("SYMBOL")[:lexeme]
 
-        unless name.chars.first.uppercase?
+        unless name[0].uppercase?
           parser.die("illegal box name: must be capitalized")
         end
 
@@ -413,6 +411,105 @@ module Ven
         value = parser.led(Precedence::IDENTITY.value)
 
         QReturnExpression.new(tag, value)
+      end
+    end
+
+    class PExpansionSymbol < Nud
+      def parse(parser, tag, token)
+        QReadtimeSymbol.new(tag, token[:lexeme][1..])
+      end
+    end
+
+    # Parses a NUD reader macro definition and defines the
+    # corresponding nud:
+    # ```ven
+    # nud greet!(name) {
+    #  say("Hi, " ~ $name);
+    # }
+    #
+    # greet! "John Doe!"
+    # ```
+    class PDefineNud < Nud
+      # It helps to make unique regex lead names (which otherwise
+      # are nameless).
+      @@count = 0
+      # It helps to remember which keywords were defined by
+      # the user, allowing to redefine them.
+      @@users = Set(String).new
+
+      def parse(parser, tag, token)
+        lead = parser.word!("REGEX") || parser.word!("SYMBOL")
+
+        unless lead
+          @@users.find do |type|
+            lead = parser.word!(type)
+          end
+        end
+
+        unless lead
+          parser.die("'nud' got invalid name")
+        end
+
+        args = parser.word!("(") ? PFun.parameters(parser) : [] of String
+        body = block parser
+
+        lexeme = lead[:lexeme]
+        trigger = uninitialized String
+
+        if args.includes?("$")
+          parser.die("'$' meaningless at read-time")
+        elsif args.includes?("_")
+          parser.die("you shouldn't ignore parses!")
+        elsif lead[:type] == "REGEX"
+          trigger = "__lead_#{@@count += 1}"
+          parser.leads[trigger] = /^#{lexeme.strip('`')}/
+        elsif lead[:type] == "SYMBOL"
+          trigger = lexeme.upcase
+          @@users << trigger
+          parser.keywords << lexeme
+        else
+          trigger = lead[:type]
+        end
+
+        parser.nud[trigger] =
+          PExpansionEvent.new(args, QGroup.new(tag, body))
+
+        QVoid.new
+      end
+    end
+
+    # Performs an expansion event.
+    #
+    # It interprets the nud arguments it was initialized with,
+    # makes all the necessary parses and passes all that down
+    # to the expansion visitor (see `ReadExpansion`).
+    #
+    # Curiously, this is one of the **semantic nuds**.
+    class PExpansionEvent < Nud
+      def initialize(@args : Array(String), @body : QGroup)
+      end
+
+      def parse(parser, tag, token)
+        args = @args.map do |name|
+          next {name, parser.led} unless name == "*"
+
+          leds = Quotes.new
+
+          while parser.is_nud?
+            leds << parser.led
+          end
+
+          {"-slurpies", QVector.new(tag, leds)}
+        end
+
+        defs = args.to_h.merge!({
+          "-lead" => QString.new(tag, token[:lexeme]).as(Quote),
+        })
+
+        # There's a comfortable way to rebuild the tree and
+        # an uncomfortable; so f*ck it, we're going for deep
+        # clone.
+        ReadExpansion.new(defs).visit(@body.clone)
       end
     end
   end

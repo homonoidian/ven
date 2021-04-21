@@ -16,6 +16,10 @@ module Ven::Suite
     def ==(other : QTag)
       @file == other.file && @line == other.line
     end
+
+    def clone
+      self
+    end
   end
 
   # The base class of all Ven AST nodes, which are called
@@ -24,7 +28,7 @@ module Ven::Suite
     macro inherited
       macro defquote!(*fields)
         getter tag : QTag
-        getter \{{*fields.map(&.var.id)}}
+        property \{{*fields.map(&.var.id)}}
 
         def initialize(@tag,
           \{% for field in fields %}
@@ -51,6 +55,8 @@ module Ven::Suite
           io << ")"
         end
       end
+
+      def_clone
     end
   end
 
@@ -58,8 +64,8 @@ module Ven::Suite
   alias Quotes = Array(Quote)
 
   # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
-  private macro defquote(quote, *fields)
-    class {{quote}} < Quote
+  private macro defquote(quote, *fields, under parent = Quote)
+    class {{quote}} < {{parent}}
       defquote!({{*fields}})
     end
   end
@@ -83,7 +89,10 @@ module Ven::Suite
     end
   end
 
-  defvalue(QSymbol)
+  defquote(QSymbol, value : String)
+  defquote(QRuntimeSymbol, value : _, under: QSymbol)
+  defquote(QReadtimeSymbol, value : _, under: QSymbol)
+
   defvalue(QString)
   defvalue(QRegex)
   defquote(QNumber, value : BigDecimal)
@@ -112,6 +121,8 @@ module Ven::Suite
   defquote(QReduceSpread, operator : String, operand : Quote)
 
   defquote(QBlock, body : Quotes)
+  defquote(QGroup, body : Quotes)
+
   defquote(QIf, cond : Quote, suc : Quote, alt : Quote?)
 
   defquote(QFun,

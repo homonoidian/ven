@@ -3,7 +3,7 @@ require "./*"
 module Ven::Suite
   # A visitor that provides **detreeing**, which means converting
   # a `Quote` back into source code.
-  class Detree < Visitor
+  class Detree < Visitor(String)
     @indent = 0
 
     # Returns an empty string if *condition* is false. Otherwise,
@@ -50,7 +50,7 @@ module Ven::Suite
       end
     end
 
-    def visit!(q : QSymbol)
+    def visit!(q : QRuntimeSymbol)
       q.value
     end
 
@@ -161,7 +161,7 @@ module Ven::Suite
     end
 
     def visit!(q : QAccessField)
-      "#{visit(q.head)}.#{field(q.tail)}"
+      "(#{visit(q.head)}).#{field(q.tail)}"
     end
 
     def visit!(q : QReduceSpread)
@@ -198,6 +198,10 @@ module Ven::Suite
 
     def visit!(q : QBlock)
       "{#{i_visit(q.body)}\n#{" " * @indent}}"
+    end
+
+    def visit!(q : QGroup)
+      visit(q.body).join(";\n")
     end
 
     def visit!(q : QEnsure)
@@ -271,13 +275,6 @@ module Ven::Suite
 
     def visit!(q : QExpose)
       "expose #{q.pieces.join(".")}"
-    end
-
-    # Returns a list of visited *quotes*.
-    def visit(quotes : Quotes)
-      quotes.map do |quote|
-        visit(quote)
-      end
     end
 
     # Returns the detreed *quotes*.

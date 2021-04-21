@@ -9,7 +9,7 @@ module Ven::Suite
   class ReadError < VenError
     getter line : UInt32
     getter file : String
-    getter lexeme : String
+    getter lexeme : String?
 
     # Initializes a lexical error.
     def initialize(@lexeme, @line, @file, @message)
@@ -19,6 +19,12 @@ module Ven::Suite
     def initialize(word : Word, @file, @message)
       @line = word[:line]
       @lexeme = word[:lexeme]
+    end
+
+    # Initializes a readtime error.
+    def initialize(tag : QTag, @message)
+      @line = tag.line
+      @file = tag.file
     end
   end
 

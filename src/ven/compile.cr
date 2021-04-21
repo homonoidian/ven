@@ -3,7 +3,7 @@ require "./suite/*"
 module Ven
   # Provides the facilities to compile Ven quotes into a linear
   # sequence of Ven bytecode instructions.
-  class Compiler < Suite::Visitor
+  class Compiler < Suite::Visitor(Nil)
     include Suite
 
     # Points to the chunk this Compiler is currently emitting into.
@@ -125,7 +125,7 @@ module Ven
 
         if branch.is_a?(QAccessField)
           field! [FADynamic.new(branch.head)] + branch.tail
-        elsif branch.is_a?(QSymbol)
+        elsif branch.is_a?(QRuntimeSymbol)
           field! FAImmediate.new(branch.value)
         else
           field! FADynamic.new(branch)
@@ -164,8 +164,18 @@ module Ven
       end
     end
 
-    def visit!(q : QSymbol)
+    def visit(quotes : Quotes)
+      quotes.each do |quote|
+        visit(quote)
+      end
+    end
+
+    def visit!(q : QRuntimeSymbol)
       emit Opcode::SYM, sym(q.value)
+    end
+
+    def visit!(q : QReadtimeSymbol)
+      die("readtime symbol caught at compile-time")
     end
 
     def visit!(q : QNumber)
@@ -356,6 +366,10 @@ module Ven
 
         emit Opcode::GOTO, target
       end
+    end
+
+    def visit!(q : QGroup)
+      visit(q.body)
     end
 
     def visit!(q : QEnsure)

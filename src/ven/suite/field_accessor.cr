@@ -19,6 +19,11 @@ module Ven::Suite
   # field accessors.
   struct FAImmediate < FieldAccessor
     takes String
+
+    # Makes a copy of this field accessor.
+    def clone
+      self
+    end
   end
 
   # A dynamic field accessor.
@@ -27,6 +32,11 @@ module Ven::Suite
   # dynamic field accesor.
   struct FADynamic < FieldAccessor
     takes Quote
+
+    # Makes a deep copy of this field accessor.
+    def clone
+      FADynamic.new(@access.clone)
+    end
   end
 
   # A branches field accessor.
@@ -35,6 +45,11 @@ module Ven::Suite
   # field accessor.
   struct FABranches < FieldAccessor
     takes QVector
+
+    # Makes a deep copy of this field accessor.
+    def clone
+      FABranches.new(@access.clone)
+    end
   end
 
   alias FieldAccessors = Array(FieldAccessor)

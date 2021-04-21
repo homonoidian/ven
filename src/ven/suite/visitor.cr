@@ -1,6 +1,6 @@
 module Ven::Suite
   # The base class for a node (in Ven, quote) visitor.
-  abstract class Visitor
+  abstract class Visitor(T)
     setter last : Quote = QVoid.new
 
     # Remembers *quote* as the last visited node and hands it
@@ -11,8 +11,8 @@ module Ven::Suite
 
     # Same as `visit(quote)`, but iterates over *quotes*.
     def visit(quotes : Quotes)
-      quotes.each do |quote|
-        visit(@last = quote)
+      quotes.map do |quote|
+        visit(@last = quote).as(T)
       end
     end
 

@@ -11,7 +11,7 @@ module Ven
     {% if name == :SYMBOL %}
       # `&_` and `_` are here as they should be handled as
       # if they were keywords
-      /([_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
+      /([$_a-zA-Z](\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
     {% elsif name == :STRING %}
       /"([^\n"\\]|\\[ntr\\"])*"/
     {% elsif name == :REGEX %}
@@ -67,9 +67,14 @@ module Ven
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
+    property leads
     property keywords
 
+    property nud
+    property led
+
     def initialize
+      @leads = {} of String => Regex
       @keywords = KEYWORDS
 
       @led = {} of String => Parselet::Led
@@ -119,15 +124,23 @@ module Ven
           when match(RX_IGNORE)
             next @line += $0.count("\n").to_u32
           when match(RX_SYMBOL)
-            word(KEYWORDS.includes?($0) ? $0.upcase : "SYMBOL", $0)
-          when match(RX_SPECIAL)
-            word($0.upcase, $0)
+            if KEYWORDS.includes?($0)
+              word($0.upcase, $0)
+            elsif $0.size > 1 && $0.starts_with?("$")
+              word("EXPASYM", $0)
+            else
+              word("SYMBOL", $0)
+            end
           when match(RX_NUMBER)
             word("NUMBER", $0)
           when match(RX_STRING)
             word("STRING", $0)
           when match(RX_REGEX)
             word("REGEX", $0)
+          when pair = @leads.find { |_, lead| match(lead) }
+            word(pair[0], $0)
+          when match(RX_SPECIAL)
+            word($0.upcase, $0)
           when @pos == @src.size
             word("EOF", "end-of-input")
           else
@@ -316,6 +329,7 @@ module Ven
       defnud("+", "-", "~", "&", "#", "NOT")
 
       defnud("'", Parselet::PQuote)
+      defnud("EXPASYM", Parselet::PExpansionSymbol)
       defnud("IF", Parselet::PIf)
       defnud("NEXT", Parselet::PNext)
       defnud("RETURN", Parselet::PReturnExpression)
@@ -357,6 +371,7 @@ module Ven
 
       # Statements:
 
+      defstmt("NUD", Parselet::PDefineNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("BOX", Parselet::PBox)
       defstmt("LOOP", Parselet::PLoop)

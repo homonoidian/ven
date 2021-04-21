@@ -504,12 +504,39 @@ module Ven
       end
     end
 
-    # Reduces range *operand* using a binary *operator*, with
-    # some cases not requiring it be computed.
+    # Reduces range *operand* using a binary *operator*.
     def reduce(operator, operand : MRange)
-      return reduce(operator, operand.to_vec) unless operator == "+"
-      # There is only a (fast) formula for sum, it seems.
-      num ((operand.start.value + operand.end.value) * operand.length) / 2
+      start = operand.start.value
+      end_  = operand.end.value
+
+      case operator
+      when "+"
+        return num ((start + end_) * operand.length) / 2
+      when "*"
+        # Uses GMP's factorial. If got |*| -A to -B, outputs
+        # -(|*| A to B); I don't know whether it's the expected
+        # behavior. If |*| (A > 1) to (B > 1), outputs (B - A)!;
+        # about this I also do not know.
+
+        if neg = start < 0 && end_ < 0
+          start = -start
+          end_  = -end_
+        elsif start < 0 || end_ < 0
+          return num 0
+        end
+
+        sign = neg ? -1 : 1
+
+        if start == 1
+          return num sign * end_.value.factorial
+        elsif start > end_
+          return num sign * (start - end_).value.factorial
+        else
+          return num sign * (end_ - start).value.factorial
+        end
+      end
+
+      reduce(operator, operand.to_vec)
     end
 
     # Fallback reduce (converts *operand* to vec).
