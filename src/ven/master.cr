@@ -61,6 +61,8 @@ module Ven
     # allowed by `verbosity`).
     def gather
       @homes.each do |home|
+        debug("gather in #{home}")
+
         Dir["#{home}/**/*.ven"].each do |file|
           begin
             @repository << Input.new(file, File.read(file), @passes)

@@ -1,3 +1,4 @@
+require "fancyline"
 require "./suite/*"
 
 module Ven
@@ -803,13 +804,15 @@ module Ven
               @context[symbol] = tap
             # Implements inplace-increment semantics: (-- x1)
             in Opcode::INC
-              operand = lookup(symbol)
-              @context[symbol] = num operand.to_num.value + 1
+              this = symbol
+              operand = lookup(this)
+              @context[this] = num operand.to_num.value + 1
               put operand
             # Implements inplace-decrement semantics: (-- x1)
             in Opcode::DEC
-              operand = lookup(symbol)
-              @context[symbol] = num operand.to_num.value - 1
+              this = symbol
+              operand = lookup(this)
+              @context[this] = num operand.to_num.value - 1
               put operand
             # Defines the `*` variable. Pops stack.size - static
             # values.
