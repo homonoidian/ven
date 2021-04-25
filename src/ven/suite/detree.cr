@@ -50,6 +50,10 @@ module Ven::Suite
       end
     end
 
+    def visit(q : QVoid)
+      ""
+    end
+
     def visit!(q : QRuntimeSymbol)
       q.value
     end
@@ -113,11 +117,11 @@ module Ven::Suite
     end
 
     def visit!(q : QAssign)
-      "#{q.target} #{q.global ? ":=" : "="} #{visit(q.value)}"
+      "#{visit(q.target)} #{q.global ? ":=" : "="} #{visit(q.value)}"
     end
 
     def visit!(q : QBinaryAssign)
-      "#{q.target} #{q.operator}= #{visit(q.value)}"
+      "#{visit(q.target)} #{q.operator}= #{visit(q.value)}"
     end
 
     def visit!(q : QCall)
@@ -133,11 +137,11 @@ module Ven::Suite
     end
 
     def visit!(q : QReturnIncrement)
-      "#{q.target}++"
+      "#{visit(q.target)}++"
     end
 
     def visit!(q : QReturnDecrement)
-      "#{q.target}--"
+      "#{visit(q.target)}--"
     end
 
     # Formats field *accessor*.
@@ -212,7 +216,7 @@ module Ven::Suite
       equals = q.body.size == 1
 
       String.build do |buffer|
-        buffer << "fun " << q.name << "(" << q.params.join(", ") << maybe(", *", if: q.slurpy) << ")"
+        buffer << "fun " << visit(q.name) << "(" << q.params.join(", ") << maybe(", *", if: q.slurpy) << ")"
         buffer << " given " << commaed(q.given) unless q.given.empty?
 
         if equals
@@ -249,7 +253,7 @@ module Ven::Suite
 
     def visit!(q : QBox)
       String.build do |buffer|
-        buffer << "box " << q.name << "(" << q.params.join(", ") << ")"
+        buffer << "box " << visit(q.name) << "(" << q.params.join(", ") << ")"
 
         unless q.given.empty?
           buffer << " given #{commaed(q.given)}"

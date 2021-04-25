@@ -170,6 +170,9 @@ module Ven
       end
     end
 
+    def visit(q : QVoid)
+    end
+
     def visit!(q : QRuntimeSymbol)
       emit Opcode::SYM, sym(q.value)
     end
@@ -244,14 +247,14 @@ module Ven
       visit(q.value)
 
       if q.global
-        @context.bound(q.target)
+        @context.bound(q.target.value)
       end
 
-      emit Opcode::TAP_ASSIGN, sym(q.target)
+      emit Opcode::TAP_ASSIGN, sym(q.target.value)
     end
 
     def visit!(q : QBinaryAssign)
-      target = sym(q.target)
+      target = sym(q.target.value)
 
       visit(q.value)
       emit Opcode::SYM, target
@@ -286,11 +289,11 @@ module Ven
     end
 
     def visit!(q : QReturnIncrement)
-      emit Opcode::INC, sym(q.target)
+      emit Opcode::INC, sym(q.target.value)
     end
 
     def visit!(q : QReturnDecrement)
-      emit Opcode::DEC, sym(q.target)
+      emit Opcode::DEC, sym(q.target.value)
     end
 
     def visit!(q : QAccessField)
@@ -383,20 +386,20 @@ module Ven
 
       given!(q.params, q.given)
 
-      unless @context.bound?(q.name)
-        @context.bound(q.name)
+      unless @context.bound?(q.name.value)
+        @context.bound(q.name.value)
       end
 
-      @context.trace(q.tag, q.name) do
+      @context.trace(q.tag, q.name.value) do
         @context.child do
-          chunk! q.name do |target|
+          chunk! q.name.value do |target|
             slurpy = q.slurpy
             params = q.params
             onymous = params.reject("*")
 
             function =
               VFunction.new(
-                sym(q.name),
+                sym(q.name.value),
                 target,
                 params,
                 q.params.size,
@@ -545,13 +548,13 @@ module Ven
     def visit!(q : QBox)
       given!(q.params, q.given)
 
-      unless @context.bound?(q.name)
-        @context.bound(q.name)
+      unless @context.bound?(q.name.value)
+        @context.bound(q.name.value)
       end
 
-      symbol = sym(q.name)
+      symbol = sym(q.name.value)
 
-      chunk! q.name do |target|
+      chunk! q.name.value do |target|
         @context.child do
           q.params.reverse_each do |param|
             emit Opcode::POP_ASSIGN, mksym(param, nest: -1)
@@ -560,7 +563,7 @@ module Ven
           q.namespace.each do |name, value|
             visit(value)
 
-            emit Opcode::POP_ASSIGN, mksym(name, nest: -1)
+            emit Opcode::POP_ASSIGN, mksym(name.value, nest: -1)
           end
 
           emit Opcode::SYM, symbol

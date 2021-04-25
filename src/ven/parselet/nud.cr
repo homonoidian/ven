@@ -217,7 +217,7 @@ module Ven::Parselet
         params.unshift("$"); givens.unshift(diamond)
       end
 
-      QFun.new(tag, name.value, params, body, givens, slurpy)
+      QFun.new(tag, name, params, body, givens, slurpy)
     end
 
     # Reads the diamond form.
@@ -377,7 +377,7 @@ module Ven::Parselet
 
       params = if? "(", params!, [] of String
       givens = if? "GIVEN", given!, Quotes.new
-      fields = if? "{", block(opening: false), {} of String => Quote
+      fields = if? "{", block(opening: false), {} of QSymbol => Quote
 
       # Make sure that the `fields` block consists of assignments,
       # and construct the namespace.
@@ -387,8 +387,7 @@ module Ven::Parselet
           : die("only assignments are legal in box blocks")
       end
 
-      # TODO: name.value -> name
-      QBox.new(tag, name.value, params, givens, namespace.to_h)
+      QBox.new(tag, name, params, givens, namespace.to_h)
     end
   end
 

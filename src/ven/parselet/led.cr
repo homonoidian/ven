@@ -45,9 +45,7 @@ module Ven
     class PAssign < Led
       def parse(parser, tag, left, token)
         QAssign.new(tag,
-          PAssign
-            .validate(parser, left)
-            .value,
+          PAssign.validate(parser, left),
           parser.led,
           token[:type] == ":=")
       end
@@ -74,9 +72,7 @@ module Ven
       def parse(parser, tag, left, token)
         QBinaryAssign.new(tag,
           token[:type][0].to_s,
-          PAssign
-            .validate(parser, left)
-            .value,
+          PAssign.validate(parser, left),
           parser.led)
       end
     end
@@ -95,7 +91,7 @@ module Ven
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '++' expects a symbol")
-          : QReturnIncrement.new(tag, left.value)
+          : QReturnIncrement.new(tag, left)
       end
     end
 
@@ -105,7 +101,7 @@ module Ven
       def parse(parser, tag, left, token)
         !left.is_a?(QSymbol) \
           ? parser.die("postfix '--' expects a symbol")
-          : QReturnDecrement.new(tag, left.value)
+          : QReturnDecrement.new(tag, left)
       end
     end
 

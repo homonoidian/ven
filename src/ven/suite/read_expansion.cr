@@ -10,7 +10,11 @@ module Ven::Suite
     private macro defvisit!(type, *names)
       def visit!(%quote : {{type}})
         {% for name in names %}
-          %quote.{{name}} = visit(%quote.{{name}})
+          {% if name.is_a?(TypeDeclaration) %}
+            apply to: %quote.{{name.var}}, as: {{name.type}}
+          {% else %}
+            apply to: %quote.{{name}}
+          {% end %}
         {% end %}
 
         %quote
@@ -31,8 +35,11 @@ module Ven::Suite
       end
     end
 
-    private macro apply(to quote)
+    private macro apply(to quote, as assert = nil)
       {{quote}} = visit({{quote}})
+        {% if assert %}
+          .as({{assert}})
+        {% end %}
     end
 
     # Given a *message*, dies of read error that is assumed
@@ -54,9 +61,12 @@ module Ven::Suite
     end
 
     defvisit QBox do |quote|
+      apply to: quote.name, as: QSymbol
       apply to: quote.given
-      quote.namespace =
-        quote.namespace.transform_values! { |it| visit(it) }
+      quote.namespace = quote.namespace.to_h do |pair|
+        { visit(pair[0]).as(QSymbol),
+          visit(pair[1]).as(Quote) }
+      end
     end
 
     defvisit! QString
@@ -72,17 +82,17 @@ module Ven::Suite
     defvisit! QUnary, operand
     defvisit! QBinary, left, right
     defvisit! QCall, callee, args
-    defvisit! QAssign, value
-    defvisit! QBinaryAssign, value
-    defvisit! QReturnDecrement
-    defvisit! QReturnIncrement
+    defvisit! QAssign, target : QSymbol, value
+    defvisit! QBinaryAssign, target : QSymbol, value
+    defvisit! QReturnDecrement, target : QSymbol
+    defvisit! QReturnIncrement, target : QSymbol
     defvisit! QDies, operand
     defvisit! QIntoBool, operand
     defvisit! QMapSpread, operator, operand
     defvisit! QReduceSpread, operand
     defvisit! QGroup, body
     defvisit! QBlock, body
-    defvisit! QFun, given, body
+    defvisit! QFun, name : QSymbol, given, body
     defvisit! QEnsure, expression
     defvisit! QQueue, value
     defvisit! QInfiniteLoop, repeatee

@@ -107,13 +107,13 @@ module Ven::Suite
   defquote(QBinary, operator : String, left : Quote, right : Quote)
   defquote(QCall, callee : Quote, args : Quotes)
 
-  defquote(QAssign, target : String, value : Quote, global : Bool)
-  defquote(QBinaryAssign, operator : String, target : String, value : Quote)
+  defquote(QAssign, target : QSymbol, value : Quote, global : Bool)
+  defquote(QBinaryAssign, operator : String, target : QSymbol, value : Quote)
 
   defquote(QDies, operand : Quote)
   defquote(QIntoBool, operand : Quote)
-  defquote(QReturnDecrement, target : String)
-  defquote(QReturnIncrement, target : String)
+  defquote(QReturnDecrement, target : QSymbol)
+  defquote(QReturnIncrement, target : QSymbol)
 
   defquote(QAccessField, head : Quote, tail : FieldAccessors)
 
@@ -126,7 +126,7 @@ module Ven::Suite
   defquote(QIf, cond : Quote, suc : Quote, alt : Quote?)
 
   defquote(QFun,
-    name : String,
+    name : QSymbol,
     params : Array(String),
     body : Quotes,
     given : Quotes,
@@ -152,8 +152,8 @@ module Ven::Suite
   defquote(QReturnExpression, value : Quote)
 
   defquote(QBox,
-    name : String,
+    name : QSymbol,
     params : Array(String),
     given : Quotes,
-    namespace : Hash(String, Quote))
+    namespace : Hash(QSymbol, Quote))
 end
