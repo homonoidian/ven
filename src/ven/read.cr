@@ -17,7 +17,7 @@ module Ven
     {% elsif name == :REGEX %}
       /`([^\\`]|\\.)*`/
     {% elsif name == :NUMBER %}
-      /(\d[\d_]*)?\.[\d_]+|[1-9][\d_]*|0/
+      /(\d(_?\d)*)?\.(_?\d)+|[1-9](_?\d)*|0/
     {% elsif name == :SPECIAL %}
       /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*]/
     {% elsif name == :IGNORE %}
@@ -127,7 +127,7 @@ module Ven
             if KEYWORDS.includes?($0)
               word($0.upcase, $0)
             elsif $0.size > 1 && $0.starts_with?("$")
-              word("EXPASYM", $0)
+              word("$SYMBOL", $0[1..])
             else
               word("SYMBOL", $0)
             end
@@ -209,7 +209,7 @@ module Ven
     def led(level = Precedence::ZERO.value) : Quote
       die("strange expression instead of a nud") unless is_nud?
 
-      left = @nud[(@word[:type])].parse(self, tag?, word!)
+      left = @nud[(@word[:type])].parse(tag?, word!)
 
       if @word[:lexeme] == "x"
         @word = word("X", "x")
@@ -232,9 +232,9 @@ module Ven
       semi = true
 
       if stmt = @stmt[(@word[:type])]?
-        this = stmt.parse(self, tag?, word!)
+        this = stmt.parse(tag?, word!)
         # Check whether this statement wants a semicolon
-        semi = stmt.semicolon?
+        semi = stmt.semicolon
       else
         this = led
       end
@@ -293,10 +293,10 @@ module Ven
     # to generate Unary parselets with the same *precedence*.
     private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
-        {{storage}}[{{type}}] = {{tail.first}}.new
+        {{storage}}[{{type}}] = {{tail.first}}.new(self)
       {% else %}
         {% for prefix in [type] + tail %}
-          {{storage}}[{{prefix}}] = Parselet::PUnary.new(Precedence::{{precedence}}.value)
+          {{storage}}[{{prefix}}] = Parselet::PUnary.new(self, Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
@@ -328,8 +328,7 @@ module Ven
 
       defnud("+", "-", "~", "&", "#", "NOT")
 
-      defnud("'", Parselet::PQuote)
-      defnud("EXPASYM", Parselet::PExpansionSymbol)
+      defnud("$SYMBOL", Parselet::PSymbol)
       defnud("IF", Parselet::PIf)
       defnud("NEXT", Parselet::PNext)
       defnud("RETURN", Parselet::PReturnExpression)

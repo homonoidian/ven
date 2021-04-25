@@ -143,13 +143,13 @@ module Ven
       # Parses a branches field access piece, which is,
       # essentially, a vector.
       def branches(parser)
-        PVector.new.parse(parser, QTag.void, word?)
+        PVector.new(parser).parse(QTag.void, word?)
       end
 
       # Parses a dynamic field access piece, which is,
       # essentially, a grouping.
       def dynamic(parser)
-        PGroup.new.parse(parser, QTag.void, word?)
+        PGroup.new(parser).parse(QTag.void, word?)
       end
 
       # Returns a fictious word.
