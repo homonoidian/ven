@@ -18,7 +18,16 @@ expose std;
 # ensure [foo, 2, 3]() is [1, 2, 3]
 # ```
 fun<vec> __iter =
-  |if (it = _).callable? it() else it| $;
+  |
+    {
+      item = _;
+
+      if item.callable?
+        item()
+      else
+        item
+    }
+  | $;
 
 # Returns whether this vector is empty.
 #

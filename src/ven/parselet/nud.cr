@@ -185,14 +185,11 @@ module Ven::Parselet
   end
 
   # Reads an if expression into QIf.
-  #
-  # FIXME: `if (x) (a)` is interpreted as `if x(a)`, which
-  # is wrong in this particular case.
   class PIf < Nud
     def parse(tag, token)
-      cond = led
+      cond = if? "(", @parser.before(")", -> led), led
       succ = led
-      fail = if?("ELSE", led)
+      fail = if? "ELSE", led
 
       QIf.new(tag, cond, succ, fail)
     end
