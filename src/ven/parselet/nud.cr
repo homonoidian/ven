@@ -38,12 +38,12 @@ module Ven::Parselet
     # Reads a symbol if *token* is nil (orelse uses the value
     # of *token*) and creates the corresponding symbol quote.
     def symbol(tag, token = nil) : QSymbol
-      token ||= @parser.expect("$SYMBOL", "SYMBOL")
+      token ||= @parser.expect("$SYMBOL", "SYMBOL", "*")
 
       case type
       when "$SYMBOL"
         QReadtimeSymbol.new(tag, lexeme)
-      when "SYMBOL"
+      when "SYMBOL", "*"
         QRuntimeSymbol.new(tag, lexeme)
       else
         raise "unknown symbol type"
