@@ -12,5 +12,5 @@ ensure "foo".empty?() is false;
 
 # same?():
 ensure "aaa".same?() is true;
-ensure "".same?() is false;
+ensure "".same?() is true;
 ensure "aba".same?() is false;
