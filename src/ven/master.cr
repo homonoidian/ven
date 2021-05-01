@@ -63,7 +63,9 @@ module Ven
       @homes.each do |home|
         debug("gather in #{home}")
 
-        Dir["#{home}/**/*.ven"].each do |file|
+        Dir["#{home}/**/[^_]*.ven"].each do |file|
+          debug("gather #{file}")
+
           begin
             @repository << Input.new(file, File.read(file), @passes)
           rescue error : ReadError
@@ -80,12 +82,12 @@ module Ven
     def import(expose : Distinct)
       success = false
 
-      debug "import #{expose}"
+      debug("import #{expose}")
 
       @repository.each do |input|
         next unless distinct = input.distinct
 
-        debug "trying '#{input.file}'"
+        debug("trying '#{input.file}'")
 
         # If an input's distinct starts with *expose*, run
         # that input in the common context.
@@ -93,10 +95,10 @@ module Ven
           success = true
 
           if input.file.in?(@exposed)
-            next debug "#{distinct} already exposed"
+            next debug("#{distinct} already exposed")
           end
 
-          debug "found: importing #{distinct}"
+          debug("found: importing #{distinct}")
 
           # Expose everything the input that we expose itself
           # exposes. Make sure not to import itself in the
@@ -107,7 +109,7 @@ module Ven
 
           input.run
 
-          # Remember the file that was exposed, not the distinct.
+          # Remember the file that was exposed.
           @exposed << input.file
         end
       end
