@@ -73,31 +73,18 @@ module Ven
     property nud
     property led
 
-    def initialize
+    def initialize(@file : String, @src : String)
       @leads = {} of String => Regex
       @keywords = KEYWORDS
+
+      @pos = 0
+      @line = 1_u32
+      word!
 
       @led = {} of String => Parselet::Led
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
       prepare
-
-      @pos = uninitialized Int32
-      @src = uninitialized String
-      @file = uninitialized String
-      @line = uninitialized UInt32
-      reset
-    end
-
-    # Resets this reader.
-    def reset(@file = "<unknown>", @src = "")
-      @pos = 0
-      @line = 1_u32
-
-      # Reads the first word:
-      word!
-
-      self
     end
 
     # Given the explanation *message*, dies of ParseError.
@@ -246,14 +233,12 @@ module Ven
       this
     end
 
-    # Performs a module-level parse (zero or more statements
-    # followed by EOF). Each statement is yielded to *block*.
-    def module(&block)
+    # Parses the program (i.e., zero or more statements followed
+    # by EOF). Each statement is yielded to the block.
+    def program
       until word!("EOF")
-        last = yield statement
+        yield statement
       end
-
-      last
     end
 
     # Returns whether this word is a nud. *pick* may be provided
@@ -383,13 +368,6 @@ module Ven
 
     def to_s(io)
       io << "<reader for '#{@file}'>"
-    end
-
-    # Reads the *source* under the *filename*.
-    def read(filename : String, source : String, &block : Quote -> _)
-      reset(filename, source).module do |quote|
-        yield quote
-      end
     end
   end
 end

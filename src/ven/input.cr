@@ -9,7 +9,6 @@ module Ven
     # for every Input.
 
     @@chunks = Chunks.new
-    @@reader = Reader.new
     @@context = Context::Hub.new
 
     # Whether to record the timetable.
@@ -33,7 +32,7 @@ module Ven
     def initialize(@file, @source, @passes = 8)
       @@context.extend(Library::Internal.new)
 
-      @@reader.read(@file, @source) do |quote|
+      Reader.new(@file, @source).program do |quote|
         if quote.is_a?(QDistinct)
           @distinct = quote.pieces
         elsif quote.is_a?(QExpose)
