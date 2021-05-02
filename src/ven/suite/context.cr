@@ -1,8 +1,10 @@
 module Ven::Suite::Context
   class VenAssignmentError < Exception; end
 
-  # Unites instances of `Context::Machine` and `Context::Compiler`.
+  # Unites instances of `Context::Reader`, `Context::Compiler`
+  # and `Context::Machine`.
   class Hub
+    getter reader = Context::Reader.new
     getter machine = Context::Machine.new
     getter compiler = Context::Compiler.new
 
@@ -17,6 +19,44 @@ module Ven::Suite::Context
         @extensions << extension.class
       end
     end
+  end
+
+  # The context for a `Reader`
+  #
+  # The reader uses context to store and look up user-defined
+  # nuds, leds and words.
+  class Reader
+    # A hash that maps word types to their nud macros:
+    getter nuds : Hash(String, Ven::Parselet::PNudMacro)
+    # A hash that maps word types to the regex patterns used
+    # to match them:
+    getter triggers : Hash(String, Regex)
+    # Keyword lexemes of this context:
+    getter keywords : Array(String)
+
+    def initialize
+      @nuds = {} of String => Ven::Parselet::PNudMacro
+      @triggers = {} of String => Regex
+      @keywords = [] of String
+    end
+
+    # Returns whether *lexeme* is a keyword under this context.
+    def keyword?(lexeme : String)
+      lexeme.in?(@keywords)
+    end
+
+    # Defines a reader macro that will be triggered by *trigger*,
+    # a word type. Does not check whether *trigger* is a valid
+    # word type.
+    def []=(trigger : String, nud : Ven::Parselet::PNudMacro)
+      @nuds[trigger] = nud
+    end
+
+    def []=(trigger : String, pattern : Regex)
+      @triggers[trigger] = pattern
+    end
+
+    delegate :<<, to: @keywords
   end
 
   # The context for a `Compiler`.

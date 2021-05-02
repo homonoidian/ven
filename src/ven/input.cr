@@ -4,10 +4,6 @@ module Ven
   class Input
     include Suite
 
-    # Common reader, chunk bank and common context are class
-    # variables so as to provide common execution environment
-    # for every Input.
-
     @@chunks = Chunks.new
     @@context = Context::Hub.new
 
@@ -32,7 +28,7 @@ module Ven
     def initialize(@file, @source, @passes = 8)
       @@context.extend(Library::Internal.new)
 
-      Reader.new(@file, @source).program do |quote|
+      Reader.new(@@context.reader, @file, @source).program do |quote|
         if quote.is_a?(QDistinct)
           @distinct = quote.pieces
         elsif quote.is_a?(QExpose)

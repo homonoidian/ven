@@ -3,14 +3,14 @@ module Ven::Parselet
 
   # A parser that is invoked by a null-denotated token.
   abstract class Nud
+    @parser = uninitialized Reader
     @precedence = 0_u8
 
     # Whether a semicolon must follow this nud.
     getter semicolon = true
 
-    # Makes a nud with precedence *precedence* that uses
-    # *parser* as the reader.
-    def initialize(@parser : Reader, @precedence = 0_u8)
+    # Makes a nud with precedence *precedence*.
+    def initialize(@precedence = 0_u8)
     end
 
     # Dies of read error with *message*, which should explain
@@ -75,8 +75,13 @@ module Ven::Parselet
       @parser.word!({{word}}) ? {{consequtive}} : {{alternative}}
     end
 
+    # Performs the parsing
+    def parse!(@parser : Ven::Reader, tag : QTag, token : Ven::Word)
+      parse(tag, token)
+    end
+
     # Performs the parsing.
-    abstract def parse(tag : QTag, token : Token)
+    abstract def parse(tag : QTag, token : Word)
   end
 
   # Reads a symbol into QSymbol.
@@ -434,11 +439,7 @@ module Ven::Parselet
       mkword defee, trigger
 
       # And define the macro:
-      @parser.nud[defee] = PNudMacro.new(
-        @parser,
-        params,
-        expand,
-      )
+      @parser.context[defee] = PNudMacro.new(params, expand)
 
       QVoid.new
     end
@@ -469,7 +470,7 @@ module Ven::Parselet
     # Defines a new word. Its type will be *type*, and it will
     # be triggered by *pattern*.
     private def mkword(type : String, pattern : Regex)
-      @parser.leads[type] = pattern
+      @parser.context[type] = pattern
     end
 
     # Defines a new word. Its type will be *type*, and it will
@@ -477,7 +478,8 @@ module Ven::Parselet
     #
     # Adds *keyword* to the list of subsidiary keywords.
     private def mkword(type : String, keyword : String)
-      @@subsidiary << type; @parser.keywords << keyword
+      @@subsidiary << type
+      @parser.context << keyword
     end
   end
 
@@ -489,7 +491,7 @@ module Ven::Parselet
   #
   # It is one of the **semantic nuds**.
   class PNudMacro < Nud
-    def initialize(@parser, @params : Array(String), body : Quotes)
+    def initialize(@params : Array(String), body : Quotes)
       @body = QGroup.new(QTag.void, body)
     end
 

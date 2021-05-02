@@ -67,16 +67,12 @@ module Ven
 
     getter word = {type: "START", lexeme: "<start>", line: 1_u32}
 
-    property leads
-    property keywords
-
     property nud
     property led
 
-    def initialize(@file : String, @src : String)
-      @leads = {} of String => Regex
-      @keywords = KEYWORDS
+    getter context : Context::Reader
 
+    def initialize(@context, @file : String, @src : String)
       @pos = 0
       @line = 1_u32
       word!
@@ -85,6 +81,10 @@ module Ven
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
       prepare
+    end
+
+    def keyword(trigger : String)
+      trigger.in?(KEYWORDS) || @context.keyword?(trigger)
     end
 
     # Given the explanation *message*, dies of ParseError.
@@ -111,7 +111,7 @@ module Ven
           when match(RX_IGNORE)
             next @line += $0.count("\n").to_u32
           when match(RX_SYMBOL)
-            if KEYWORDS.includes?($0)
+            if keyword($0)
               word($0.upcase, $0)
             elsif $0.size > 1 && $0.starts_with?("$")
               word("$SYMBOL", $0[1..])
@@ -124,7 +124,7 @@ module Ven
             word("STRING", $0)
           when match(RX_REGEX)
             word("REGEX", $0)
-          when pair = @leads.find { |_, lead| match(lead) }
+          when pair = @context.triggers.find { |_, lead| match(lead) }
             word(pair[0], $0)
           when match(RX_SPECIAL)
             word($0.upcase, $0)
@@ -196,7 +196,7 @@ module Ven
     def led(level = Precedence::ZERO.value) : Quote
       die("strange expression instead of a nud") unless is_nud?
 
-      left = @nud[(@word[:type])].parse(tag?, word!)
+      left = (@nud[(@word[:type])]? || @context.nuds[(@word[:type])]).parse!(self, tag?, word!)
 
       if @word[:lexeme] == "x"
         @word = word("X", "x")
@@ -219,7 +219,7 @@ module Ven
       semi = true
 
       if stmt = @stmt[(@word[:type])]?
-        this = stmt.parse(tag?, word!)
+        this = stmt.parse!(self, tag?, word!)
         # Check whether this statement wants a semicolon
         semi = stmt.semicolon
       else
@@ -244,14 +244,12 @@ module Ven
     # Returns whether this word is a nud. *pick* may be provided
     # to check only certain parselet classes.
     def is_nud?(only pick : Parselet::Nud.class)
-      @nud.each do |k, v|
-        return true if k == @word[:type] && v.class == pick
-      end
+      (@nud[(@word[:type])]? || @context.nud?(@word[:type])).try(&.class.== pick)
     end
 
     # :ditto:
     def is_nud?
-      @nud.has_key?(@word[:type])
+      @nud.has_key?(@word[:type]) || @context.nuds.has_key?(@word[:type])
     end
 
     # Returns whether this word is a led. *pick* may be provided
@@ -278,10 +276,10 @@ module Ven
     # to generate Unary parselets with the same *precedence*.
     private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
       {% unless tail.first.is_a?(StringLiteral) %}
-        {{storage}}[{{type}}] = {{tail.first}}.new(self)
+        {{storage}}[{{type}}] = {{tail.first}}.new
       {% else %}
         {% for prefix in [type] + tail %}
-          {{storage}}[{{prefix}}] = Parselet::PUnary.new(self, Precedence::{{precedence}}.value)
+          {{storage}}[{{prefix}}] = Parselet::PUnary.new(Precedence::{{precedence}}.value)
         {% end %}
       {% end %}
     end
