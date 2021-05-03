@@ -5,18 +5,18 @@ module Ven::Parselet
   abstract class Nud
     # The reader that asked for this nud to be parsed.
     @parser = uninitialized Reader
-    # The precedence of this nud (experimental, probably
-    # meaningless).
-    @precedence = Precedence::ZERO
 
     # Whether a semicolon must follow this nud.
     getter semicolon = true
+    # The precedence of this nud (experimental, probably
+    # meaningless).
+    getter precedence : Precedence = Precedence::ZERO
 
     # Makes a nud with precedence *precedence*.
     def initialize(@precedence = Precedence::ZERO)
     end
 
-    # Dies of read error with *message*, which should explain
+    # Dies of `ReadError` given *message*, which should explain
     # why the error happened.
     def die(message : String)
       @parser.die(message)
@@ -54,7 +54,7 @@ module Ven::Parselet
     end
 
     # Reads a block under the jurisdiction of this nud. Returns
-    # the statements of this block. If *opening* is false, the
+    # the statements of the block. If *opening* is false, the
     # opening paren won't be read.
     def block(opening = true, @semicolon = false)
       @parser.expect("{") if opening
@@ -73,8 +73,11 @@ module Ven::Parselet
       @parser.word!({{word}}) ? {{consequtive}} : {{alternative}}
     end
 
-    # Performs the parsing
-    def parse!(@parser : Ven::Reader, tag : QTag, token : Ven::Word)
+    # Performs the parsing.
+    #
+    # Subclasses of `Nud` should not override this method. Instead,
+    # they should override `parse`.
+    def parse!(@parser : Reader, tag : QTag, token : Word)
       parse(tag, token)
     end
 

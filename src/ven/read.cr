@@ -3,7 +3,7 @@ module Ven
   # of the source code.
   alias Word = { type: String, lexeme: String, line: Int32 }
 
-  # A path to a Ven distinct.
+  # Path to a Ven distinct.
   alias Distinct = Array(String)
 
   # Returns the regex pattern for word type *type*. *type*
@@ -273,7 +273,7 @@ module Ven
       end
 
       while level.value < precedence.value
-        left = led_for(@word[:type]).parse(self, tag, left, word!)
+        left = led_for(@word[:type]).parse!(self, tag, left, word!)
       end
 
       left
@@ -349,6 +349,8 @@ module Ven
     # Returns nothing.
     #
     # Raises if this reader is dirty.
+    #
+    # NOTE: `expose` and `distinct` are not read by this method.
     def read
       raise "read(): this reader is dirty" if @dirty
 
@@ -364,6 +366,8 @@ module Ven
     # Returns that array.
     #
     # Raises if this reader is dirty.
+    #
+    # NOTE: `expose` and `distinct` are not read by this method.
     def read
       raise "read(): this reader is dirty" if @dirty
 
@@ -544,14 +548,28 @@ module Ven
     # code; *file* is for the filename; *context* is for the
     # reader context.
     #
+    # Ignores valid `expose` and `distinct`.
+    #
     # See `read`.
     def self.read(source : String, file = "untitled", context = Context::Reader.new)
-      new(source, file, context).read
+      reader = new(source, file, context)
+
+      reader.distinct?
+      reader.exposes?
+
+      reader.read
     end
 
     # :ditto:
     def self.read(source, file = "untitled", context = Context::Reader.new)
-      new(source, file, context).read { |quote| yield quote }
+      reader = new(source, file, context)
+
+      reader.distinct?
+      reader.exposes?
+
+      reader.read do |quote|
+        yield quote
+      end
     end
   end
 end

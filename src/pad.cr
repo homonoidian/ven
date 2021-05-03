@@ -25,3 +25,23 @@ quotes = reader.read
 puts Ven::Suite::Detree.detree(quotes)
 
 # Reader.read
+
+
+tests =
+  Dir["examples/*.ven"] +
+  Dir["test/**/*.ven"] +
+  Dir["std/**/*.ven"]
+
+tests.each do |test|
+  source = File.read(test)
+
+  begin
+    took = Time.measure do
+      Ven::Reader.read(source, test)
+    end
+
+    puts "SUCCESS #{test}".colorize.green, "- TOOK #{took.total_microseconds}us"
+  rescue e : Ven::Suite::ReadError
+    puts "FAILURE #{e.message}: l. #{e.line}, f. #{e.file}".colorize.red
+  end
+end
