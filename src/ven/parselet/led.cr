@@ -5,7 +5,7 @@ module Ven
     # Left-denotated token parser works with a *token*, to the
     # *left* of which there is a quote of interest.
     abstract class Led
-      getter precedence : UInt8
+      getter precedence : Precedence
 
       def initialize(@precedence)
       end
@@ -15,7 +15,7 @@ module Ven
         parser : Reader,
         tag : QTag,
         left : Quote,
-        token : Token)
+        token : Word)
     end
 
     # Parses a binary operation into a QBinary: `2 + 2`,
@@ -150,7 +150,7 @@ module Ven
 
       # Returns a fictious word.
       private macro word?
-        { type: ".", lexeme: ".", line: 0_u32 }
+        { type: ".", lexeme: ".", line: 1 }
       end
     end
 

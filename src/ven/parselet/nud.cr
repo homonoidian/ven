@@ -4,13 +4,13 @@ module Ven::Parselet
   # A parser that is invoked by a null-denotated token.
   abstract class Nud
     @parser = uninitialized Reader
-    @precedence = 0_u8
+    @precedence = Precedence::ZERO
 
     # Whether a semicolon must follow this nud.
     getter semicolon = true
 
     # Makes a nud with precedence *precedence*.
-    def initialize(@precedence = 0_u8)
+    def initialize(@precedence = Precedence::ZERO)
     end
 
     # Dies of read error with *message*, which should explain
@@ -62,11 +62,6 @@ module Ven::Parselet
     # the precedence of this nud.
     def led(precedence = @precedence)
       @parser.led(precedence)
-    end
-
-    # :ditto:
-    def led(precedence : Precedence)
-      led(precedence.value)
     end
 
     # Evaluates *consequtive* if read *word*; otherwise,

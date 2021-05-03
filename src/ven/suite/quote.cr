@@ -2,14 +2,14 @@ module Ven::Suite
   # The location (*file*name and *line*number) of a `Quote`.
   struct QTag
     getter file : String
-    getter line : UInt32
+    getter line : Int32
 
     def initialize(@file, @line)
     end
 
     # Returns a void tag.
     def self.void
-      new("<void>", 1_u32)
+      new("<void>", 1)
     end
 
     # Returns whether this tag is equal to the *other* tag.

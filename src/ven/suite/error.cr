@@ -7,7 +7,7 @@ module Ven::Suite
   # malformed or illegal input, or when the lexical analyzer
   # receives invalid input.
   class ReadError < VenError
-    getter line : UInt32
+    getter line : Int32
     getter file : String
     getter lexeme : String?
 
