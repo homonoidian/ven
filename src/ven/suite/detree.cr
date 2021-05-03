@@ -273,14 +273,6 @@ module Ven::Suite
       end
     end
 
-    def visit!(q : QDistinct)
-      "distinct #{q.pieces.join(".")}"
-    end
-
-    def visit!(q : QExpose)
-      "expose #{q.pieces.join(".")}"
-    end
-
     # Returns the detreed *quotes*.
     def self.detree(quotes : Quotes)
       new.visit(quotes).join(";\n")

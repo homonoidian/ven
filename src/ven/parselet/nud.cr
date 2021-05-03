@@ -3,7 +3,10 @@ module Ven::Parselet
 
   # A parser that is invoked by a null-denotated token.
   abstract class Nud
+    # The reader that asked for this nud to be parsed.
     @parser = uninitialized Reader
+    # The precedence of this nud (experimental, probably
+    # meaningless).
     @precedence = Precedence::ZERO
 
     # Whether a semicolon must follow this nud.
@@ -317,22 +320,17 @@ module Ven::Parselet
     end
   end
 
-  # Reads an 'expose' statement into QExpose.
+  # Safety parselet for 'expose'. Always dies.
   class PExpose < Nud
     def parse(tag, token)
-      QExpose.new(tag, pieces!)
-    end
-
-    # Reads pieces - a bunch of comma-separated SYMBOLs.
-    def pieces!
-      @parser.repeat(sep: ".", unit: -> { lexeme @parser.expect("SYMBOL") })
+      @parser.die("please move this 'expose' to the start of your program")
     end
   end
 
-  # Reads a 'distinct' statement into QDistinct.
-  class PDistinct < PExpose
+  # Safety parselet for 'distinct'. Always dies.
+  class PDistinct < Nud
     def parse(tag, token)
-      QDistinct.new(tag, pieces!)
+      @parser.die("this 'distinct' is meaningless")
     end
   end
 

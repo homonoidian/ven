@@ -519,12 +519,15 @@ module Ven
 
       # Statements:
 
+      # Always dies (use `exposes?`):
+      defstmt("EXPOSE", Parselet::PExpose)
+      # Always dies (use `distinct?`):
+      defstmt("DISTINCT", Parselet::PDistinct)
+
       defstmt("NUD", Parselet::PDefineNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("BOX", Parselet::PBox)
       defstmt("LOOP", Parselet::PLoop)
-      defstmt("EXPOSE", Parselet::PExpose)
-      defstmt("DISTINCT", Parselet::PDistinct)
       defstmt("RETURN", Parselet::PReturnStatement)
 
       self

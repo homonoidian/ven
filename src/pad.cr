@@ -1,23 +1,27 @@
 require "./lib"
 
-r = Ven::Reader.new(File.read("examples/calculator.ven"))
-puts r.read.join("\n")
+reader = Ven::Reader.new(
+  <<-EOF
+  distinct hello;
 
-# # Ways of using the reader:
-# #
-# # 1) Reading and getting an array of quotes:
-# puts Ven::Reader.read("untitled", "1 + 1")
-# # 2) Reading and recieving the quotes one after another:
-# Ven::Reader.read("untitled", "1 + 1") { |quote| puts quote }
-# # 3) Making an instance of Reader and using it:
-# reader = Ven::Reader.new("untitled", "1 + 1")
-# # 3.1) Reading and getting an array of quotes:
-# puts reader.read
-# # 3.2) Reading and recieving the quotes one after another:
-# # reader.read { |quote| puts quote }
-# # 3.3) Retrieving distinct & exposes (only in this order):
-# reader2 = Ven::Reader.new("untitled", "distinct a; expose a.b; expose b.c;")
-# puts reader2.distinct?
-# puts reader2.exposes?
+  expose std;
+  expose a.b.c;
+  expose d.e.f;
+
+  fun add(x, y) =
+    say("add", x)(-1) + say("to", y)(-1);
+
+  result = add(1, 2);
+  say(result)
+
+  EOF
+)
+
+puts "distinct (should be: hello): #{reader.distinct?.try &.join(".")}"
+puts "exposes (should be: std, a.b.c, d.e.f): #{reader.exposes?.map(&.join(".")).join(", ")}"
+
+quotes = reader.read
+
+puts Ven::Suite::Detree.detree(quotes)
 
 # Reader.read

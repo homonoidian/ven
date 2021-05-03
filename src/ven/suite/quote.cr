@@ -144,9 +144,6 @@ module Ven::Suite
     step : Quote,
     repeatee : Quote)
 
-  defquote(QExpose, pieces : Array(String))
-  defquote(QDistinct, pieces : Array(String))
-
   defquote(QNext, scope : String?, args : Quotes)
   defquote(QReturnStatement, value : Quote)
   defquote(QReturnExpression, value : Quote)
