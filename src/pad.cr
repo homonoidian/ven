@@ -1,7 +1,7 @@
 require "./lib"
 
 r = Ven::Reader.new(File.read("examples/calculator.ven"))
-puts r.program.join("\n")
+puts r.read.join("\n")
 
 # # Ways of using the reader:
 # #

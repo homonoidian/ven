@@ -52,7 +52,7 @@ module Ven
 
   # A reader capable of parsing Ven.
   #
-  # Basic usage (see `Reader.read` and `program`):
+  # Basic usage (see `Reader.read`):
   #
   # ```
   # puts Ven::Reader.read("2 + 2")
@@ -78,24 +78,26 @@ module Ven
     # Returns this reader's context.
     getter context
 
+    # Whether this reader's state is dirty.
+    @dirty = false
     # Current line number.
     @lineno = 1
     # Current offset.
     @offset = 0
 
-    # Creates a new reader.
+    # Makes a reader.
     #
     # *source* (the only required argument) is for the source
     # code, *file* is for the filename, and *context* is for
     # the reader context.
     #
-    # NOTE: instances of Reader should be disposed after the
+    # NOTE: Instances of Reader should be disposed after the
     # first use.
     #
     # ```
-    # Reader.new("1 + 1")
+    # puts Reader.new("1 + 1").read
     # ```
-    def initialize(@source : String, @file : String = "untitled", @context = Context::Reader.new)
+    def initialize(@source : String, @file = "untitled", @context = Context::Reader.new)
       # Read the first word:
       word!
 
@@ -213,9 +215,9 @@ module Ven
 
     # Returns the current word and consumes the next one,
     # but only if the current word is of one of the given
-    # *types*. Dies of read error otherwise.
+    # *types*. Dies of `ReadError` otherwise.
     def expect(*types : String)
-      return word! if types.includes?(@word[:type])
+      return word! if @word[:type].in?(types)
 
       die("expected #{types.map(&.dump).join(", ")}")
     end
@@ -249,8 +251,7 @@ module Ven
       result
     end
 
-    # Reads a led expression with precedence level *level*
-    # (see `Precedence`).
+    # Reads a led expression on precedence level *level* (see `Precedence`).
     def led(level : Precedence = Precedence::ZERO) : Quote
       die("expected an expression") unless is_nud?
 
@@ -270,12 +271,14 @@ module Ven
     end
 
     # Returns whether the current word is one of the end-of-input
-    # words. Semicolons are optional before end-of-input words.
+    # words.
     def eoi?
       word[:type].in?("EOF", "}", ";")
     end
 
-    # Reads a statement.
+    # Reads a statement followed by a semicolon (if needed).
+    #
+    # Semicolons are optional before `eoi?` words.
     def statement : Quote
       if stmt = @stmt[(@word[:type])]?
         this = stmt.parse!(self, tag, word!)
@@ -292,19 +295,31 @@ module Ven
       this
     end
 
-    # Reads the whole program (i.e., zero or more statements
-    # followed by EOF). Each statement is yielded to the block.
+    # Reads the source, yielding each top-level statement
+    # to the block.
     #
     # Returns nothing.
-    def program
+    #
+    # Raises if this reader is dirty.
+    def read
+      raise "read(): this reader is dirty" if @dirty
+
+      @dirty = true
+
       until word!("EOF")
         yield statement
       end
     end
 
-    # Reads the whole program into an Array of `Quote`s. Returns
-    # that array.
-    def program
+    # Reads the source into an Array of `Quote`s.
+    #
+    # Returns that array.
+    #
+    # Raises if this reader is dirty.
+    def read
+      raise "read(): this reader is dirty" if @dirty
+
+      @dirty = true
       quotes = Quotes.new
 
       until word!("EOF")
@@ -314,67 +329,101 @@ module Ven
       quotes
     end
 
-    # Returns whether the current word is a nud of type *pick*.
+    # Returns whether the current word is a nud parselet of
+    # type *pick*.
     def is_nud?(only pick : Parselet::Nud.class) : Bool
       !!nud_for?(@word[:type]).try(&.class.== pick)
     end
 
-    # Returns whether the current word is a nud.
+    # Returns whether the current word is a nud parselet.
     def is_nud?
       !!nud_for?(@word[:type])
     end
 
-    # Returns whether the current word is a led of type *pick*.
+    # Returns whether the current word is a led parselet of
+    # type *pick*.
     def is_led?(only pick : Parselet::Led.class) : Bool
       !!led_for?(@word[:type]).try(&.class.== pick)
     end
 
-    # Returns whether the current word is a led.
+    # Returns whether the current word is a led parselet.
     def is_led?
       !!led_for?(@word[:type])
     end
 
-    # Returns whether the current word is a statement.
+    # Returns whether the current word is a statement parselet.
     def is_stmt?
       @stmt.has_key?(@word[:type])
     end
 
-    # Stores a nud in a hash *storage*, under the key *type*.
-    # A nud with precedence *precedence* may be provided in
-    # *tail*; alternatively, multiple String literals can be given
-    # to generate Unary parselets with the same *precedence*.
-    private macro defnud(type, *tail, storage = @nud, precedence = PREFIX)
-      {% unless tail.first.is_a?(StringLiteral) %}
-        {{storage}}[{{type}}] = {{tail.first}}.new
+    # Makes an entry for a nud parselet.
+    #
+    # The entry is made in *storage*.
+    #
+    # *trigger* is the type of the word that will trigger that
+    # nud parselet.
+    #
+    # If the first item in *args* is
+    #
+    #   - a String, *args* (plus *trigger* itself) is interpreted
+    #   as a list of unary operators; *precedence* will apply to
+    #   all of them;
+    #
+    #   - something other than String, then that first item will
+    #   be interpreted as a nud parselet (subclass of `Nud`);
+    #   *precedence* will not apply to it; all other items in
+    #   *args* are ignored.
+    private macro defnud(trigger, *args, storage = @nud, precedence = PREFIX)
+      {% unless args.first.is_a?(StringLiteral) %}
+        {{storage}}[{{trigger}}] = {{args.first}}.new
       {% else %}
-        {% for prefix in [type] + tail %}
+        {% for prefix in [trigger] + args %}
           {{storage}}[{{prefix}}] = Parselet::PUnary.new(Precedence::{{precedence}})
         {% end %}
       {% end %}
     end
 
-    # Stores a led in `@leds`, under the key *type*. A led
-    # with precedence *precedence* may be provided in *tail*;
-    # alternatively, multiple String literals can be given
-    # to generate *common* parselets with the same *precedence*.
-    private macro defled(type, *tail, common = Parselet::PBinary, precedence = ZERO)
-      {% if !tail.first.is_a?(StringLiteral) && tail.first %}
-        @led[{{type}}] = {{tail.first}}.new(Precedence::{{precedence}})
+    # Makes an entry for a led parselet.
+    #
+    # The entry is made in `@leds`.
+    #
+    # *trigger* is the type of the word that will trigger that
+    # led parselet.
+    #
+    # If the first item of *args* is
+    #
+    #   - a String, *args* (plus *trigger* itself) are interpreted
+    #   as a list of binary operators (or, if got *common*, of
+    #   *common* led parselet triggers); *precedence* will be
+    #   applied to all of them;
+    #
+    #   - something other than String, then that first item will
+    #   be interpreted as a led parselet (subclass of `Led`);
+    #   *precedence* will be applied to it; all other items in
+    #   *args* are going to be ignored.
+    private macro defled(trigger, *args, common = Parselet::PBinary, precedence = ZERO)
+      {% if args.first && !args.first.is_a?(StringLiteral) %}
+        @led[{{trigger}}] = {{args.first}}.new(Precedence::{{precedence}})
       {% else %}
-        {% for infix in [type] + tail %}
-          @led[{{infix}}] = {{common}}.new(Precedence::{{precedence}})
+        {% for binary in [trigger] + args %}
+          @led[{{binary}}] = {{common}}.new(Precedence::{{precedence}})
         {% end %}
       {% end %}
     end
 
-    # Stores a statement in `@stmt`, under the key *type*.
-    # *tail* is interpreted by `defnud`.
-    private macro defstmt(type, *tail)
-      defnud({{type}}, {{*tail}}, storage: @stmt)
+    # Makes an entry for a statement parselet.
+    #
+    # The entry is made in `@stmt`.
+    #
+    # *trigger* is the type of the word that will trigger that
+    # statement parselet.
+    #
+    # See `defnud` to see how *args* are interpreted.
+    private macro defstmt(trigger, *args)
+      defnud({{trigger}}, {{*args}}, storage: @stmt)
     end
 
-    # Initializes this reader so it is capable of reading
-    # base Ven.
+    # Prepares this reader so it is able to read Ven.
     def prepare
       # Prefixes (NUDs):
 
@@ -435,6 +484,23 @@ module Ven
 
     def to_s(io)
       io << "<reader for '#{@file}'>"
+    end
+
+    # Makes an instance of `Reader`, immediately reads *source*
+    # and disposes the instance.
+    #
+    # *source* (the only required argument) is for the source
+    # code; *file* is for the filename; *context* is for the
+    # reader context.
+    #
+    # See `read`.
+    def self.read(source : String, file = "untitled", context = Context::Reader.new)
+      new(source, file, context).read
+    end
+
+    # :ditto:
+    def self.read(source, file = "untitled", context = Context::Reader.new)
+      new(source, file, context).read { |quote| yield quote }
     end
   end
 end
