@@ -1,4 +1,4 @@
-require "./nud"
+require "./share"
 
 module Ven::Parselet
   include Suite
@@ -7,85 +7,18 @@ module Ven::Parselet
   #
   # Left denotation is when something to the left of the
   # current word assigns meaning to the current word itself.
-  abstract class Led
-    # The reader that asked for this led to be parsed.
-    @parser = uninitialized Reader
-
-    # Whether a semicolon must follow this led.
-    getter semicolon = true
-    # The precedence of this led.
-    getter precedence : Precedence = Precedence::ZERO
-
-    # Makes a led with precedence *precedence*.
-    def initialize(@precedence = Precedence::ZERO)
-    end
-
-    # Dies of `ReadError` given *message*, which should explain
-    # why the error happened.
-    def die(message : String)
-      @parser.die(message)
-    end
-
-    # Returns the type of *token*.
-    #
-    # *token* defaults to `token`, which is the standard name
-    # of the lead token in `parse`.
-    macro type(token = token)
-      {{token}}[:type]
-    end
-
-    # Returns the lexeme of *token*.
-    #
-    # *token* defaults to `token`, which is the standard name
-    # of the lead token in `parse`.
-    macro lexeme(token = token)
-      {{token}}[:lexeme]
-    end
-
-    # Reads a symbol if *token* is nil (orelse uses the value
-    # of *token*) and creates the corresponding symbol quote.
-    def symbol(tag, token = nil) : QSymbol
-      token ||= @parser.expect("$SYMBOL", "SYMBOL", "*")
-
-      case type
-      when "$SYMBOL"
-        QReadtimeSymbol.new(tag, lexeme)
-      when "SYMBOL", "*"
-        QRuntimeSymbol.new(tag, lexeme)
-      else
-        raise "unknown symbol type"
-      end
-    end
-
-    # Reads a block under the jurisdiction of this led. Returns
-    # the statements of the block. If *opening* is false, the
-    # opening paren won't be read.
-    def block(opening = true, @semicolon = false)
-      @parser.expect("{") if opening
-      @parser.repeat("}", unit: -> @parser.statement)
-    end
-
-    # Reads a led under the jurisdiction of this led and with
-    # the precedence of this led.
-    def led(precedence = @precedence)
-      @parser.led(precedence)
-    end
-
-    # Evaluates *consequtive* if read *word*; otherwise,
-    # evaluates *alternative*.
-    macro if?(word, then consequtive, else alternative = nil)
-      @parser.word!({{word}}) ? {{consequtive}} : {{alternative}}
-    end
-
+  abstract class Led < Parselet::Share
     # Performs the parsing.
     #
-    # Subclasses of `Led` should not override this method. Instead,
-    # they should override `parse`.
+    # Subclasses of `Led` should not override this method.
+    # They should (actually, must) implement `parse` instead.
     def parse!(@parser : Ven::Reader, tag : QTag, left : Quote, token : Ven::Word)
       parse(tag, left, token)
     end
 
     # Performs the parsing.
+    #
+    # All subclasses of `Led` should implement this method.
     abstract def parse(tag : QTag, left : Quote, token : Word)
   end
 
@@ -96,7 +29,7 @@ module Ven::Parselet
     NOTTABLE = %(IS)
 
     def parse(tag, left, token)
-      notted = type(token).in?(NOTTABLE) && !!@parser.word!("NOT")
+      notted = type.in?(NOTTABLE) && !!@parser.word!("NOT")
 
       quote = QBinary.new(tag, lexeme(token), left, led)
       quote = QUnary.new(tag, "not", quote) if notted
@@ -115,7 +48,7 @@ module Ven::Parselet
   # Reads an assignment expression into QAssign.
   class PAssign < Led
     def parse(tag, left, token)
-      QAssign.new(tag, validate(left), led, type(token) == ":=")
+      QAssign.new(tag, validate(left), led, type == ":=")
     end
 
     # Returns whether *left* is a valid assignment target.
@@ -135,7 +68,7 @@ module Ven::Parselet
   # Reads a binary operator assignment expression into QBinaryAssign.
   class PBinaryAssign < PAssign
     def parse(tag, left, token)
-      QBinaryAssign.new(tag, type(token)[0].to_s, validate(left), led)
+      QBinaryAssign.new(tag, type[0].to_s, validate(left), led)
     end
   end
 
