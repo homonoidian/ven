@@ -5,6 +5,8 @@ crystal: 1.0.0
 targets:
   ven:
     main: src/ven.cr
+  pad:
+    main: src/pad.cr
 
 dependencies:
   fancyline:
