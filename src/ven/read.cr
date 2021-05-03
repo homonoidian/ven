@@ -3,6 +3,9 @@ module Ven
   # of the source code.
   alias Word = { type: String, lexeme: String, line: Int32 }
 
+  # A path to a Ven distinct.
+  alias Distinct = Array(String)
+
   # Returns the regex pattern for word type *type*. *type*
   # can be:
   #
@@ -228,6 +231,12 @@ module Ven
       value = unit.call; expect(type); value
     end
 
+    # Calls *after* after calling *unit*. If *after* returned
+    # false, dies of `ReadError`.
+    def before(after : -> Bool, unit = ->led)
+      value = unit.call; after.call || die("unexpected term"); value
+    end
+
     # Calls *unit* repeatedly; assembles the results of each
     # call in an Array, and returns that array on termination.
     #
@@ -293,6 +302,45 @@ module Ven
       end
 
       this
+    end
+
+    # Reads multiple dot-separated symbols.
+    #
+    # SYMBOL {"." SYMBOL}
+    private macro path
+      repeat sep: ".", unit: -> { expect("SYMBOL")[:lexeme] }
+    end
+
+    # Tries to read a 'distinct' statement.
+    #
+    # Returns the path of the distinct if found one, or nil
+    # if did not.
+    #
+    # "distinct" PATH (";" | EOI)
+    def distinct? : Distinct?
+      return unless word!("DISTINCT")
+
+      before -> { !!word!(";") || eoi? }, -> { path }
+    end
+
+    # Tries to read a group of 'expose' statements separated
+    # by semicolons. Returns an array of each of those exposes'
+    # paths. If read no expose statements, returns and empty
+    # array.
+    #
+    # {"expose" PATH (";" | EOI)}
+    def exposes? : Array(Distinct)
+      exposes = [] of Distinct
+
+      while word!("EXPOSE")
+        exposes << path
+
+        unless word!(";") || eoi?
+          die("'expose': expected semicolon or end-of-input")
+        end
+      end
+
+      exposes
     end
 
     # Reads the source, yielding each top-level statement
