@@ -36,7 +36,7 @@ fun read(source) given str {
   # token.
   fun consume =
     token = return token and
-      if match(`[1-9]\d*`)
+      if match(`[1-9]\d*|0`)
         ["NUMBER", _]
       else if match(`[-+*/()]`)
         [&_, _]
