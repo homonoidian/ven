@@ -28,24 +28,31 @@ puts Ven::Suite::Detree.detree(quotes)
 
 
 tests =
-  Dir["examples/*.ven"] +
-  Dir["test/**/*.ven"] +
-  Dir["std/**/*.ven"]
+  # Dir["examples/*.ven"] +
+  Dir["test/**/[^_]*.ven"]
+  # Dir["std/**/*.ven"]
 
 tests.each do |test|
   source = File.read(test)
 
+  c_context = Ven::Suite::Context::Compiler.new
+  m_context = Ven::Suite::Context::Machine.new
+  Ven::Library::Internal.new.load(c_context, m_context)
+
   begin
     took = Time.measure do
       quotes = Ven::Reader.read(source, test)
-      unstitched_chunks = Ven::Compiler.compile(quotes)
-      Ven::Optimizer.optimize(unstitched_chunks)
+      unstitched_chunks = Ven::Compiler.compile(quotes, context: c_context)
+      stitched_chunks = Ven::Optimizer.optimize(unstitched_chunks)
+      puts Ven::Machine.run(stitched_chunks, context: m_context)
     end
 
     puts "SUCCESS #{test}".colorize.green, "- TOOK #{took.total_microseconds}us"
   rescue e : Ven::Suite::ReadError
     puts "FAILURE #{e.message}: l. #{e.line}, f. #{e.file}".colorize.red
   rescue e : Ven::Suite::CompileError
+    puts "FAILURE #{e.message}: #{e.traces}".colorize.red
+  rescue e : Ven::Suite::RuntimeError
     puts "FAILURE #{e.message}: #{e.traces}".colorize.red
   end
 end

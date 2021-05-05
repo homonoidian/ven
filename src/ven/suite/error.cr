@@ -41,7 +41,7 @@ module Ven::Suite
   # a semantic error.
   class RuntimeError < VenError
     getter file : String
-    getter line : UInt32
+    getter line : Int32
     getter traces : Traces
 
     def initialize(@traces, @file, @line, @message)

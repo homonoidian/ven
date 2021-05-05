@@ -69,7 +69,7 @@ module Ven::Suite
 
     # Appends an instruction given its *opcode*, *argument*
     # and *line* number.
-    def add(opcode : Opcode, argument : Label, line : UInt32)
+    def add(opcode : Opcode, argument : Label, line : Int32)
       snippet.add(opcode, argument, line)
     end
 

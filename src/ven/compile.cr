@@ -105,7 +105,7 @@ module Ven
     #
     # Ensures *opcode* is not nil.
     private macro issue(opcode, argument = nil)
-      chunk.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line.to_u32)
+      chunk.add({{opcode}}.not_nil!, {{argument}}, @last.tag.line)
     end
 
     # Makes a `VSymbol` called *name* and with nest *nest*.
@@ -446,7 +446,7 @@ module Ven
               else
                 # Assign the parameter in the local (-1) scope.
                 #
-                issue(Opcode::POP_ASSIGN, mksym name, nest: -1)
+                issue(Opcode::POP_ASSIGN, mksym param, nest: -1)
               end
             end
 
