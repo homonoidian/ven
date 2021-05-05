@@ -1,13 +1,25 @@
+require "./model"
+
 module Ven::Suite::Context
-  class VenAssignmentError < Exception; end
+  # This exception is raised when an assignment error occurs.
+  #
+  # Assignment errors exist mainly to protect some values
+  # from being re-defined by the user (e.g., `true`, `false`,
+  # builtin functions, etc.)
+  class VenAssignmentError < Exception
+  end
 
   # Unites instances of `Context::Reader`, `Context::Compiler`
   # and `Context::Machine`.
   class Hub
+    # Returns the reader context of this hub.
     getter reader = Context::Reader.new
-    getter machine = Context::Machine.new
+    # Returns the compiler context of this hub.
     getter compiler = Context::Compiler.new
+    # Returns the machine context of this hub.
+    getter machine = Context::Machine.new
 
+    # Extensions already present in this hub.
     @extensions = [] of Extension.class
 
     delegate :[], :[]?, to: @machine
@@ -26,19 +38,14 @@ module Ven::Suite::Context
   # The reader uses context to store and look up user-defined
   # nuds, leds and words.
   class Reader
-    # A hash that maps word types to their nud macros:
-    getter nuds : Hash(String, Ven::Parselet::PNudMacro)
-    # A hash that maps word types to the regex patterns used
-    # to match them:
-    getter triggers : Hash(String, Regex)
-    # Keyword lexemes of this context:
-    getter keywords : Array(String)
-
-    def initialize
-      @nuds = {} of String => Ven::Parselet::PNudMacro
-      @triggers = {} of String => Regex
-      @keywords = [] of String
-    end
+    # Returns a hash of word types mapped to nud macros
+    # they trigger.
+    getter nuds = {} of String => Ven::Parselet::PNudMacro
+    # Returns the keyword lexemes of this context.
+    getter keywords = [] of String
+    # Returns a hash of word types mapped to regex patterns
+    # used to match them.
+    getter triggers = {} of String => Regex
 
     # Returns whether *lexeme* is a keyword under this context.
     def keyword?(lexeme : String)
@@ -46,16 +53,20 @@ module Ven::Suite::Context
     end
 
     # Defines a reader macro that will be triggered by *trigger*,
-    # a word type. Does not check whether *trigger* is a valid
-    # word type.
+    # a word type (keyword or not).
+    #
+    # Does not check whether *trigger* is a valid word type.
     def []=(trigger : String, nud : Ven::Parselet::PNudMacro)
       @nuds[trigger] = nud
     end
 
-    def []=(trigger : String, pattern : Regex)
-      @triggers[trigger] = pattern
+    # Defines a trigger given *type*, word type, and regex
+    # pattern *pattern*.
+    def []=(type : String, pattern : Regex)
+      @triggers[type] = pattern
     end
 
+    # Defines a new keyword.
     delegate :<<, to: @keywords
   end
 
@@ -68,15 +79,13 @@ module Ven::Suite::Context
     alias Scope = Hash(String, Symbol)
 
     # The scope hierarchy. The rightmost scope is the localmost,
-    # and the leftmost - the globalmost.
+    # the leftmost is the globalmost.
     getter scopes : Array(Scope)
-
     # An array of traces, which together will form the traceback.
     getter traces = [] of Trace
 
-    def initialize
-      @scopes = [Scope.new]
-    end
+    # The scopes of this context.
+    @scopes = [Scope.new]
 
     # Declares a bound *symbol* in the localmost scope.
     def bound(symbol : String)
@@ -103,11 +112,13 @@ module Ven::Suite::Context
     ensure
       # Compile-time errors should dup the traces, so this
       # being in `ensure` shouldn't be a problem.
+      #
       @traces.pop
     end
 
-    # Evaluates the block inside a child scope. Passes the
-    # depth of the child scope to the block.
+    # Evaluates the block inside a child scope.
+    #
+    # Yields the depth of the child scope to the block.
     def child
       @scopes << Scope.new
 
@@ -125,13 +136,15 @@ module Ven::Suite::Context
     # if exceeds.
     MAX_TRACES = 64
 
+    # The scopes of this context.
     getter scopes : Array(Scope)
+    # The traceback of this context.
     getter traces = [] of Trace
 
-    def initialize
-      @scopes = [Scope.new]
-    end
+    @scopes = [Scope.new]
 
+    # Returns the amount of scopes (aka scope depth, nesting)
+    # in this context.
     delegate :size, to: @scopes
 
     # Deletes all scopes except the globalmost.
@@ -148,7 +161,7 @@ module Ven::Suite::Context
 
     # Returns the value of *symbol*.
     #
-    # Respects the meta-context (`$`).
+    # Respects the metacontext (`$`).
     #
     # Nests *maybe* and -1 will be searched in first.
     #
@@ -171,19 +184,23 @@ module Ven::Suite::Context
       end
     end
 
-    # :ditto:
+    # Returns the value of *symbol*.
+    #
+    # Respects the metacontext (`$`).
+    #
+    # Returns nil if *symbol* was not found.
     def []?(symbol : VSymbol)
       self[symbol.name, maybe: symbol.nest]?
     end
 
     # Makes *symbol* be *value* in the localmost scope.
     #
-    # If the localmost scope contains a meta-context (`$`),
-    # and that meta-context has a field named *symbol*, this
-    # field will be set to *value*.
+    # If the localmost scope includes a metacontext (`$`),
+    # and that metacontext has a field named *symbol*, this
+    # field will be set to *value* instead.
     #
-    # Will raise `VenAssignmentError` if *symbol* already exists
-    # and is an `MFunction`, whilst *value* is not.
+    # Will raise `VenAssignmentError` if *symbol* already
+    # exists and is an `MFunction`, whilst *value* is not.
     def []=(symbol : String, value : Model, nest = -1)
       meta = @scopes[-1]["$"]?
       prev = @scopes[nest][symbol]?
@@ -203,10 +220,10 @@ module Ven::Suite::Context
       self[symbol.name, nest: symbol.nest] = value
     end
 
-    # Introduces a child scope and a child trace.
+    # Introduces a child scope **and** a child trace.
     #
-    # Deletes all existing traces if the amount of them is
-    # bigger than `MAX_TRACES`.
+    # Deletes all existing traces if the amount of them
+    # exceeds `MAX_TRACES`.
     def push(file, line, name)
       if @traces.size > MAX_TRACES
         @traces.clear
@@ -216,7 +233,7 @@ module Ven::Suite::Context
       @traces << Trace.new(file, line, name)
     end
 
-    # Pops the current scope and the current trace.
+    # Pops the current scope **and** the current trace.
     def pop
       @scopes.pop
       @traces.pop?
