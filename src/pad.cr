@@ -26,6 +26,21 @@ puts Ven::Suite::Detree.detree(quotes)
 
 # Reader.read
 
+chunks = [] of Ven::Suite::Chunk
+
+a = Ven::Program.new("1 + 1", file: "a").run(chunks)
+b = Ven::Program.new("2 + 2", file: "b").run(chunks)
+
+puts a, b
+
+puts chunks.join("\n")
+
+# Running the calculator is pretty easy now:
+# hub = Ven::Suite::Context::Hub.new
+# hub.extend(Ven::Library::Internal.new)
+# source = File.read("examples/calculator.ven")
+# Ven::Program.new(source, file: "examples/calculator.ven", hub: hub).run
+
 
 tests =
   # Dir["examples/*.ven"] +
