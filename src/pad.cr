@@ -18,7 +18,7 @@ reader = Ven::Reader.new(
 )
 
 puts "distinct (should be: hello): #{reader.distinct?.try &.join(".")}"
-puts "exposes (should be: std, a.b.c, d.e.f): #{reader.exposes?.map(&.join(".")).join(", ")}"
+puts "exposes (should be: std, a.b.c, d.e.f): #{reader.exposes.map(&.join(".")).join(", ")}"
 
 quotes = reader.read
 

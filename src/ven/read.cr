@@ -329,7 +329,7 @@ module Ven
     # array.
     #
     # {"expose" PATH (";" | EOI)}
-    def exposes? : Array(Distinct)
+    def exposes : Array(Distinct)
       exposes = [] of Distinct
 
       while word!("EXPOSE")
@@ -555,7 +555,7 @@ module Ven
       reader = new(source, file, context)
 
       reader.distinct?
-      reader.exposes?
+      reader.exposes
 
       reader.read
     end
