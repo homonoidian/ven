@@ -444,9 +444,9 @@ module Ven
                 #
                 issue(Opcode::POP_UPUT)
               else
-                # Assign the parameter in the local (-1) scope.
+                # Assign the parameter in the local scope.
                 #
-                issue(Opcode::POP_ASSIGN, mksym param, nest: -1)
+                issue(Opcode::POP_ASSIGN, mksym param)
               end
             end
 
