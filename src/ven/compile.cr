@@ -637,7 +637,7 @@ module Ven
     # filename under which they will be compiled; *context*
     # is the compiler context of the compilation.
     #
-    # Returns the resulting chunks.
+    # Returns unstitched chunks.
     def self.compile(quotes, file = "untitled", context = Context::Compiler.new)
       compiler = new(file, context)
       compiler.visit(quotes)

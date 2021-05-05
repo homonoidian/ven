@@ -27,9 +27,9 @@ module Ven
     @inspect = false
     @measure = false
 
-    # Initializes a Machine given some *chunks*, a *context*
-    # and a chunk pointer *cp*: in *chunks*, the chunk at *cp*
-    # will be the first to be executed.
+    # Initializes a Machine given some stitched *chunks*, a
+    # *context* and a chunk pointer *cp*: in *chunks*, the
+    # chunk at *cp* will be the first to be executed.
     #
     # Remember: per each frame there should always be a scope;
     # if you push a frame, that is, you have to push a scope
@@ -362,6 +362,7 @@ module Ven
       when {"is", _, _}
         # 'is' requires explicit, non-strict (does not die if
         # failed) normalization.
+        #
         normal = normalize?(operator, left, right)
 
         may_be left, if: normal && normal[0].eqv?(normal[1])
@@ -518,7 +519,7 @@ module Ven
         # -(|*| A to B); I don't know whether it's the expected
         # behavior. If |*| (A > 1) to (B > 1), outputs (B - A)!;
         # about this I also do not know.
-
+        #
         if neg = start < 0 && end_ < 0
           start = -start
           end_  = -end_
@@ -667,6 +668,7 @@ module Ven
 
       # Trap so users see a nice error message instead of
       # just killing the program.
+      #
       Signal::INT.trap do
         interrupt = true
       end
@@ -1012,11 +1014,13 @@ module Ven
           unless dies
             # Re-raise if climbed up all frames & didn't find
             # a handler.
+            #
             raise error
           end
 
           # I do not know why this is required here, but without
           # it, if interrupted, it rescues infinitely.
+          #
           interupt = false
 
           jump(dies)
