@@ -38,7 +38,8 @@ tests.each do |test|
   begin
     took = Time.measure do
       quotes = Ven::Reader.read(source, test)
-      Ven::Compiler.compile(quotes)
+      unstitched_chunks = Ven::Compiler.compile(quotes)
+      Ven::Optimizer.optimize(unstitched_chunks)
     end
 
     puts "SUCCESS #{test}".colorize.green, "- TOOK #{took.total_microseconds}us"

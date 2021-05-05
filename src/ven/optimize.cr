@@ -1,33 +1,52 @@
 module Ven
+  # Peephole optimizer for Ven unstitched chunks.
+  #
+  # Matches sequences of bytecode instructions against patterns,
+  # and, based on that, folds, removes or modifies them.
+  #
+  # Basic usage:
+  # ```
+  # puts Optimizer.optimize(unstitched_chunks) # => stitched chunks
+  # ```
   class Optimizer
     include Suite
 
+    # Makes an Optimizer from *chunks*, an array of
+    # unstitched chunks.
     def initialize(@chunks : Chunks)
     end
 
-    # Returns the *instruction*'s argument, ensuring it is
-    # not nil.
+    # Returns *instruction*'s argument.
+    #
+    # Ensures the argument is not nil.
     private macro argument(instruction)
       {{instruction}}.argument.not_nil!
     end
 
-    # Assumes *source* is a static payload carrying *type*.
+    # Assumes *source* is a static payload carrying a value
+    # of type *type*.
     #
-    # **Assumes that *chunk* is in the scope.**
-    private macro static(source, type)
+    # **Assumes that a variable named *chunk* is in the scope.**
+    private macro static_as(source, type)
       chunk.resolve({{source}}).as(VStatic).value.as({{type}})
     end
 
     # Returns the data offset of *value*.
     #
-    # **Assumes that *chunk* is in the scope.**
-    private macro data(value)
+    # **Assumes that a variable named *chunk* is in the scope.**
+    private macro to_offset(value)
       chunk.offset({{value}})
     end
 
-    # Computes, if possible, an *operator* with *left*, *right*
-    # being known BigDecimals (in Ven, nums).
+    # Computes, if possible, a binary operator, *operator*,
+    # with *left* and *right* being known BigDecimals (thus
+    # nums in Ven).
+    #
+    # Returns nil if haven't optimized.
     def binary2n(operator : String, left : BigDecimal, right : BigDecimal)
+      # Let the fail happen at runtime (because we have no
+      # way to err in the optimizer).
+      #
       return if right == 0
 
       case operator
@@ -42,8 +61,11 @@ module Ven
       end
     end
 
-    # Computes, if possible, an *operator* with *left*, *right*
-    # being known Strings (in Ven, strs).
+    # Computes, if possible, a binary operator, *operator*,
+    # with *left* and *right* being known Strings (thus strs
+    # in Ven).
+    #
+    # Returns nil if haven't optimized.
     def binary2s(operator : String, left : String, right : String)
       case operator
       when "~"
@@ -65,22 +87,22 @@ module Ven
           when [Opcode::NUM, Opcode::NUM, Opcode::BINARY]
             resolution =
               binary2n(
-                static(triplet[2], String),
-                static(triplet[0], BigDecimal),
-                static(triplet[1], BigDecimal))
+                static_as(triplet[2], String),
+                static_as(triplet[0], BigDecimal),
+                static_as(triplet[1], BigDecimal))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::NUM, data resolution)
+              break snippet.replace(start, 3, Opcode::NUM, to_offset resolution)
             end
           when [Opcode::STR, Opcode::STR, Opcode::BINARY]
             resolution =
               binary2s(
-                static(triplet[2], String),
-                static(triplet[0], String),
-                static(triplet[1], String))
+                static_as(triplet[2], String),
+                static_as(triplet[0], String),
+                static_as(triplet[1], String))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::STR, data resolution)
+              break snippet.replace(start, 3, Opcode::STR, to_offset resolution)
             end
           end
         end
@@ -100,14 +122,16 @@ module Ven
           end
 
           if pair.first.opcode == Opcode::J
-            # At this point we are in the snippet-world and
+            # At this point we are in the snippet-world, so
             # there are only cross-snippet jumps. In one snippet
             # therefore, everything past an absolute jump is
-            # dead weight.
+            # dead code.
+            #
             break snippet.replace(start, 2, Opcode::J, pair.first.label)
           elsif pair.first.opcode.puts_one? && pair[1].opcode == Opcode::POP
             # First instruction of the pair produces one value,
-            # and second pops it right away. No effect at all.
+            # and second pops it right away.
+            #
             break snippet.remove(start, 2)
           end
         end
@@ -123,11 +147,12 @@ module Ven
       end
     end
 
-    # Returns the *chunks* optimized in several *passes*.
+    # Given an array of unstitched chunks, *chunks*, optimizes
+    # them in *passes* passes. Stitches the optimized chunks
+    # and returns them.
     def self.optimize(chunks, passes = 1)
       new(chunks).optimize(passes)
-
-      chunks
+      chunks.map(&.complete!)
     end
   end
 end
