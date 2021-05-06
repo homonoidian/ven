@@ -1,3 +1,5 @@
+require "./suite/*"
+
 module Ven
   # An individual Ven program, and a first-tier (higher is
   # more abstract) high level manager.
