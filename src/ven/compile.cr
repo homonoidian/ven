@@ -30,9 +30,10 @@ module Ven
 
     # Makes a compiler.
     #
-    # No arguments are required, but *file* (for a file name)
-    # and *context* (for a compiler context) can be provided.
-    def initialize(@file = "untitled", @context = Context::Compiler.new)
+    # No arguments are required, but *file* (for a file name),
+    # *context* (for a compiler context) and *origin* (for the
+    # point of origin of chunk emission) can be provided.
+    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0)
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
@@ -85,7 +86,7 @@ module Ven
         @chunks << Chunk.new(@file, {{name}})
 
         {% if block.args %}
-          {{*block.args}} = @target
+          {{*block.args}} = @origin + @target
         {% end %}
 
         {{yield}}
@@ -638,8 +639,8 @@ module Ven
     # is the compiler context of the compilation.
     #
     # Returns unstitched chunks.
-    def self.compile(quotes, file = "untitled", context = Context::Compiler.new)
-      compiler = new(file, context)
+    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0)
+      compiler = new(file, context, origin)
       compiler.visit(quotes)
       compiler.@chunks
     end

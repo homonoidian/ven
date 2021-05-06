@@ -71,3 +71,45 @@ tests.each do |test|
     puts "FAILURE #{e.message}: #{e.traces}".colorize.red
   end
 end
+
+
+first_prog = <<-EOF
+  distinct pi;
+
+  PI = 3.14;
+EOF
+
+second_prog = <<-EOF
+  distinct pi;
+
+  fun say_pi =
+    say(PI);
+EOF
+
+master_prog = <<-EOF
+  expose pi;
+
+  say_pi();
+  say("Hi!");
+EOF
+
+
+hub = Ven::Suite::Context::Hub.new
+hub.extend(Ven::Library::Internal.new)
+
+ps = Ven::Programs.new(hub)
+
+pid_1 = ps.add(first_prog)
+pid_2 = ps.add(second_prog)
+pid_m = ps.add(master_prog)
+
+ps.run(pid_m)
+
+
+ps = Ven::Programs.new
+
+p1 = ps.add("distinct p1; x = 2")
+p2 = ps.add("distinct p2; y = 3")
+p3 = ps.add("expose p1; expose p2; x + y")
+
+puts ps.run(p3) # 5 : Num

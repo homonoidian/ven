@@ -59,6 +59,13 @@ module Ven
       #
       @distinct = @reader.distinct?
       @exposes = @reader.exposes
+
+      # Members of our distinct (i.e., our neighbors) are
+      # automatically exposed.
+      #
+      if @distinct && !@distinct.in?(@exposes)
+        @exposes << @distinct.not_nil!
+      end
     end
 
     # Performs a particular *step* in Ven program evaluation
@@ -70,7 +77,7 @@ module Ven
       when Step::Read
         @quotes = @reader.read
       when Step::Compile
-        @chunks += Compiler.compile(@quotes, @file, @hub.compiler)
+        @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin)
       when Step::Optimize
         @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...])
       when Step::Evaluate
@@ -115,8 +122,7 @@ module Ven
     # `export`ed. See these methods to find out about
     # the details.
     #
-    # Returns the result of the program's evaluation, or nil
-    # if there is none.
+    # Returns self.
     def run(with parenthood = [] of Chunk)
       import(parenthood)
 
@@ -128,10 +134,14 @@ module Ven
       export(parenthood)
     end
 
-    # Appends the result of this program's evaluation, if any,
-    # to *io*.
+    # Appends the result of this program's evaluation of the
+    # string representation for an unevaluated program to *io*.
     def to_s(io)
-      io << @result unless @result.nil?
+      if @result.nil?
+        io << "#{@file} of (#{@distinct.try &.join(".") || "self"})"
+      else
+        io << @result
+      end
     end
   end
 end
