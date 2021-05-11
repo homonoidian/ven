@@ -132,6 +132,9 @@ module Ven
 
     # Jumps to the instruction at some instruction pointer *ip*.
     private macro jump(ip)
+      # XXX: SIGINT/SIGTERM.
+      Fiber.yield
+
       next frame.ip = ({{ip}}.not_nil!)
     end
 
@@ -669,17 +672,11 @@ module Ven
     def start
       interrupt = false
 
-      # Trap so users see a nice error message instead of
-      # just killing the program.
-      #
       Signal::INT.trap do
         interrupt = true
       end
 
       while this = fetch?
-        # https://github.com/crystal-lang/crystal/issues/5830#issuecomment-386591044
-        sleep 0
-
         # Remember the chunk we are/(at the end, possibly were)
         # in and the current instruction pointer.
         ip, cp = frame.ip, frame.cp
@@ -937,6 +934,9 @@ module Ven
             # an explicit tail-call (elimination) request. Pops
             # the callee and N arguments: (x1 ...N --)
             in Opcode::NEXT_FUN
+              # XXX: SIGINT/SIGTERM.
+              Fiber.yield
+
               args = pop static(Int32)
               callee = pop.as(MFunction)
 
