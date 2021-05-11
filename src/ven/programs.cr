@@ -24,6 +24,9 @@ module Ven
   class Programs
     include Suite
 
+    # A mapping of PIDs to Programs.
+    getter programs = {} of String => Program
+
     # Makes a new programs manager.
     #
     # *hub* is the common context hub that all programs
@@ -33,8 +36,6 @@ module Ven
       @pool = Chunks.new
       # A mapping of distincts to PIDs.
       @scopes = {} of Distinct => Array(String)
-      # A mapping of PIDs to Programs.
-      @programs = {} of String => Program
     end
 
     # Adds a new program to this programs manager.
