@@ -81,6 +81,7 @@ module Ven
     # Returns a joint (linear) list of unique PIDs of those
     # scopes.
     private def relate(pid : String)
+      status = false
       result = [] of String
 
       get(pid).exposes.each do |expose|
@@ -88,11 +89,10 @@ module Ven
           scope, subscribers = pair
 
           # scope.starts_with?(expose)
-          if scope[0, expose.size]? == expose
+          if status ||= scope[0, expose.size]? == expose
             # Reject *pid* to avoid infinite recursion (I guess):
-            #
             result += subscribers.reject(pid)
-          elsif index >= @scopes.size
+          elsif !status && index == @scopes.size - 1
             raise ExposeError.new(expose.join ".")
           end
         end
