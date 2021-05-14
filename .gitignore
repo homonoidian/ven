@@ -1,4 +1,5 @@
 shard.lock
-bin
 .vscode
 lib
+bin/*
+!bin/.gitkeep
