@@ -1,10 +1,11 @@
 ## Ven
 
-> **Beware!** Ven is just a hobby project I work from time to time.
+> **Beware!** Ven is just a hobby project I work on from time to time.
 
 This repository contains a reference interpreter for the Ven
 programming language. Ven is lightweight, slick and elegant;
-it is inspired mostly by JavaScript, Python and Lisp (yes, Lisp!)
+it is inspired mostly by Perl (and Raku), JavaScript, Python
+and Lisp (yes, Lisp!)
 
 ### Building Ven
 
