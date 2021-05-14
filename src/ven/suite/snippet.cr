@@ -13,7 +13,7 @@ module Ven::Suite
 
     # Adds to this chunk an instruction with the given *opcode*,
     # *argument* and *line*.
-    def add(opcode : Opcode, argument : IArg, line : UInt32)
+    def add(opcode : Opcode, argument : IArg, line : Int32)
       @code << Instruction.new(opcode, argument, line)
     end
 

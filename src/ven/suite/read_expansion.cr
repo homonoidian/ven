@@ -75,8 +75,6 @@ module Ven::Suite
     defvisit! QURef
     defvisit! QUPop
     defvisit! QRuntimeSymbol
-    defvisit! QExpose
-    defvisit! QDistinct
 
     defvisit! QVector, items
     defvisit! QUnary, operand

@@ -1,37 +1,21 @@
 require "fancyline"
 require "commander"
 
-require "./ven/**"
+require "./lib"
 
 module Ven
-  VERSION = "0.1.1-rev11.5"
-
+  # Ven command line interface builds an `Orchestra` and uses it
+  # to run a program either from a file, or from an interactive
+  # prompt.
   class CLI
     include Suite
 
-    # Whether to quit after a Ven error.
     @quit = true
-    # The step that we will stop on.
-    @step = :eval
-    # All files & REPL inputs go to and through this Master.
-    @master = Master.new
-    # Whether to display the result.
+    @final = "eval"
+    @legate = uninitialized Legate
     @result = false
-    # The amount of optimization passes.
-    @passes = 8
-    # Whether we run isolated.
-    @isolated = false
-
-    def initialize
-      Colorize.on_tty_only!
-    end
-
-    # Prints *message* and quits with status 0.
-    private def quit(message : String)
-      puts message
-
-      exit 0
-    end
+    @measure = false
+    @orchestra = uninitialized Orchestra
 
     # Prints an error according to the following template:
     # `[*embraced*] *message*`.
@@ -41,10 +25,7 @@ module Ven
     # Quits with status 1 if decided to quit.
     private def err(embraced : String, message : String)
       puts "#{"[#{embraced}]".colorize(:red)} #{message}"
-
-      if @quit
-        exit(1)
-      end
+      exit(1) if @quit
     end
 
     # Dies of an *error*.
@@ -71,7 +52,7 @@ module Ven
 
     # :ditto:
     private def die(error e : ExposeError)
-      err("expose error", "#{e.message} #{@isolated ? "(isolated)" : ""}")
+      err("expose error", e.message || "bad expose")
     end
 
     # :ditto:
@@ -79,17 +60,23 @@ module Ven
       err("general error", error.to_s)
     end
 
-    # Displays *quotes*.
+    # Displays the given *quotes*.
+    #
+    # Returns nothing.
     def display(quotes : Quotes)
       puts Detree.detree(quotes)
     end
 
-    # Displays *chunks*.
+    # Displays the given *chunks*.
+    #
+    # Returns nothing.
     def display(chunks : Chunks)
       chunks.each { |chunk| puts chunk }
     end
 
-    # Displays *timetable*.
+    # Displays the given *timetable*.
+    #
+    # Returns nothing.
     def display(timetable : Machine::Timetable)
       timetable.each do |cidx, stats|
         puts "chunk #{cidx}".colorize.underline
@@ -125,41 +112,94 @@ module Ven
       end
     end
 
-    # Displays *entity*.
-    def display(entity)
-      puts entity if @result && entity
+    # Displays the given *value*.
+    #
+    # Returns nothing.
+    def display(value)
+      puts value if @result && value
     end
 
-    # Runs *source* named *file* up to the step requested by
-    # the user (orelse eval), and `display`s whatever that
-    # step returns.
+    #
+    #
+    #
     def run(file : String, source : String)
-      unless @step == :eval
-        return display Input.run(file, source, until: @step, passes: @passes)
+      result  = nil
+      program = @orchestra.from(source, file, @legate, run: false)
+
+      # Measure the duration of the whole thing, for we will display
+      # only the measurement of the final step (including those that
+      # were before, of course).
+      duration = Time.measure do
+        case @final
+        when "read"
+          result = program
+            .step(Program::Step::Read)
+            .quotes
+        when "compile"
+          result = program
+            .step(Program::Step::Read)
+            .then(Program::Step::Compile)
+            .chunks
+        when "optimize"
+          result = program
+            .step(Program::Step::Read)
+            .then(Program::Step::Compile)
+            .then(Program::Step::Optimize)
+            .chunks
+        when "eval"
+          result = program.run(@orchestra.pool)
+        else
+          die("invalid final step: #{@final}")
+        end
       end
 
-      value = @master.load(file, source)
-      display @master.timetable
-      display value
-    rescue error : VenError
-      die(error)
+      # Although they have very similar names, `@legate.measure`
+      # is much more thorough (per-instruction) than `@measure`.
+      # And they can be combined (for seeing the total time)!
+      if @legate.measure
+        # We're sure it's there at this point.
+        display(@legate.timetable)
+      end
+
+      display(result)
+
+      if @measure
+        puts "[#{@final}: #{duration.total_microseconds}us]".colorize.bold
+      end
+    rescue e : VenError
+      die(e)
     end
 
-    # Makes sure that *file* is a file and can be opened &
-    # executed, and, if so, executes it. Otherwise, dies.
-    def open(file : String)
-      unless File.exists?(file) && File.file?(file) && File.readable?(file)
-        die("'#{file}' does not exist or is not a readable file")
+    # Launches the read-eval-print loop.
+    def repl
+      fancy = Fancyline.new
+
+      fancy.display.add do |ctx, line, yielder|
+        yielder.call ctx, highlight(line)
       end
 
-      unless @isolated
-        @master.gather
-      end
+      puts "[Ven #{VERSION}]",
+           "Hit CTRL+D to exit."
 
-      run file, File.read(file)
+      loop do
+        begin
+          source = fancy.readline(" #{"~>".colorize(:dark_gray)} ").try(&.strip)
+        rescue Fancyline::Interrupt
+          next puts
+        end
+
+        if source.nil? # CTRL+D pressed.
+          puts "Bye bye!"
+          exit 0
+        elsif source.empty?
+          next
+        end
+
+        run("interactive", source)
+      end
     end
 
-    # A tiny lexer that highlights a *snippet* of Ven code.
+    # Highlights a *snippet* of Ven code.
     private def highlight(snippet)
       offset = 0
       result = ""
@@ -172,7 +212,7 @@ module Ven
           if Reader::KEYWORDS.any?($0)
             result += $0.colorize.blue.to_s
           else
-            result += $0.colorize.bold.toggle(Input.context[$0]?).to_s
+            result += $0.colorize.bold.toggle(@orchestra.hub[$0]?).to_s
           end
         when Reader::RX_STRING
           result += $0.colorize.yellow.to_s
@@ -195,144 +235,122 @@ module Ven
       result
     end
 
-    # Launches the read-eval-print loop.
-    def repl
-      fancy = Fancyline.new
-
-      fancy.display.add do |ctx, line, yielder|
-        yielder.call ctx, highlight(line)
-      end
-
-      puts "[Ven #{VERSION}]",
-           "Hit CTRL+D to exit."
-
-      unless @isolated
-        @master.gather
-      end
-
-      loop do
-        begin
-          source = fancy
-            .readline(" #{"~>".colorize(:dark_gray)} ")
-            .try(&.strip)
-        rescue Fancyline::Interrupt
-          next puts
-        end
-
-        if source.nil? # CTRL+D was pressed:
-          exit(0)
-        elsif source.empty?
-          next
-        end
-
-        run("interactive", source)
-      end
-    end
-
-    def parse
+    # Returns the Commander command line interface for Ven.
+    def main
       Commander::Command.new do |cmd|
-        cmd.use = "ven"
-        cmd.long = VERSION
+        cmd.use  = "ven"
+        cmd.long = Ven::VERSION
 
         cmd.flags.add do |flag|
-          flag.name = "just"
-          flag.short = "-j"
-          flag.long = "--just"
-          flag.default = "eval"
-          flag.description = "Halt at a certain step (read, compile, optimize)."
+          flag.name        = "port"
+          flag.short       = "-p"
+          flag.long        = "--port"
+          flag.default     = 3000
+          flag.description = "Set the referent Inquirer port."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "isolated"
-          flag.short = "-i"
-          flag.long = "--isolated"
-          flag.default = false
-          flag.description = "Do not look up other Ven files."
+          flag.name        = "inspect"
+          flag.short       = "-i"
+          flag.long        = "--inspect"
+          flag.default     = false
+          flag.description = "Enable instruction-by-instruction inspector."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "result"
-          flag.short = "-r"
-          flag.long = "--result"
-          flag.default = false
-          flag.description = "Display the output of the final step."
+          flag.name        = "measure"
+          flag.short       = "-m"
+          flag.long        = "--measure"
+          flag.default     = false
+          flag.description = "Enable execution time output."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "measure"
-          flag.short = "-m"
-          flag.long = "--measure"
-          flag.default = false
-          flag.description = "Display instruction timetable."
+          flag.name        = "timetable"
+          flag.short       = "-M"
+          flag.default     = false
+          flag.description = "Enable per-instruction execution time output (timetable)."
         end
 
         cmd.flags.add do |flag|
-          flag.name = "optimize"
-          flag.short = "-O"
-          flag.long = "--optimize"
-          flag.default = 1
+          flag.name        = "final"
+          flag.short       = "-j"
+          flag.long        = "--just"
+          flag.default     = "eval"
+          flag.description = "Set the final step (read, compile, optimize, eval)"
+        end
+
+        cmd.flags.add do |flag|
+          flag.name        = "result"
+          flag.short       = "-r"
+          flag.long        = "--result"
+          flag.default     = false
+          flag.description = "Print the result of the final step."
+        end
+
+        cmd.flags.add do |flag|
+          flag.name        = "optimize"
+          flag.short       = "-O"
+          flag.long        = "--optimize"
+          flag.default     = 1
           flag.description = "Set the amount of optimization passes."
         end
 
-        cmd.flags.add do |flag|
-          flag.name = "inspect"
-          flag.short = "-s"
-          flag.long = "--inspect"
-          flag.default = false
-          flag.description = "Enable step-by-step evaluation inspector."
-        end
-
-        cmd.flags.add do |flag|
-          flag.name = "verbose"
-          flag.short = "-v"
-          flag.long = "--verbose"
-          flag.default = 1
-          flag.description = "Set master verbosity (0: quiet, 1: warn, 2: warn + debug)."
-        end
-
         cmd.run do |options, arguments|
+          port = options.int["port"].as Int32
+
+          @orchestra = Orchestra.new(port)
+
+          @final = options.string["final"]
           @result = options.bool["result"]
+          @measure = options.bool["measure"]
 
-          @master.passes = @passes = options.int["optimize"].as(Int32) * 8
-          @master.inspect = options.bool["inspect"]
-          @master.measure = options.bool["measure"]
-          @master.verbosity = options.int["verbose"].as(Int32)
+          @legate = Legate.new
+          @legate.measure  = options.bool["timetable"]
+          @legate.inspect  = options.bool["inspect"]
+          @legate.optimize = options.int["optimize"].to_i * 8
 
-          case just = options.string["just"]
-          when "eval"
-            # pass
-          when "read"
-            @step = :read
-          when "compile"
-            @step = :compile
-          when "optimize"
-            @step = :optimize
-          else
-            die("'just': invalid step: #{just}").not_nil!
-          end
-
-          # We are isolated if: (a) `-i` was passed; or (b)
-          # we are never going to evaluate.
-          @isolated = options.bool["isolated"] || @step != :eval
-
-          case arguments.size
-          when 0
+          if arguments.empty?
+            # Do not quit after errors:
             @quit = false
+            # Do print the result:
             @result = true
-            repl
-          when 1
-            open(arguments.first)
+            # Fly!
+            repl()
+          elsif arguments.size == 1
+            file = arguments.first
+
+            if File.exists?(file) && File.file?(file) && File.readable?(file)
+              run file, File.read(file)
+            elsif !@orchestra.isolated && file =~ /^(\w[\.\w]*[^\.])$/
+              # If there is no such file, try to look if it's
+              # a distinct.
+              candidates = @orchestra.files_for? file.split('.')
+
+              if candidates.empty?
+                die("no such distinct: '#{file}'")
+              elsif candidates.size > 1
+                die("too many (#{candidates.size}) candidates for '#{file}'")
+              end
+
+              # Trust Inquirer that *candidate* is readable,
+              # is a file, etc.
+              run candidate = candidates.first, File.read(candidate)
+            else
+              die("there is no readable file or distinct named '#{file}'")
+            end
           else
-            die("illegal arguments: #{arguments.join(", ")}")
+            puts cmd.help
           end
         end
       end
     end
 
-    def self.start
-      Commander.run(new.parse, ARGV)
+    # Starts Ven command line interface from the given *argv*.
+    def self.start(argv)
+      Commander.run(new.main, argv)
     end
   end
 end
 
-Ven::CLI.start
+Ven::CLI.start(ARGV)

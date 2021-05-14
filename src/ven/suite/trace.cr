@@ -3,7 +3,7 @@ module Ven::Suite
   # traceback.
   struct Trace
     getter file : String
-    getter line : UInt32
+    getter line : Int32
     getter name : String
 
     def initialize(tag : QTag, @name)
@@ -12,6 +12,10 @@ module Ven::Suite
     end
 
     def initialize(@file, @line, @name)
+    end
+
+    def ==(tag : QTag)
+      @file == tag.file && @line == tag.line
     end
 
     # Stringifies this trace.

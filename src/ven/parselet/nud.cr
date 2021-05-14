@@ -1,86 +1,21 @@
+require "./share"
+
 module Ven::Parselet
   include Suite
 
   # A parser that is invoked by a null-denotated token.
-  abstract class Nud
-    @parser = uninitialized Reader
-    @precedence = 0_u8
-
-    # Whether a semicolon must follow this nud.
-    getter semicolon = true
-
-    # Makes a nud with precedence *precedence*.
-    def initialize(@precedence = 0_u8)
-    end
-
-    # Dies of read error with *message*, which should explain
-    # why the error happened.
-    def die(message : String)
-      @parser.die(message)
-    end
-
-    # Returns the type of *token*.
+  abstract class Nud < Parselet::Share
+    # Performs the parsing.
     #
-    # *token* defaults to `token`, which is the standard name
-    # of the lead token in `parse`.
-    macro type(token = token)
-      {{token}}[:type]
-    end
-
-    # Returns the lexeme of *token*.
-    #
-    # *token* defaults to `token`, which is the standard name
-    # of the lead token in `parse`.
-    macro lexeme(token = token)
-      {{token}}[:lexeme]
-    end
-
-    # Reads a symbol if *token* is nil (orelse uses the value
-    # of *token*) and creates the corresponding symbol quote.
-    def symbol(tag, token = nil) : QSymbol
-      token ||= @parser.expect("$SYMBOL", "SYMBOL", "*")
-
-      case type
-      when "$SYMBOL"
-        QReadtimeSymbol.new(tag, lexeme)
-      when "SYMBOL", "*"
-        QRuntimeSymbol.new(tag, lexeme)
-      else
-        raise "unknown symbol type"
-      end
-    end
-
-    # Reads a block under the jurisdiction of this nud. Returns
-    # the statements of this block. If *opening* is false, the
-    # opening paren won't be read.
-    def block(opening = true, @semicolon = false)
-      @parser.expect("{") if opening
-      @parser.repeat("}", unit: -> @parser.statement)
-    end
-
-    # Reads a led under the jurisdiction of this nud and with
-    # the precedence of this nud.
-    def led(precedence = @precedence)
-      @parser.led(precedence)
-    end
-
-    # :ditto:
-    def led(precedence : Precedence)
-      led(precedence.value)
-    end
-
-    # Evaluates *consequtive* if read *word*; otherwise,
-    # evaluates *alternative*.
-    macro if?(word, then consequtive, else alternative = nil)
-      @parser.word!({{word}}) ? {{consequtive}} : {{alternative}}
-    end
-
-    # Performs the parsing
-    def parse!(@parser : Ven::Reader, tag : QTag, token : Ven::Word)
+    # Subclasses of `Nud` should not override this method.
+    # They should (actually, must) implement `parse` instead.
+    def parse!(@parser : Reader, tag : QTag, token : Word)
       parse(tag, token)
     end
 
     # Performs the parsing.
+    #
+    # All subclasses of `Nud` should implement this method.
     abstract def parse(tag : QTag, token : Word)
   end
 
@@ -322,22 +257,17 @@ module Ven::Parselet
     end
   end
 
-  # Reads an 'expose' statement into QExpose.
+  # Safety parselet for 'expose'. Always dies.
   class PExpose < Nud
     def parse(tag, token)
-      QExpose.new(tag, pieces!)
-    end
-
-    # Reads pieces - a bunch of comma-separated SYMBOLs.
-    def pieces!
-      @parser.repeat(sep: ".", unit: -> { lexeme @parser.expect("SYMBOL") })
+      @parser.die("please move this 'expose' to the start of your program")
     end
   end
 
-  # Reads a 'distinct' statement into QDistinct.
-  class PDistinct < PExpose
+  # Safety parselet for 'distinct'. Always dies.
+  class PDistinct < Nud
     def parse(tag, token)
-      QDistinct.new(tag, pieces!)
+      @parser.die("this 'distinct' is meaningless")
     end
   end
 

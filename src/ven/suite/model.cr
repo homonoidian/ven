@@ -298,7 +298,7 @@ module Ven::Suite
     end
 
     def initialize(@source : String)
-      @value = Regex.new(!@source.starts_with?("^") ? "^" + @source : @source)
+      @value = /^(?:#{@source})/
     end
 
     def to_str

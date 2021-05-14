@@ -15,29 +15,27 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
-    # Whether to run the inspector.
-    property inspect : Bool
-
-    # Whether to measure instruction evaluation time.
-    property measure : Bool
-
     getter context : Context::Machine
-    getter timetable : Timetable
 
-    @inspect = false
-    @measure = false
+    @timetable : Timetable
 
-    # Initializes a Machine given some *chunks*, a *context*
-    # and a chunk pointer *cp*: in *chunks*, the chunk at *cp*
-    # will be the first to be executed.
+    # Makes a `Machine` that will run *chunks*, an array of
+    # stitched chunks.
     #
-    # Remember: per each frame there should always be a scope;
-    # if you push a frame, that is, you have to push a scope
-    # as well. This has to be done so the frames and the context
-    # scopes are in sync.
-    def initialize(@context, @chunks : Chunks, cp = 0)
-      @frames = [Frame.new(cp: cp)]
-      @timetable = Timetable.new
+    # *context* is the context that the Machine will run in.
+    # *origin* is the first chunk that will be evaluated (the
+    # main chunk).
+    def initialize(@chunks : Chunks, @context = Context::Machine.new,
+                   origin = 0, @legate = Legate.new)
+      @inspect = @legate.inspect.as Bool
+      @measure = @legate.measure.as Bool
+
+      # Remember: per each frame there should always be a scope;
+      # if you push a frame, that is, you have to push a scope
+      # too. This has to be done so that the frames and the
+      # context scopes are in sync.
+      @frames = [Frame.new(cp: origin)]
+      @timetable = @legate.timetable = Timetable.new
     end
 
     # Dies of runtime error with *message*, which should explain
@@ -48,7 +46,7 @@ module Ven
       file = chunk.file
       line = fetch.line
 
-      unless traces.last?.try(&.name) == "unit"
+      unless traces.last?.try(&.line) == line
         traces << Trace.new(file, line, "unit")
       end
 
@@ -129,6 +127,9 @@ module Ven
 
     # Jumps to the instruction at some instruction pointer *ip*.
     private macro jump(ip)
+      # XXX: SIGINT/SIGTERM.
+      Fiber.yield
+
       next frame.ip = ({{ip}}.not_nil!)
     end
 
@@ -362,6 +363,7 @@ module Ven
       when {"is", _, _}
         # 'is' requires explicit, non-strict (does not die if
         # failed) normalization.
+        #
         normal = normalize?(operator, left, right)
 
         may_be left, if: normal && normal[0].eqv?(normal[1])
@@ -518,7 +520,7 @@ module Ven
         # -(|*| A to B); I don't know whether it's the expected
         # behavior. If |*| (A > 1) to (B > 1), outputs (B - A)!;
         # about this I also do not know.
-
+        #
         if neg = start < 0 && end_ < 0
           start = -start
           end_  = -end_
@@ -665,16 +667,11 @@ module Ven
     def start
       interrupt = false
 
-      # Trap so users see a nice error message instead of
-      # just killing the program.
       Signal::INT.trap do
         interrupt = true
       end
 
       while this = fetch?
-        # https://github.com/crystal-lang/crystal/issues/5830#issuecomment-386591044
-        sleep 0
-
         # Remember the chunk we are/(at the end, possibly were)
         # in and the current instruction pointer.
         ip, cp = frame.ip, frame.cp
@@ -932,6 +929,9 @@ module Ven
             # an explicit tail-call (elimination) request. Pops
             # the callee and N arguments: (x1 ...N --)
             in Opcode::NEXT_FUN
+              # XXX: SIGINT/SIGTERM.
+              Fiber.yield
+
               args = pop static(Int32)
               callee = pop.as(MFunction)
 
@@ -1012,11 +1012,13 @@ module Ven
           unless dies
             # Re-raise if climbed up all frames & didn't find
             # a handler.
+            #
             raise error
           end
 
           # I do not know why this is required here, but without
           # it, if interrupted, it rescues infinitely.
+          #
           interupt = false
 
           jump(dies)
@@ -1044,16 +1046,33 @@ module Ven
       stack.delete_at(..).last?
     end
 
-    # Makes an instance of Machine given *context*, *chunks*
-    # and *offset* (see `Machine`). Yields this instance to
-    # the block.
+    # Makes a `Machine`, runs *chunks* and disposes the `Machine`.
     #
-    # After the block was executed, starts the Machine and
-    # returns the resulting value.
-    def self.start(context, chunks, offset)
-      machine = new(context, chunks, offset)
+    # *context* is the context that the Machine will run in.
+    # *origin* is the first chunk that will be evaluated (the
+    # main chunk).
+    #
+    # Before running, yields the `Machine` to the block.
+    #
+    # Returns the result that was produced by the Machine, or
+    # nil if nothing was produced.
+    def self.run(chunks, context = Context::Machine.new, origin = 0)
+      machine = new(chunks, context, origin)
       yield machine
       machine.start.return!
+    end
+
+    # Makes a Machine, runs *chunks* and disposes the Machine.
+    #
+    # *context* is the context that the Machine will run in.
+    # *origin* is the first chunk that will be evaluated (the
+    # main chunk).
+    #
+    # Returns the result that was produced by the Machine, or
+    # nil if nothing was produced.
+    def self.run(chunks, context = Context::Machine.new, origin = 0,
+                 legate = Legate.new)
+      new(chunks, context, origin, legate).start.return!
     end
   end
 end

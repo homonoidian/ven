@@ -5,8 +5,12 @@ crystal: 1.0.0
 targets:
   ven:
     main: src/ven.cr
+  pad:
+    main: src/pad.cr
 
 dependencies:
+  inquirer:
+    github: homonoidian/inquirer
   fancyline:
     github: papierkorb/fancyline
     version: ~> 0.3.3

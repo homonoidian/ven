@@ -5,7 +5,7 @@ module Ven::Suite
   # be either a `Label` or an integer. What this integer means
   # is not of Instruction's concern.
   struct Instruction
-    getter line : UInt32
+    getter line : Int32
     getter label : Label?
     getter opcode : Opcode
     getter argument : Int32?

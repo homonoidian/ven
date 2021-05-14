@@ -3,13 +3,13 @@ module Ven::Suite
   abstract class Visitor(T)
     setter last : Quote = QVoid.new
 
-    # Remembers *quote* as the last visited node and hands it
-    # off to `visit!`.
+    # Remembers *quote* as the last visited quote, and hands
+    # it off to `visit!`.
     def visit(quote : Quote)
       visit!(@last = quote)
     end
 
-    # Same as `visit(quote)`, but iterates over *quotes*.
+    # Maps `visit(quote)` on *quotes*.
     def visit(quotes : Quotes)
       quotes.map do |quote|
         visit(@last = quote).as(T)
