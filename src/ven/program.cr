@@ -59,13 +59,6 @@ module Ven
       #
       @distinct = @reader.distinct?
       @exposes = @reader.exposes
-
-      # Members of our distinct (i.e., our neighbors) are
-      # automatically exposed.
-      #
-      if @distinct && !@distinct.in?(@exposes)
-        @exposes << @distinct.not_nil!
-      end
     end
 
     # Performs a particular *step* in Ven program evaluation
