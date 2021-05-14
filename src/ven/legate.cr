@@ -1,4 +1,10 @@
 module Ven
+  # Legate convoys various configurations from the heights
+  # of abstraction (i.e., `Orchestra`) down, to `Program`,
+  # `Machine`, or anyone else willing.
+  #
+  # It does the same in the opposite direction; i.e., one can
+  # also *send* data with `Legate` back to the top.
   class Legate
     # `Machine`: whether to run the inspector.
     property inspect = false

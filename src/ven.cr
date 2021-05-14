@@ -4,9 +4,9 @@ require "commander"
 require "./lib"
 
 module Ven
-  # Ven command line interface builds an `Orchestra` and uses it
-  # to run a program either from a file, or from an interactive
-  # prompt.
+  # Ven command line interface builds an `Orchestra` and a
+  # `Legate`, and uses them to run a program from a file,
+  # interactive prompt, or a particular distinct.
   class CLI
     include Suite
 
