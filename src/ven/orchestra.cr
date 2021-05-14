@@ -43,6 +43,8 @@ module Ven
     def initialize(port = 3000)
       @client = client_from(port)
       @isolated = !@client.running?
+      # Load the built-in libraries.
+      @hub.extend(Library::Internal.new)
     end
 
     # Makes a client given the *port* of an Inquirer server

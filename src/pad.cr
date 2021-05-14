@@ -71,3 +71,16 @@ tests.each do |test|
     puts "FAILURE #{e.message}: #{e.traces}".colorize.red
   end
 end
+
+# Should work if the Inquirer server is running on port 3000.
+orchestra = Ven::Orchestra.new
+
+program = <<-EOF
+  expose std;
+
+  ensure not true?(false);
+  ensure starts-with?("hello", `he`);
+  ensure empty?([]);
+EOF
+
+orchestra.from(program)
