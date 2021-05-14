@@ -1,5 +1,6 @@
-# expose std;
+distinct calculator;
 
+expose std;
 
 box Num(value) given str;
 

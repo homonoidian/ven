@@ -32,10 +32,15 @@ module Ven
   class Orchestra
     include Inquirer::Protocol
 
-    @hub   = Suite::Context::Hub.new
-    @pool  = Suite::Chunks.new
-    @cache = Set(String).new
+    # Returns the context hub of this orchestra.
+    getter hub  = Suite::Context::Hub.new
+    # Returns the chunk pool of this orchestra.
+    getter pool = Suite::Chunks.new
+    # Returns whether this orchestra is running isolated from
+    # an Inquirer server.
+    getter isolated : Bool
 
+    @cache  = Set(String).new
     @client : Inquirer::Client
 
     # Legate with all defaults, since we really do not want
@@ -63,7 +68,7 @@ module Ven
     # build the given *distinct*.
     #
     # Returns an array of filepaths (empty if failed).
-    private def files_for?(distinct : Distinct)
+    def files_for?(distinct : Distinct)
       request = Request.new Command::FilesFor, distinct.join('.')
       response = @client.send(request)
       response.result.as?(Array) || [] of String
@@ -75,7 +80,7 @@ module Ven
     # Returns an array of filepaths.
     #
     # Raises `ExposeError` if failed.
-    private def files_for(distinct : Distinct)
+    def files_for(distinct : Distinct)
       files = files_for?(distinct)
 
       if files.empty?
@@ -87,7 +92,7 @@ module Ven
 
     # Exposes the program found at *filepath*, and containing
     # the given *source*.
-    private def expose(filepath : String, source : String, legate = @legate)
+    private def expose(filepath : String, source : String, legate = @legate, run = true)
       program = Program.new(source, filepath, @hub, legate)
 
       if @isolated && !program.exposes.empty?
@@ -127,7 +132,7 @@ module Ven
         end
       end
 
-      program.run(@pool)
+      run ? program.run(@pool) : program
     end
 
     # Exposes the program found at *filepath*.
@@ -143,12 +148,12 @@ module Ven
 
     # Runs the given *source* code, which can be found in *file*,
     # as a composer program.
-    def from(source : String, file = "composer", legate = Legate.new)
+    def from(source : String, file = "composer", legate = Legate.new, run = true)
       # WARNING: do not remove this, as doing so will provoke
       # infinite expose (in some cases).
       @cache << file
 
-      expose(file, source, legate)
+      expose(file, source, legate, run)
     end
   end
 end

@@ -40,8 +40,11 @@ module Ven
     # Returns this program's distinct.
     getter distinct : Distinct?
 
-    @quotes = uninitialized Quotes
-    @chunks = uninitialized Chunks
+    # Returns the quotes of this program.
+    getter quotes = Quotes.new
+    # Returns the chunks of this program.
+    getter chunks = Chunks.new
+
     @result : Model?
 
     # The chunk that will be evaluated first.
