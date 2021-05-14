@@ -38,6 +38,10 @@ module Ven
 
     @client : Inquirer::Client
 
+    # Legate with all defaults, since we really do not want
+    # to create a new Legate every time we do `expose`/`from`.
+    @legate = Legate.new
+
     # Makes an Orchestra for an Inquirer server running at
     # the given *port*.
     def initialize(port = 3000)
@@ -83,13 +87,13 @@ module Ven
 
     # Exposes the program found at *filepath*, and containing
     # the given *source*.
-    private def expose(filepath : String, source : String)
-      program = Program.new(source, filepath, hub: @hub)
+    private def expose(filepath : String, source : String, legate = @legate)
+      program = Program.new(source, filepath, @hub, legate)
 
       if @isolated && !program.exposes.empty?
         raise Suite::ExposeError.new(
-          "you cannot use 'expose', as the Inquirer server " \
-          "specified is not running")
+          "you cannot use 'expose', as the referent Inquirer " \
+          "server is not running")
       elsif !@isolated
         if distinct = program.distinct
           # foo.ven (composer):
@@ -139,12 +143,12 @@ module Ven
 
     # Runs the given *source* code, which can be found in *file*,
     # as a composer program.
-    def from(source : String, file = "composer")
+    def from(source : String, file = "composer", legate = Legate.new)
       # WARNING: do not remove this, as doing so will provoke
       # infinite expose (in some cases).
       @cache << file
 
-      expose(file, source)
+      expose(file, source, legate)
     end
   end
 end

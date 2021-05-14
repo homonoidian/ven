@@ -15,17 +15,9 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
-    # Whether to run the inspector.
-    property inspect : Bool
-
-    # Whether to measure instruction evaluation time.
-    property measure : Bool
-
     getter context : Context::Machine
-    getter timetable : Timetable
 
-    @inspect = false
-    @measure = false
+    @timetable : Timetable
 
     # Makes a `Machine` that will run *chunks*, an array of
     # stitched chunks.
@@ -33,14 +25,17 @@ module Ven
     # *context* is the context that the Machine will run in.
     # *origin* is the first chunk that will be evaluated (the
     # main chunk).
-    def initialize(@chunks : Chunks, @context = Context::Machine.new, origin = 0)
+    def initialize(@chunks : Chunks, @context = Context::Machine.new,
+                   origin = 0, @legate = Legate.new)
+      @inspect = @legate.inspect.as Bool
+      @measure = @legate.measure.as Bool
+
       # Remember: per each frame there should always be a scope;
       # if you push a frame, that is, you have to push a scope
       # too. This has to be done so that the frames and the
       # context scopes are in sync.
-      #
       @frames = [Frame.new(cp: origin)]
-      @timetable = Timetable.new
+      @timetable = @legate.timetable = Timetable.new
     end
 
     # Dies of runtime error with *message*, which should explain
@@ -1075,8 +1070,9 @@ module Ven
     #
     # Returns the result that was produced by the Machine, or
     # nil if nothing was produced.
-    def self.run(chunks, context = Context::Machine.new, origin = 0)
-      new(chunks, context, origin).start.return!
+    def self.run(chunks, context = Context::Machine.new, origin = 0,
+                 legate = Legate.new)
+      new(chunks, context, origin, legate).start.return!
     end
   end
 end

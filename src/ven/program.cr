@@ -52,11 +52,10 @@ module Ven
     # *source* is the source code of this program; *file* is
     # its filename (or unit name); *hub* is the context hub
     # that this program will use.
-    def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new)
+    def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new,
+                   @legate = Legate.new)
       @reader = Reader.new(@source, @file, @hub.reader)
-
-      # Order is important here:
-      #
+      # WARNING: order is important!
       @distinct = @reader.distinct?
       @exposes = @reader.exposes
     end
@@ -72,9 +71,9 @@ module Ven
       when Step::Compile
         @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin)
       when Step::Optimize
-        @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...])
+        @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...], @legate.optimize)
       when Step::Evaluate
-        @result = Machine.run(@chunks, @hub.machine, @origin)
+        @result = Machine.run(@chunks, @hub.machine, @origin, @legate)
       end
 
       self
