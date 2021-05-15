@@ -30,6 +30,39 @@ Otherwise, `distinct` and `expose` statements won't work.
 
 You can `strip` the executable to reduce its size (goes down to about 5M).
 
+### Using Ven
+
+Note that:
+
+1. Ven is not ready enough for experimental use.
+2. Ven is never going to be ready for production.
+
+First, you have to start Inquirer:
+
+1. `/path/to/bin/inquirer start -d` starts Inquirer in *detached* mode,
+   i.e., as a daemon that will be running in background; Omit the `-d`
+   if you want to see what's going on, that is, if you want to see live
+   server/daemon log.
+2. You can see whether Inquirer is running by asking it: `/path/to/bin/inquirer shell`.
+   Type `ping` into the prompt, and you'll hopefully see `pong`;
+3. You can quit from the Inquirer shell by pressing *CTRL+C*;
+4. **It is recommended to stop Inquirer after you've fiddled with it: it's
+   `/path/to/bin/inquirer stop`, or `die` from the interactive shell.**
+
+Second, try to run Ven:
+
+1. Run `ven sanity`. If it worked with no errors, you have built Ven &
+   friends successfully and know how to run it all now. If it didn't,
+   make sure Inquirer's running and, if it is and things still fall
+   apart, file an issue here or in the Inquirer repository.
+2. Run `ven` for an interactive prompt. Play with it?
+3. If you want to see what's going under the hood, pass `-j` (or `--just`) flag
+   (`ven -j <...>`). It exposes different stages of Ven interpretation. Try
+   `-j read`, `-j compile` and `-j optimize` to see what happens. If you don't
+   know what to type, type `1 + 1` :slightly_smiling_face:
+4. You can run files by just passing them to `ven`: `ven examples/calculator.ven`.
+   The `-j` flag works here, too.
+
 ### Contributing
 
 1. Fork it;

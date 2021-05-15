@@ -13,24 +13,20 @@ fun<Foo> inc(_, by) given `(b|B)`, any = b += by;
 fun<Foo> dec(_, by) given `(a|A)`, any = a -= by;
 fun<Foo> dec(_, by) given `(b|B)`, any = b -= by;
 
-fun<Foo> get = [a, b];
-
 
 foo = Foo(0, 0);
 
-ensure foo.get() is [0, 0];
+ensure foo.[a, b] is [0, 0];
 
 foo.inc("a", "1");
 foo.inc("A", 2);
 
-ensure foo.a is 3;
-ensure foo.b is 0;
+ensure foo.[a, b] is [3, 0];
 
 foo.dec("b", 1);
 foo.dec("B", 2);
 
-ensure foo.a is 3;
-ensure foo.b is -3;
+ensure foo.[a, b] is [3, -3];
 
 };
 
