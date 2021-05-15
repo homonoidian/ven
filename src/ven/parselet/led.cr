@@ -52,8 +52,18 @@ module Ven::Parselet
     end
 
     # Returns whether *left* is a valid assignment target.
-    def validate?(left : Quote) : Bool
-      left.is_a?(QSymbol) && left.value != "*"
+    def validate?(left : QSymbol) : Bool
+      !left.value.in?("$", "*")
+    end
+
+    # :ditto:
+    def validate?(left : QCall)
+      true
+    end
+
+    # :ditto:
+    def validate?(left)
+      false
     end
 
     # Returns *left* if it is a valid assignment target, or
@@ -61,7 +71,7 @@ module Ven::Parselet
     def validate(left : Quote)
       die("illegal assignment target") unless validate?(left)
 
-      left.as(QSymbol)
+      left
     end
   end
 

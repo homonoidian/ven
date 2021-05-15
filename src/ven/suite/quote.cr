@@ -107,8 +107,8 @@ module Ven::Suite
   defquote(QBinary, operator : String, left : Quote, right : Quote)
   defquote(QCall, callee : Quote, args : Quotes)
 
-  defquote(QAssign, target : QSymbol, value : Quote, global : Bool)
-  defquote(QBinaryAssign, operator : String, target : QSymbol, value : Quote)
+  defquote(QAssign, target : Quote, value : Quote, global : Bool)
+  defquote(QBinaryAssign, operator : String, target : Quote, value : Quote)
 
   defquote(QDies, operand : Quote)
   defquote(QIntoBool, operand : Quote)

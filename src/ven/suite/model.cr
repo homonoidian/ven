@@ -165,6 +165,28 @@ module Ven::Suite
     def indexable?
       false
     end
+
+    # Sets this model's *referent* item (whatever the meaning
+    # of that is) to *value*.
+    #
+    # Generally, subclasses should not choose to override
+    # this method. They can override `[]=` instead.
+    def set_referent(referent : Model, value : Model) : Model
+      (self[referent] = value) ||
+        raise ModelCastException.new(
+          "'#{self}' does not seem to support assignment to '#{referent}'")
+    end
+
+    # Sets this model's *referent* item (whatever the meaning
+    # of that is) to *value*.
+    #
+    # Models may choose to override this method.
+    #
+    # Returns nil if found no *referent* item (this is the
+    # default meaning; it may be changed by the overriding
+    # model).
+    def []=(referent : Model, value : Model) : Model?
+    end
   end
 
   # The parent of all `Model`s represented by a Crystal struct.
@@ -439,11 +461,11 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
-    delegate :[], :<<, :map, :each, to: @value
+    delegate :[], :<<, :map, :each, :size, to: @value
 
     # Returns the length of this vector.
     def to_num
-      Num.new(@value.size)
+      Num.new(size)
     end
 
     def to_vec
@@ -465,11 +487,11 @@ module Ven::Suite
     end
 
     def true?
-      @value.size != 0
+      size != 0
     end
 
     def length
-      @value.size
+      size
     end
 
     def []?(index : Int)
@@ -478,6 +500,12 @@ module Ven::Suite
 
     def []?(range : Range)
       @value[range]?.try { |subset| Vec.new(subset) }
+    end
+
+    def []=(index : Num, value : Model)
+      return if size < (index = index.to_i)
+
+      @value[index] = value
     end
 
     def to_s(io)
@@ -861,6 +889,31 @@ module Ven::Suite
     # the *other* box.
     def eqv?(other : MBox)
       @parent == other
+    end
+
+    # Sets *referent* field of this box instance to *value*.
+    #
+    # If *referent* is one of the typed fields (i.e., it was
+    # declared as a box parameter and thus has a type), a
+    # match against that type is performed.
+    def []=(referent : Str, value : Model)
+      field = referent.value
+
+      return unless @namespace.has_key?(field)
+
+      if (parent = @parent).is_a?(MBox)
+        # Make sure the types match, if value's one of the
+        # parameters, that is.
+        typed_at = parent.params.index(field)
+
+        if typed_at && !value.match(type = parent.given[typed_at])
+          raise ModelCastException.new(
+            "type mismatch in assignment to '#{field}': " \
+            "expected #{type}, got #{value}")
+        end
+      end
+
+      @namespace[field] = value
     end
 
     def to_s(io)

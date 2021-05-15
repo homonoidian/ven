@@ -5,16 +5,6 @@ expose std;
 # Invokes all callable items in this vector.
 #
 # ```
-# fun foo {
-#  1
-# }
-#
-# ensure __iter([foo, 2, 3]) is [1, 2, 3]
-# ```
-#
-# Or, if used as a hook,
-#
-# ```
 # ensure [foo, 2, 3]() is [1, 2, 3]
 # ```
 fun<vec> __iter =

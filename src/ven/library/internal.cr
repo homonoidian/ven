@@ -34,6 +34,12 @@ module Ven::Library
       input.value[cut.value.to_big_i...]
     end
 
+    # Sets *reference*'s *referent* item (whatever the meaning
+    # of that is) to *value*.
+    def set_referent(reference, referent, value)
+      reference.set_referent(referent, value)
+    end
+
     true_ = MBool.new(true)
     false_ = MBool.new(false)
 

@@ -314,9 +314,11 @@ module Ven::Parselet
       # Make sure that the `fields` block consists of assignments,
       # and construct the namespace.
       namespace = fields.map do |field|
-        field.is_a?(QAssign) \
-          ? { field.target, field.value }
-          : die("only assignments are legal in box blocks")
+        unless field.is_a?(QAssign) && (target = field.target).is_a?(QSymbol)
+          die("expected an assignment to a symbol")
+        end
+
+        { target, field.value }
       end
 
       QBox.new(tag, name, params, givens, namespace.to_h)

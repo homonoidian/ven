@@ -124,6 +124,11 @@ module Ven
       VSymbol.new({{name}}, {{nest}})
     end
 
+    # Issues a hook call to a function called *name*.
+    private macro hook(tag, name, *args)
+      visit QCall.new({{tag}}, QRuntimeSymbol.new(QTag.void, {{name}}), {{*args}})
+    end
+
     # Issues the appropriate field gathering instructions
     # for field accessor *accessor*.
     private def field!(accessor : FAImmediate)
@@ -263,18 +268,48 @@ module Ven
     end
 
     def visit!(q : QAssign)
-      visit(q.value)
-      @context.bound(q.target.value) if q.global
-      issue(Opcode::TAP_ASSIGN, sym q.target.value)
+      case target = q.target
+      when QSymbol
+        visit(q.value)
+        @context.bound(target.value) if q.global
+        issue(Opcode::TAP_ASSIGN, sym target.value)
+      when QCall
+        # We'll transform this:
+        #   ~> x(0) = 1
+        # To this:
+        #   ~> __call_assign(x, 1, 0)
+        # And this:
+        #   ~> x("foo")(0) = 1
+        # To this:
+        #   ~> __call_assign(x("foo"), 1, 0)
+        # Et cetera.
+        hook(q.tag, "__call_assign", [target.callee, q.value] + target.args)
+      end
     end
 
     def visit!(q : QBinaryAssign)
-      target = sym(q.target.value)
+      case target = q.target
+      when QSymbol
+        symbol = sym(target.value)
 
-      visit(q.value)
-      issue(Opcode::SYM, target)
-      issue(Opcode::BINARY_ASSIGN, q.operator)
-      issue(Opcode::POP_ASSIGN, target)
+        visit(q.value)
+        issue(Opcode::SYM, symbol)
+        issue(Opcode::BINARY_ASSIGN, q.operator)
+        issue(Opcode::POP_ASSIGN, symbol)
+      when QCall
+        # We'll transform this:
+        #   ~> x(0) += 1
+        # To this:
+        #   ~> __call_assign(x, x(0) + 1, 0)
+        # And this:
+        #   ~> x("foo")(0) += 1
+        # To this:
+        #   ~> __call_assign(x("foo"), x("foo")(0) + 1, 0)
+        # Et cetera.
+        hook(q.tag, "__call_assign",
+          [target.callee, QBinary.new(q.tag, q.operator, target, q.value)] +
+           target.args)
+      end
     end
 
     def visit!(q : QCall)
