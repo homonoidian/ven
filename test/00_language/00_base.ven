@@ -1,3 +1,7 @@
+distinct ven.tests.language.base;
+
+say("00_language/00_base.ven");
+
 # Basic 'ensure' behavior: dies only if 'false':
 
 ensure true;
@@ -143,3 +147,4 @@ ensure 10 x "a" is "aaaaaaaaaa";
 ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
+say("-> [PASS]");

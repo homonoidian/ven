@@ -1,0 +1,27 @@
+distinct ven.tests.std.std;
+
+expose std;
+
+say("01_std/00_std.ven");
+
+# true?():
+ensure true?(0) is true;
+ensure true?("") is true;
+ensure true?([]) is true;
+ensure true?(false) is false;
+
+# ()=:
+{
+  values = [1, 2, 3];
+  values(1) = "foo";
+  ensure values is [1, "foo", 3];
+};
+
+# (_, *)=
+{
+  values = [0, 1, 2];
+  values(0, 1) = "foo";
+  ensure values is ["foo", "foo", 2];
+};
+
+say("-> [PASS]");

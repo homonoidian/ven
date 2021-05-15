@@ -299,11 +299,11 @@ module Ven
       when QCall
         # We'll transform this:
         #   ~> x(0) += 1
-        # To this:
+        # Into this:
         #   ~> __call_assign(x, x(0) + 1, 0)
         # And this:
         #   ~> x("foo")(0) += 1
-        # To this:
+        # Into this:
         #   ~> __call_assign(x("foo"), x("foo")(0) + 1, 0)
         # Et cetera.
         hook(q.tag, "__call_assign",

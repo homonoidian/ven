@@ -1,3 +1,9 @@
+distinct ven.tests.language.return_;
+
+say("00_language/02_return.ven");
+
+{
+
 # Statement return -----------------------------------------
 
 fun return-immediately {
@@ -165,3 +171,7 @@ fun statement-return-overrides-expression-return {
 }
 
 ensure statement-return-overrides-expression-return() is 1;
+
+};
+
+say("-> [PASS]");

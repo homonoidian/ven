@@ -1,0 +1,24 @@
+# Runs the tests.
+#
+# The sole purpose of this file's existence is to bring all
+# Ven tests together, that is, under one runnable distinct.
+#
+# If you have Inquirer running, you can run this file from
+# anywhere by typing:
+#   > ven sanity
+
+distinct sanity;
+
+# Ideally, we `expose ven.tests`. But the order they will be
+# exposed in is not really guaranteed (by Ven); and we ourselves
+# did not specify one.
+
+expose ven.tests.language.base;
+expose ven.tests.language.scope;
+expose ven.tests.language.return_;
+expose ven.tests.language.boxes;
+expose ven.tests.language.diamond;
+
+expose ven.tests.std.std;
+expose ven.tests.std.str;
+expose ven.tests.std.vec;

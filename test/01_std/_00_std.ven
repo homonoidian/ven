@@ -1,7 +1,0 @@
-expose std;
-
-# true?():
-ensure true?(0) is true;
-ensure true?("") is true;
-ensure true?([]) is true;
-ensure true?(false) is false;

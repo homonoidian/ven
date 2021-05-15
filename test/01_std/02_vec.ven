@@ -1,4 +1,8 @@
+distinct ven.tests.std.vec;
+
 expose std;
+
+say("01_std/02_vec.ven");
 
 fun foo = 1;
 
@@ -14,3 +18,5 @@ ensure [1, 2, 3].empty?() is false;
 ensure [].same?() is true;
 ensure [1, 1, 1].same?() is true;
 ensure [1, 2, 3].same?() is false;
+
+say("-> [PASS]");

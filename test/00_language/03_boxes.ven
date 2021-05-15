@@ -1,3 +1,9 @@
+distinct ven.tests.language.boxes;
+
+say("00_language/03_boxes.ven");
+
+{
+
 box A;
 box B;
 
@@ -55,4 +61,8 @@ loop (i = 0; i < 1_000; i++) {
 
   timeit.a;
   timeit.b;
-}
+};
+
+};
+
+say("-> [PASS]");

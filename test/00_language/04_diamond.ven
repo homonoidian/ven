@@ -1,3 +1,9 @@
+distinct ven.tests.language.diamond;
+
+say("00_language/04_diamond.ven");
+
+{
+
 box Foo(a, b) given num;
 
 
@@ -25,3 +31,7 @@ foo.dec("B", 2);
 
 ensure foo.a is 3;
 ensure foo.b is -3;
+
+};
+
+say("-> [PASS]")

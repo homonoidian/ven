@@ -1,4 +1,8 @@
+distinct ven.tests.std.str;
+
 expose std;
+
+say("01_std/01_str.ven");
 
 # starts-with?():
 ensure "foobar".starts-with?("foo") is true;
@@ -14,3 +18,5 @@ ensure "foo".empty?() is false;
 ensure "aaa".same?() is true;
 ensure "".same?() is true;
 ensure "aba".same?() is false;
+
+say("-> [PASS]");
