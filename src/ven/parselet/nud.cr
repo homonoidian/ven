@@ -35,6 +35,8 @@ module Ven::Parselet
 
   # Reads a string into QString.
   class PString < Nud
+    # Escaped escape codes and what they should be
+    # unescaped into.
     ESCAPES = {
       "\\n"  => "\n",
       "\\r"  => "\r",
@@ -43,15 +45,42 @@ module Ven::Parselet
       "\\\\" => "\\",
     }
 
-    # Evaluates the escaped escape sequences in *source*.
+    # The regex that matches Ven string interpolation.
+    INTERPOLATION = /\$(#{Ven.regex_for(:SYMBOL)})/
+
+    # Evaluates the escaped escape sequences in *content*.
     #
     # For example, `"1\\n2\\n"` will be evaluated to `"1\n2\n"`.
-    def unescape(source : String)
-      source.gsub(/\\([nrt"\\])/, ESCAPES)
+    def unescape(content : String)
+      content.gsub(/\\[nrt"\\]/, ESCAPES)
+    end
+
+    # If there are any Ven interpolations in the given *content*,
+    # generates a series of stitch operations (`~`) that will
+    # interpolate as expected. Otherwise, returns *content*
+    # as a `QString`.
+    def interpolate(tag : QTag, content : String) : QString | QBinary
+      final = 0
+      parts = Quotes.new
+
+      content.scan(INTERPOLATION) do |match|
+        parts << QString.new(tag, content[final...match.begin]) <<
+                 QRuntimeSymbol.new(tag, $1)
+        final = match.end
+      end
+
+      # Append the trail:
+      parts << QString.new(tag, content[final...])
+
+      # Reduce down to one long stitch ('~'), or return
+      # the trail:
+      parts.reduce do |memo, part|
+        QBinary.new(tag, "~", memo, part)
+      end
     end
 
     def parse(tag, token)
-      QString.new(tag, unescape lexeme[1...-1])
+      interpolate(tag, unescape lexeme[1...-1])
     end
   end
 
