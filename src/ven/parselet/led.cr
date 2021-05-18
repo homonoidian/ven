@@ -13,6 +13,9 @@ module Ven::Parselet
     # Subclasses of `Led` should not override this method.
     # They should (actually, must) implement `parse` instead.
     def parse!(@parser : Ven::Reader, tag : QTag, left : Quote, token : Ven::Word)
+      # Reset the semicolon want each pass.
+      @semicolon = true
+
       parse(tag, left, token)
     end
 

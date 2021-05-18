@@ -10,6 +10,9 @@ module Ven::Parselet
     # Subclasses of `Nud` should not override this method.
     # They should (actually, must) implement `parse` instead.
     def parse!(@parser : Reader, tag : QTag, token : Word)
+      # Reset the semicolon want each pass.
+      @semicolon = true
+
       parse(tag, token)
     end
 
@@ -38,6 +41,7 @@ module Ven::Parselet
     # Escaped escape codes and what they should be
     # unescaped into.
     ESCAPES = {
+      "\\e"  => "\e",
       "\\n"  => "\n",
       "\\r"  => "\r",
       "\\t"  => "\t",
@@ -52,7 +56,7 @@ module Ven::Parselet
     #
     # For example, `"1\\n2\\n"` will be evaluated to `"1\n2\n"`.
     def unescape(content : String)
-      content.gsub(/\\[nrt"\\]/, ESCAPES)
+      content.gsub(/\\[a-z"\\]/, ESCAPES)
     end
 
     # If there are any Ven interpolations in the given *content*,

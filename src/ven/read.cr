@@ -22,7 +22,7 @@ module Ven
       # `&_` and `_` should be handled as if they were keywords.
       /(?:[$_a-zA-Z](?:\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
     {% elsif type == :STRING %}
-      /"(?:[^\n"\\]|\\[ntr\\"])*"/
+      /"(?:[^\n"\\]|\\[$a-z\\"])*"/
     {% elsif type == :REGEX %}
       /`(?:[^\\`]|\\.)*`/
     {% elsif type == :NUMBER %}
