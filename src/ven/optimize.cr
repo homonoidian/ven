@@ -104,6 +104,25 @@ module Ven
             if resolution
               break snippet.replace(start, 3, Opcode::STR, to_offset resolution)
             end
+          when [Opcode::BINARY, Opcode::STR, Opcode::BINARY]
+            # A special-case optimization to avoid creating
+            # an empty string when stitching:
+            #   ~> "a" ~ "b" ~ ""
+            # Gets optimized to:
+            #   ==> "a" ~ "b"
+            # But:
+            #   ~> "a" ~ ""
+            # Does not:
+            #   ==> "a" ~ ""
+            # This is useful when working with interpolation:
+            #   ~> "hello$world"
+            #   => "hello" ~ world ~ ""
+            #   ==> "hello" ~ world
+            if static_as(triplet[0], String) == "~"   &&
+                 static_as(triplet[1], String) == ""  &&
+                 static_as(triplet[2], String) == "~"
+              break snippet.remove(start, 2)
+            end
           end
         end
 
