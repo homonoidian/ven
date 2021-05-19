@@ -9,7 +9,6 @@ module Ven
   # They manage the workhorses in a simple, graceful and
   # powerful way.
   #
-  # Basic usage:
   # ```
   # puts Program.new("1 + 1").run # 2 : Num
   # ```

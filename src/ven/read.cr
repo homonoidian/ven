@@ -57,8 +57,6 @@ module Ven
 
   # A reader capable of parsing Ven.
   #
-  # Basic usage (see `Reader.read`):
-  #
   # ```
   # puts Ven::Reader.read("2 + 2")
   # ```

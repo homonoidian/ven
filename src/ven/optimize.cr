@@ -4,7 +4,6 @@ module Ven
   # Matches sequences of bytecode instructions against patterns,
   # and, based on that, folds, removes or modifies them.
   #
-  # Basic usage:
   # ```
   # puts Optimizer.optimize(unstitched_chunks) # => stitched chunks
   # ```

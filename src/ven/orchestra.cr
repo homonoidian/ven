@@ -23,7 +23,6 @@ module Ven
   # Their order, as well as files themselves, are managed
   # entirely by Inquirer.
   #
-  # Basic usage:
   # ```
   # orchestra = Ven::Orchestra.new
   #

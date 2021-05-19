@@ -12,7 +12,6 @@ module Ven
   # process of *stitching*. Once this process is finished,
   # the chunks are thought of as *stitched*.
   #
-  # Basic usage:
   # ```
   # puts Compiler.compile(quotes) # ==> unstitched chunks
   # ```
