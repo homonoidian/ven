@@ -20,19 +20,21 @@ module Ven
   macro regex_for(type)
     {% if type == :SYMBOL %}
       # `&_` and `_` should be handled as if they were keywords.
-      /(?:[$_a-zA-Z](?:\-?\w)+|[a-zA-Z])[?!]?|&?_|\$/
+      /(?:(?:[$_a-zA-Z](?:\-?\w)+|[a-zA-Z])[?!]?|&?_|\$)/
     {% elsif type == :STRING %}
-      /"(?:[^\n"\\]|\\[$a-z\\"])*"/
+      /"(?:[^\n"\\]|#{Ven.regex_for(:STRING_ESCAPES)})*"/
+    {% elsif type == :STRING_ESCAPES %}
+      /\\[$a-z\\"]/
     {% elsif type == :REGEX %}
       /`(?:[^\\`]|\\.)*`/
     {% elsif type == :NUMBER %}
-      /(?:\d(?:_?\d)*)?\.(?:_?\d)+|[1-9](?:_?\d)*|0/
+      /(?:(?:\d(?:_?\d)*)?\.(?:_?\d)+|[1-9](?:_?\d)*|0)/
     {% elsif type == :SPECIAL %}
-      /-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*]/
+      /(?:-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*])/
     {% elsif type == :IGNORE %}
-      /[ \n\r\t]+|#(?:[ \t][^\n]*|\n+)/
+      /(?:[ \n\r\t]+|#(?:[ \t][^\n]*|\n+))/
     {% else %}
-      {{ raise "no word type #{type}" }}
+      {{ raise "regex_for(): no regex for #{type}" }}
     {% end %}
   end
 
@@ -63,12 +65,12 @@ module Ven
   class Reader
     include Suite
 
-    RX_REGEX   = /^(?:#{Ven.regex_for(:REGEX)})/
-    RX_SYMBOL  = /^(?:#{Ven.regex_for(:SYMBOL)})/
-    RX_STRING  = /^(?:#{Ven.regex_for(:STRING)})/
-    RX_NUMBER  = /^(?:#{Ven.regex_for(:NUMBER)})/
-    RX_IGNORE  = /^(?:#{Ven.regex_for(:IGNORE)})/
-    RX_SPECIAL = /^(?:#{Ven.regex_for(:SPECIAL)})/
+    RX_REGEX   = Ven.regex_for(:REGEX)
+    RX_SYMBOL  = Ven.regex_for(:SYMBOL)
+    RX_STRING  = Ven.regex_for(:STRING)
+    RX_NUMBER  = Ven.regex_for(:NUMBER)
+    RX_IGNORE  = Ven.regex_for(:IGNORE)
+    RX_SPECIAL = Ven.regex_for(:SPECIAL)
 
     # Built-in keywords.
     KEYWORDS = %w(
@@ -171,7 +173,7 @@ module Ven
     # Matches offset source against a regex *pattern*. If successful,
     # increments the offset by matches' length.
     private macro match(pattern)
-      @offset += $0.size if @source[@offset..] =~ {{pattern}}
+      @offset += $0.size if @source[@offset..].starts_with?({{pattern}})
     end
 
     # Returns the current word and consumes the next one.

@@ -41,6 +41,7 @@ module Ven::Parselet
     # Escaped escape codes and what they should be
     # unescaped into.
     ESCAPES = {
+      "\\$"  => "$",
       "\\e"  => "\e",
       "\\n"  => "\n",
       "\\r"  => "\r",
@@ -49,42 +50,49 @@ module Ven::Parselet
       "\\\\" => "\\",
     }
 
-    # The regex that matches Ven string interpolation.
-    INTERPOLATION = /\$(#{Ven.regex_for(:SYMBOL)})/
-
-    # Evaluates the escaped escape sequences in *content*.
-    #
-    # For example, `"1\\n2\\n"` will be evaluated to `"1\n2\n"`.
-    def unescape(content : String)
-      content.gsub(/\\[a-z"\\]/, ESCAPES)
-    end
-
-    # If there are any Ven interpolations in the given *content*,
-    # generates a series of stitch operations (`~`) that will
-    # interpolate as expected. Otherwise, returns *content*
-    # as a `QString`.
-    def interpolate(tag : QTag, content : String) : QString | QBinary
+    def parse(tag, token)
+      raw = lexeme[1...-1]
+      chops = [QString.new(tag, "")] of Quote
       final = 0
-      parts = Quotes.new
+      offset = 0
 
-      content.scan(INTERPOLATION) do |match|
-        parts << QString.new(tag, content[final...match.begin]) <<
-                 QRuntimeSymbol.new(tag, $1)
-        final = match.end
+      loop do
+        target = chops.last.as(QString)
+
+        case pad = raw[offset..]
+        when .empty? then break
+        #
+        # Interpret escape sequences.
+        #
+        when .starts_with? Ven.regex_for(:STRING_ESCAPES)
+          target.value += ESCAPES[$0]? || $0
+        #
+        # Chop according to interpolations.
+        #
+        # Note that "Hello, $" means "Hello, $$" (interpolate
+        # the contextual).
+        #
+        when .starts_with? /\$(#{Ven.regex_for(:SYMBOL)}?)/
+          chops << QRuntimeSymbol.new(tag, $1.empty? ? "$" : $1) \
+                << QString.new(tag, "")
+          final = offset + $0.size
+        #
+        # Skip over all other characters.
+        #
+        else
+          target.value += pad[0]
+          offset += 1
+          next
+        end
+
+        offset += $0.size
       end
 
-      # Append the trail:
-      parts << QString.new(tag, content[final...])
-
-      # Reduce down to one long stitch ('~'), or return
-      # the trail:
-      parts.reduce do |memo, part|
+      # Reduce the chops down to a stitching operation (or
+      # a single QString).
+      chops.reduce do |memo, part|
         QBinary.new(tag, "~", memo, part)
       end
-    end
-
-    def parse(tag, token)
-      interpolate(tag, unescape lexeme[1...-1])
     end
   end
 

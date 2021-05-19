@@ -206,19 +206,19 @@ module Ven
 
       loop do
         case pad = snippet[offset..]
-        when Reader::RX_REGEX
+        when .starts_with? Ven.regex_for(:STRING)
           result += $0.colorize.yellow.to_s
-        when Reader::RX_SYMBOL
+        when .starts_with? Ven.regex_for(:SYMBOL)
           if Reader::KEYWORDS.any?($0)
             result += $0.colorize.blue.to_s
           else
             result += $0.colorize.bold.toggle(@orchestra.hub[$0]?).to_s
           end
-        when Reader::RX_STRING
+        when .starts_with? Ven.regex_for(:REGEX)
           result += $0.colorize.yellow.to_s
-        when Reader::RX_NUMBER
+        when .starts_with? Ven.regex_for(:NUMBER)
           result += $0.colorize.magenta.to_s
-        when /^#([ \t][^\n]*|\n+)/
+        when .starts_with? Ven.regex_for(:IGNORE)
           result += $0.colorize.dark_gray.to_s
         when .empty?
           break
