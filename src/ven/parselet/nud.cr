@@ -185,10 +185,13 @@ module Ven::Parselet
       params = if? "(", params!, [] of String
       givens = if? "GIVEN", given!, Quotes.new
       slurpy = "*".in?(params)
-      body = if? "=", [led], block
+      body = if? "=", [body_source = led], block
 
       if body.empty?
         die("empty function body illegal")
+      elsif body_source.is_a?(QBlock)
+        # Don't need a semicolon if there's a block after '='.
+        @semicolon = false
       elsif !slurpy && !params && givens
         die("zero-arity functions cannot have a 'given'")
       elsif diamond

@@ -121,7 +121,7 @@ fun block_return-a-if-a-gt-b(a, b) =
       {
         (return a);
       }
-    }
+    };
 
 fun block_return-overwrites-value = {
   { (return "overwrites"); };
