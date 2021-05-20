@@ -39,29 +39,35 @@ Note that:
 
 First, you have to start Inquirer:
 
-1. `/path/to/bin/inquirer start -d` starts Inquirer in *detached* mode,
-   i.e., as a daemon that will be running in background; Omit the `-d`
-   if you want to see what's going on, that is, if you want to see live
-   server/daemon log.
-2. You can see whether Inquirer is running by asking it: `/path/to/bin/inquirer shell`.
-   Type `ping` into the prompt, and you'll hopefully see `pong`;
-3. You can quit from the Inquirer shell by pressing *CTRL+C*;
-4. **It is recommended to stop Inquirer after you've fiddled with it: it's
-   `/path/to/bin/inquirer stop`, or `die` from the interactive shell.**
+1. `/path/to/bin/inquirer start -d` starts Inquirer in *detached*
+   mode, i.e., as a daemon that will run in the background;
+   Omit the `-d` flag if you want to see what the server is
+   up to, live.
+2. You can see whether Inquirer is running by asking it:
+   `/path/to/bin/inquirer shell`. Type `ping` into the prompt,
+   and you'll hopefully see `pong`;
+3. You can quit from the Inquirer shell by pressing *CTRL+D*;
+4. **It is recommended to stop Inquirer after you've fiddled
+   with it: it's `/path/to/bin/inquirer stop`, or `die` from
+   the interactive shell.**
 
 Second, try to run Ven:
 
-1. Run `ven sanity`. If it worked with no errors, you have built Ven &
-   friends successfully and know how to run it all now. If it didn't,
-   make sure Inquirer's running and, if it is and things still fall
-   apart, file an issue here or in the Inquirer repository.
+1. Run `ven sanity`. If it worked with no errors, you have
+   built Ven & friends successfully and know how to run it
+   all now. If it didn't, make sure Inquirer's running and,
+   if it is and things still fall apart, file an issue here
+   or in the Inquirer repository.
 2. Run `ven` for an interactive prompt. Play with it?
-3. If you want to see what's going under the hood, pass `-j` (or `--just`) flag
-   (`ven -j <...>`). It exposes different stages of Ven interpretation. Try
-   `-j read`, `-j compile` and `-j optimize` to see what happens. If you don't
-   know what to type, type `1 + 1` :slightly_smiling_face:
-4. You can run files by just passing them to `ven`: `ven examples/calculator.ven`.
-   The `-j` flag works here, too.
+3. If you want to see what's going under the hood, pass `-j`
+   (or `--just`) flag (`ven -j <...>`). It exposes different
+   stages of Ven interpretation. Try `-j read`, `-j compile`
+   and `-j optimize` to see what happens. If you don't know
+   what to type, type `1 + 1` :slightly_smiling_face:
+4. You can run files by just passing them to `ven`: e.g., try
+   try `ven examples/calculator.ven`. The `-j` flag works here,
+   too, so `ven -j optimize examples/calculator.ven` will dump
+   the optimized bytecode for that file.
 
 ### Contributing
 
