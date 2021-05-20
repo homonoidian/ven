@@ -245,7 +245,7 @@ module Ven
           flag.name        = "port"
           flag.short       = "-p"
           flag.long        = "--port"
-          flag.default     = 3000
+          flag.default     = 12879
           flag.description = "Set the referent Inquirer port."
         end
 

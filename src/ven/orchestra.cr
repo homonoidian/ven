@@ -48,7 +48,7 @@ module Ven
 
     # Makes an Orchestra for an Inquirer server running at
     # the given *port*.
-    def initialize(port = 3000)
+    def initialize(port = 12879)
       @client = client_from(port)
       @isolated = !@client.running?
       # Load the built-in libraries.
