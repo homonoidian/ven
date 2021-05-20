@@ -10,12 +10,25 @@ module Ven
   class CLI
     include Suite
 
+    #
+    # These represent the flags. Look into their corresponding
+    # helps in the Commander scaffold to know what they are for.
+    #
     @quit = true
     @final = "eval"
-    @legate = uninitialized Legate
     @result = false
     @measure = false
+
+    # The orchestra and legate cannot be initialized at
+    # this point, and they cannot be used before they've
+    # been initialized. That's why these `uninitialized`s
+    # are safe (are they?)
+    @legate = uninitialized Legate
     @orchestra = uninitialized Orchestra
+
+    def initialize
+      Colorize.on_tty_only!
+    end
 
     # Prints an error according to the following template:
     # `[*embraced*] *message*`.
@@ -126,9 +139,7 @@ module Ven
       result  = nil
       program = @orchestra.from(source, file, @legate, run: false)
 
-      # Measure the duration of the whole thing, for we will display
-      # only the measurement of the final step (including those that
-      # were before, of course).
+      # Measure the duration of the whole thing.
       duration = Time.measure do
         case @final
         when "read"
@@ -163,8 +174,10 @@ module Ven
 
       display(result)
 
+      # Again, we show **the total time** it took the program
+      # to execute here.
       if @measure
-        puts "[#{@final}: #{duration.total_microseconds}us]".colorize.bold
+        puts "[took #{duration.total_microseconds}us]".colorize.bold
       end
     rescue e : VenError
       die(e)
