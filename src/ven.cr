@@ -10,10 +10,11 @@ module Ven
   class CLI
     include Suite
 
-    #
+    # Contains the path to Ven REPL history file.
+    HISTORY = ENV["VEN_HISTORY"]? || Path.home / ".ven_history"
+
     # These represent the flags. Look into their corresponding
     # helps in the Commander scaffold to know what they are for.
-    #
     @quit = true
     @final = "eval"
     @result = false
@@ -191,6 +192,12 @@ module Ven
         yielder.call ctx, highlight(line)
       end
 
+      if File.exists?(HISTORY) && File.file?(HISTORY) && File.readable?(HISTORY)
+        File.open(HISTORY, "r") do |io|
+          fancy.history.load(io)
+        end
+      end
+
       puts "[Ven #{VERSION}]",
            "Hit CTRL+D to exit."
 
@@ -202,14 +209,20 @@ module Ven
         end
 
         if source.nil? # CTRL+D pressed.
-          puts "Bye bye!"
-          exit 0
+          break
         elsif source.empty?
           next
         end
 
         run("interactive", source)
       end
+
+      File.open(HISTORY, "w") do |io|
+        fancy.history.save(io)
+      end
+
+      puts "Bye bye!"
+      exit 0
     end
 
     # Highlights a *snippet* of Ven code.
