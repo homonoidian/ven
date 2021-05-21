@@ -214,6 +214,26 @@ module Ven
           next
         end
 
+        loop do
+          # As ugly as it seems, it'll work for now.
+          if !(source.count('(') != 0 && source.count('(') > source.count(')')) &&
+             !(source.count('[') != 0 && source.count('[') > source.count(']')) &&
+             !(source.count('{') != 0 && source.count('{') > source.count('}'))
+            break
+          end
+
+          begin
+            unless snippet = fancy.readline("... ").try(&.strip)
+              # CTRL+D pressed.
+              break
+            end
+
+            source += "\n#{snippet}"
+          rescue Fancyline::Interrupt
+            break
+          end
+        end
+
         run("interactive", source)
       end
 
