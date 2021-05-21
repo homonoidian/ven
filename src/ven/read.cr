@@ -387,6 +387,12 @@ module Ven
       !!nud_for?(@word[:type]).try(&.class.== pick)
     end
 
+    # Returns whether the current word is a nud parselet of
+    # any type except *pick*.
+    def is_nud?(but pick : Parselet::Nud.class) : Bool
+      !!nud_for?(@word[:type]).try(&.class.!= pick)
+    end
+
     # Returns whether the current word is a nud parselet.
     def is_nud?
       !!nud_for?(@word[:type])

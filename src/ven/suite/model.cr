@@ -920,4 +920,29 @@ module Ven::Suite
       io << "instance of " << @parent
     end
   end
+
+  # Represents a Ven lambda (nameless function & closure).
+  class MLambda < MFunction
+    # Lambda has to have some name for compatibility with other
+    # MFunctions.
+    getter name = "lambda"
+    # Returns the **surrounding** scope (singular!) of this
+    # lambda. I.e., won't contain globals etc.
+    getter scope : Context::Machine::Scope
+    getter arity : Int32
+    getter slurpy : Bool
+    getter target : Int32
+    getter params : Array(String)
+
+    def initialize(@scope, @arity, @slurpy, @params, @target)
+    end
+
+    def variant?(args)
+      self if (@slurpy && args.size >= @arity) || args.size == @arity
+    end
+
+    def to_s(io)
+      io << "lambda " << "(" << params.join(", ") << ")"
+    end
+  end
 end

@@ -665,6 +665,43 @@ module Ven
       issue(Opcode::POP_ASSIGN, sym name)
     end
 
+    def visit!(q : QLambda)
+      slurpy = q.slurpy
+      params = q.params
+
+      target = uninitialized Int32
+      lambda = uninitialized VFunction
+
+      aritious = params.reject("*")
+      arity    = aritious.size
+
+      @context.child do
+        under "lambda" do |target|
+          lambda = VFunction.new(
+            VSymbol.nameless,
+            target,      # body chunk
+            params,      # params
+            0,           # amount of 'given's
+            arity,       # minimum amount of params
+            slurpy,      # slurpiness
+          )
+
+          # `Opcode::REST` interprets the slurpie ('*').
+          issue(Opcode::REST, arity) if slurpy
+
+          aritious.reverse_each do |param|
+            issue(Opcode::POP_ASSIGN, mksym param)
+          end
+
+          visit(q.body)
+          # RET will work fine with lambdas.
+          issue(Opcode::RET)
+        end
+      end
+
+      issue(Opcode::LAMBDA, lambda)
+    end
+
     # Makes a compiler, compiles *quotes* with it and disposes
     # the compiler.
     #

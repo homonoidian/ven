@@ -56,6 +56,7 @@ module Ven::Library
     regex = MRegex
 
     partial = MPartial
+    lambda = MLambda
     builtin = MBuiltinFunction
     generic = MGenericFunction
     concrete = MConcreteFunction

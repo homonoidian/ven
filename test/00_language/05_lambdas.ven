@@ -1,0 +1,52 @@
+distinct ven.tests.language.lambdas;
+
+say("00_language/05_lambdas.ven");
+
+{
+  ensure (a) a is lambda;
+  ensure a dies; # No leak of 'a'?
+  ensure (() 1)() is 1;
+  ensure ((a) a)(1) is 1;
+  ensure ((a, b) a + b)(1, 2) is 3;
+  ensure a dies; # No leak of 'a', 'b'?
+  ensure b dies;
+
+  # The crucial behavior of lambda is saving the surrounding
+  # scope:
+  {
+    inc-by = 1;
+    add = (a) a + inc-by;
+    ensure add(1) is 2;
+    inc-by = 2;
+    # Saved the scope & scope has the old value.
+    ensure add(1) is 2;
+  };
+
+  # getX, getY belong to this scope but are defined in
+  # another one.
+  getX := false;
+  getY := false;
+
+  {
+    x = 42;
+    y = [1, 2, 3];
+    getX = () x;
+    getY = () y;
+    y &= 4;
+    ensure y is [1, 2, 3, 4];
+  };
+
+  ensure getX() is 42;
+  ensure getY() is [1, 2, 3];
+
+  # Currying:
+  fun curry(f) = (a) (b) f(a, b);
+  fun sum(a, b) = a + b;
+  ensure sum(1, 2) is 3;
+  ensure curry(sum)(1)(2) is 3;
+
+  rec = (n) if n < 10 rec(n + 1) else n;
+  ensure rec(0) is 10;
+};
+
+say("-> [PASS]")

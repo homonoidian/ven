@@ -13,7 +13,8 @@ module Ven
     # `Program`: the amount of optimize passes.
     property optimize = 8
 
-    # `Machine`: the resulting timetable (if `measure` enabled).
+    # `Machine`: returns the resulting timetable (if had
+    # `measure` enabled).
     property timetable = Ven::Machine::Timetable.new
   end
 end

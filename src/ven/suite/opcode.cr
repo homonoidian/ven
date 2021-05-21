@@ -74,6 +74,7 @@ module Ven::Suite
 
     FUN = 2048
     BOX
+    LAMBDA
 
     # Returns the kind of payload an instruction takes, or
     # nil if it does not take any.

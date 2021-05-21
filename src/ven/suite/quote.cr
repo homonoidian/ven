@@ -153,4 +153,9 @@ module Ven::Suite
     params : Array(String),
     given : Quotes,
     namespace : Hash(QSymbol, Quote))
+
+  defquote(QLambda,
+    params : Array(String),
+    body : Quote,
+    slurpy : Bool)
 end

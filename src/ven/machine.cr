@@ -476,6 +476,8 @@ module Ven
       case existing = @context[symbol]?
       when MGenericFunction
         return existing.add(defee)
+      when MLambda
+        # pass
       when MFunction
         if existing != defee
           defee = MGenericFunction.new(name)
@@ -853,6 +855,16 @@ module Ven
                   next invoke(callee.to_s, found.target, args, Frame::Goal::Function)
                 when MBuiltinFunction
                   put found.callee.call(self, args)
+                when MLambda
+                  # Invoke the lambda manually, as it's not
+                  # worth it to make this a special-case of
+                  # invoke():
+                  @frames << Frame.new(Frame::Goal::Function, args, found.target)
+                  # Worked without the 'dup', but it's required
+                  # by semantics (is it?)
+                  @context.scopes << found.scope.dup
+                  @context.traces << Trace.new(chunk.file, fetch.line, "lambda")
+                  next
                 else
                   die("improper arguments for #{callee}: #{args.join(", ")}")
                 end
@@ -1000,6 +1012,19 @@ module Ven
             # instance, and I is the instance.
             in Opcode::BOX_INSTANCE
               put MBoxInstance.new(pop.as(MFunction), @context.scopes[-1].dup)
+            # Makes a lambda from the function it receives
+            # as the argument. Assumes there is at least
+            # one scope in the scope hierarchy.
+            in Opcode::LAMBDA
+              lambda = function
+
+              put MLambda.new(
+                @context.scopes.last.dup,
+                lambda.arity,
+                lambda.slurpy,
+                lambda.params,
+                lambda.target,
+              )
             end
           rescue error : ModelCastException | Context::VenAssignmentError
             die(error.message.not_nil!)

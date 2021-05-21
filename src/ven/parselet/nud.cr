@@ -124,10 +124,62 @@ module Ven::Parselet
     end
   end
 
-  # Reads a grouping (an expression wrapped in parens).
+  # Reads a grouping (an expression wrapped in parens), or
+  # a lambda (deduces which one in the process).
   class PGroup < Nud
+    def lambda(tag, params = [] of String)
+      # Notice how lambda consumes the rest of the expression.
+      QLambda.new(tag, params, led, "*".in? params)
+    end
+
     def parse(tag, token)
-      @parser.before(")")
+      # Empty grouping is always an argumentless lambda:
+      # ~> () ...
+      return lambda(tag) if @parser.word!(")")
+
+      # Agent is the expression that initiates a grouping.
+      agent = led
+
+      # Any agent but runtime symbol is always a grouping.
+      unless agent.is_a?(QRuntimeSymbol)
+        return @parser.before(")", -> { agent })
+      end
+
+      # Grouping with a comma in it is always a lambda.
+      if @parser.word!(",")
+        return lambda tag, [agent.value] + @parser.repeat(")", ",", -> {
+          lexeme @parser.expect("SYMBOL", "*")
+        })
+      elsif @parser.expect(")")
+        # ~> (x) + 1
+        #        ^-- Clashes: `(x) { +1 }`
+        #                  OR `x + 1`
+        if @parser.is_nud?(but: PUnary)
+          if type(@parser.word) == "("
+            # Things get sketchy here:
+            #
+            #   ~> (x) (y)
+            #          ^--- is this a strangely-formulated call
+            #               or a lambda body?
+            #
+            # Let's look at the raw source, particularly at
+            # that space you see in the middle. If it is
+            # there, `(y)` is a lambda body; otherwise, it's
+            # an argument to a strangely-formulated call.
+            #
+            #   ~> (foo) (bar)
+            #             ^--- @parser.offset points here
+            unless @parser.@source[@parser.@offset - 2].to_s =~ Ven.regex_for(:IGNORE)
+              return agent
+            end
+          end
+
+          return lambda(tag, [agent.value])
+        end
+      end
+
+      # Fallback to the agent, i.e., the grouping behavior.
+      agent
     end
   end
 

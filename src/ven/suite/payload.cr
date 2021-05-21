@@ -86,6 +86,11 @@ module Ven::Suite
     def to_s(io)
       io << "sym " << @name << "#" << @nest
     end
+
+    # Makes a nameless VSymbol.
+    def self.nameless
+      new("<nameless>", -1)
+    end
   end
 
   # The function payload vehicle.
