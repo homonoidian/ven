@@ -37,7 +37,11 @@ module Ven::Library
     # Sets *reference*'s *referent* item (whatever the meaning
     # of that is) to *value*.
     def set_referent(reference, referent, value)
-      reference.set_referent(referent, value)
+      unless reference[referent] = value
+        machine.die("#{reference} has no set-referent policy for #{referent}")
+      end
+
+      value
     end
 
     true_ = MBool.new(true)

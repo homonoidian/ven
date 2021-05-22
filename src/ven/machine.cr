@@ -830,10 +830,12 @@ module Ven
 
               case callee = pop
               when .indexable?
-                if args.size == 1
-                  put callee.nth(args.first)
-                elsif args.size > 1
-                  put vec args.map { |arg| callee.nth(arg) }
+                if args.size != 0
+                  values = args.map do |arg|
+                    callee[arg]? || die("#{callee}: item(s) not found: #{arg}")
+                  end
+
+                  values.size == 1 ? put values.first : put vec values
                 else
                   # Argumentless indexable call is a call spread:
                   #   `[1, 2, 3].say() # ==> 1\n2\n3\n`

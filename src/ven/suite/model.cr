@@ -19,9 +19,11 @@ module Ven::Suite
   alias Str = MString
   alias Vec = MVector
 
-  # Model weight is, simply speaking, the priority, or defineness,
-  # of a model. A model with higher weight should be evaluated
-  # first, though it really depends on the context.
+  # Model weight is, simply speaking, the priority, or
+  # definedness, of a model.
+  #
+  # Used in, say, generics to determine the order in which
+  # the subordinate concretes should be sorted.
   enum MWeight
     ANON_ANY = 1
     ANY
@@ -48,25 +50,38 @@ module Ven::Suite
       Vec.new([self.as(Model)])
     end
 
-    # Converts (casts) this model into an `MBool`. Inverts
-    # this MBool (applies `not`) if *inverse* is true.
+    # Converts (casts) this model into an `MBool` (inverting
+    # the resulting bool if *inverse* is true).
     def to_bool(inverse = false) : MBool
       MBool.new(inverse ? !true? : true?)
     end
 
-    # Returns whether this model is a false `MBool`. Note
-    # that it is likely **not** the inverse of `true?`.
+    # Returns whether this model is a false `MBool`.
+    #
+    # This is likely **not** the inverse of `true?`.
     def false? : Bool
       false
     end
 
     # Returns a field's value for this model, or nil if this
     # model has no such field.
+    #
+    # This method may be overridden by the subclass if it
+    # wishes to support the following syntax:
+    #
+    # ```ven
+    # foo.field1;
+    # foo.field2;
+    # foo.field3;
+    # foo.[field1, field2, field3];
+    # foo.("field1");
+    # ```
+    #
+    # Where `foo` is this model.
     def field(name : String) : Model?
-      nil
     end
 
-    # Returns whether this model is of the type *other*.
+    # Returns whether this model is of type *other*.
     def of?(other : MType) : Bool
       other.type.is_a?(MClass.class) \
         ? self.class <= other.type.as(MClass.class)
@@ -74,24 +89,21 @@ module Ven::Suite
     end
 
     # :ditto:
-    def of?(other : MAny)
-      true
-    end
-
-    # :ditto:
     def of?(other)
-      false
+      other.is_a?(MAny)
     end
 
-    # Returns whether this model is equal-by-value to the
-    # *other* model.
+    # Returns whether this model is equal-by-value to *other*.
     def eqv?(other : Model) : Bool
       false
     end
 
-    # Returns whether this model is of the type *other*, or
-    # is equal-by-value to *other*.
-    def match(other : Model)
+    # Returns whether this model is of type *other*, or is
+    # equal-by-value to *other*.
+    #
+    # This is mostly useful when matching arguments against
+    # the `given` appendix, hence the name.
+    def match(other : Model) : Bool
       of?(other) || other.eqv?(self)
     end
 
@@ -110,7 +122,7 @@ module Ven::Suite
       MWeight::VALUE
     end
 
-    # Returns the length (#) of this model.
+    # Returns the length of this model.
     #
     # By default, stringifies this model and returns the
     # length of the resulting string.
@@ -118,86 +130,64 @@ module Ven::Suite
       to_s.size
     end
 
-    # Returns the *index*-th item of this model,
-    #
-    # Subclasses should not generally override this method.
-    # They should override `[]?` instead.
-    #
-    # Raises `ModelCastException` if index is improper.
-    def nth(index : Num)
-      self[index.to_i]? ||
-        raise ModelCastException.new(
-          "#{self} is not indexable or was " \
-          "given improper index: #{index}")
-    end
-
-    # Returns a subset of items in this model.
-    #
-    # Subclasses should not generally override this method.
-    # They should override `[]?` instead.
-    #
-    # Raises `ModelCastException` if index is improper.
-    def nth(range : MRange)
-      self[range.start.to_i...range.end.to_i]? ||
-        raise ModelCastException.new(
-          "#{self} is not indexable or was " \
-          "given improper index: #{range}")
-    end
-
-    # :ditto:
-    def nth(other)
-      nth(other.to_num)
+    # Returns whether this model is indexable.
+    def indexable? : Bool
+      {{@type.has_method?("[]?")}}
     end
 
     # Returns *index*-th item of this model.
     #
-    # Subclasses should rather override this method instead
-    # of `nth`.
-    def []?(index : Int)
+    # Subclasses may override this method to add indexing
+    # support.
+    #
+    # Returns nil if found no *index*-th item.
+    def []?(index : MNumber) : Model?
+      self[index.to_i]?
+    end
+
+    # :ditto:
+    def []?(index : Int) : Model?
+    end
+
+    # :ditto:
+    def []?(index)
     end
 
     # Returns a subset of items in this model.
     #
-    # Subclasses should rather override this method instead
-    # of `nth`.
-    def []?(index : Range)
+    # Subclasses may override this method to add subset
+    # support.
+    #
+    # Returns nil if *range* is invalid (too long, etc.)
+    def []?(range : MRange) : Model?
+      self[range.start.to_i...range.end.to_i]?
     end
 
-    # Returns whether this model is indexable (i.e., properly
-    # implements `nth`).
-    def indexable?
-      false
+    # :ditto:
+    def []?(index : Range) : Model?
     end
 
-    # Sets this model's *referent* item (whatever the meaning
-    # of that is) to *value*.
+    # Set-referent is a way of making the following syntax
+    # support this model:
     #
-    # Generally, subclasses should not choose to override
-    # this method. They can override `[]=` instead.
-    def set_referent(referent : Model, value : Model) : Model
-      (self[referent] = value) ||
-        raise ModelCastException.new(
-          "'#{self}' does not seem to support assignment to '#{referent}'")
-    end
-
-    # Sets this model's *referent* item (whatever the meaning
-    # of that is) to *value*.
+    # ```ven
+    # foo(referent) = value
+    # ```
     #
-    # Models may choose to override this method.
+    # Where `foo` is this model.
     #
-    # Returns nil if found no *referent* item (this is the
-    # default meaning; it may be changed by the overriding
-    # model).
+    # Returns nil if found no *referent* / has no support for
+    # such referent.
     def []=(referent : Model, value : Model) : Model?
     end
   end
 
-  # The parent of all `Model`s represented by a Crystal struct.
+  # The parent of all Struct `Model`s.
   abstract struct MStruct
     Suite.model_template?
   end
 
-  # A Ven value that has the Crystal type *T*.
+  # A model that holds a value of type *T*.
   abstract struct MValue(T) < MStruct
     getter value : T
 
@@ -213,7 +203,7 @@ module Ven::Suite
     end
   end
 
-  # Ven's number data type.
+  # Ven's number data type (type num).
   struct MNumber < MValue(BigDecimal)
     @@cache = {} of String => BigDecimal
 
@@ -331,7 +321,7 @@ module Ven::Suite
     end
 
     def eqv?(other : Str)
-      @value =~ other.value
+      @value == other.value
     end
 
     def true?
