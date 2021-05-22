@@ -154,26 +154,11 @@ module Ven::Parselet
         # ~> (x) + 1
         #        ^-- Clashes: `(x) { +1 }`
         #                  OR `x + 1`
+        # Also:
+        #   ~> (x) (y)
+        #          ^--- is this a strangely-formulated call
+        #               or a lambda body?
         if @parser.is_nud?(but: PUnary)
-          if type(@parser.word) == "("
-            # Things get sketchy here:
-            #
-            #   ~> (x) (y)
-            #          ^--- is this a strangely-formulated call
-            #               or a lambda body?
-            #
-            # Let's look at the raw source, particularly at
-            # that space you see in the middle. If it is
-            # there, `(y)` is a lambda body; otherwise, it's
-            # an argument to a strangely-formulated call.
-            #
-            #   ~> (foo) (bar)
-            #             ^--- @parser.offset points here
-            unless @parser.@source[@parser.@offset - 2].to_s =~ Ven.regex_for(:IGNORE)
-              return agent
-            end
-          end
-
           return lambda(tag, [agent.value])
         end
       end
