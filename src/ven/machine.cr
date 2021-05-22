@@ -29,6 +29,7 @@ module Ven
                    origin = 0, @legate = Legate.new)
       @inspect = @legate.inspect.as Bool
       @measure = @legate.measure.as Bool
+      @fast_interrupt = @legate.fast_interrupt.as Bool
 
       # Remember: per each frame there should always be a scope;
       # if you push a frame, that is, you have to push a scope
@@ -127,9 +128,6 @@ module Ven
 
     # Jumps to the instruction at some instruction pointer *ip*.
     private macro jump(ip)
-      # XXX: SIGINT/SIGTERM.
-      Fiber.yield
-
       next frame.ip = ({{ip}}.not_nil!)
     end
 
@@ -669,14 +667,23 @@ module Ven
     def start
       interrupt = false
 
-      Signal::INT.trap do
-        interrupt = true
+      unless @fast_interrupt
+        Signal::INT.trap do
+          interrupt = true
+        end
       end
 
       while this = fetch?
         # Remember the chunk we are/(at the end, possibly were)
         # in and the current instruction pointer.
         ip, cp = frame.ip, frame.cp
+
+        # De-busy the loop (a temporary solution).
+        #
+        # XXX: have some sort of scheduling logic do this? I.e.,
+        # every 10 instructions `Fiber.yield` to see if an
+        # interrupt was requested.
+        Fiber.yield unless @fast_interrupt
 
         begin
           if interrupt
@@ -943,9 +950,6 @@ module Ven
             # an explicit tail-call (elimination) request. Pops
             # the callee and N arguments: (x1 ...N --)
             in Opcode::NEXT_FUN
-              # XXX: SIGINT/SIGTERM.
-              Fiber.yield
-
               args = pop static(Int32)
               callee = pop.as(MFunction)
 
@@ -1039,13 +1043,11 @@ module Ven
           unless dies
             # Re-raise if climbed up all frames & didn't find
             # a handler.
-            #
             raise error
           end
 
           # I do not know why this is required here, but without
           # it, if interrupted, it rescues infinitely.
-          #
           interupt = false
 
           jump(dies)

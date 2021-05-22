@@ -342,6 +342,13 @@ module Ven
           flag.description = "Set the amount of optimization passes."
         end
 
+        cmd.flags.add do |flag|
+          flag.name        = "fast-interrupt"
+          flag.long        = "--fast-interrupt"
+          flag.default     = false
+          flag.description = "Enable system SIGINT handling (makes your program run faster)."
+        end
+
         cmd.run do |options, arguments|
           port = options.int["port"].as Int32
 
@@ -352,9 +359,10 @@ module Ven
           @measure = options.bool["measure"]
 
           @legate = Legate.new
-          @legate.measure  = options.bool["timetable"]
-          @legate.inspect  = options.bool["inspect"]
+          @legate.measure = options.bool["timetable"]
+          @legate.inspect = options.bool["inspect"]
           @legate.optimize = options.int["optimize"].to_i * 8
+          @legate.fast_interrupt = options.bool["fast-interrupt"]
 
           if arguments.empty?
             # Do not quit after errors:

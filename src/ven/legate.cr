@@ -12,6 +12,10 @@ module Ven
     property measure = false
     # `Program`: the amount of optimize passes.
     property optimize = 8
+    # `Machine`: if true, the system handles SIGINT interrupt
+    # (and your program runs faster); if false, Ven handles
+    # SIGINT interrupt.
+    property fast_interrupt = false
 
     # `Machine`: returns the resulting timetable (if had
     # `measure` enabled).
