@@ -111,8 +111,11 @@ module Ven::Suite
     end
 
     # Returns the length (#) of this model.
+    #
+    # By default, stringifies this model and returns the
+    # length of the resulting string.
     def length : Int32
-      0
+      to_s.size
     end
 
     # Returns the *index*-th item of this model,
@@ -237,10 +240,6 @@ module Ven::Suite
 
     def true?
       @value != 0
-    end
-
-    def length
-      to_s.size
     end
 
     # Mutably negates this number. Returns self.
