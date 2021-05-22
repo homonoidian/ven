@@ -271,8 +271,8 @@ module Ven
     #
     # See `Frame::Goal` to see what *goal* is for.
     private macro invoke(name, cp, import values = Models.new, goal = Frame::Goal::Unknown)
-      @frames << Frame.new({{goal}}, {{values}}, {{cp}})
       @context.push(chunk.file, fetch.line, {{name}})
+      @frames << Frame.new({{goal}}, {{values}}, {{cp}})
     end
 
     # Reverts the actions of `invoke`.
@@ -361,9 +361,7 @@ module Ven
       when {"is", _, _}
         # 'is' requires explicit, non-strict (does not die if
         # failed) normalization.
-        #
         normal = normalize?(operator, left, right)
-
         may_be left, if: normal && normal[0].eqv?(normal[1])
       when {"in", Str, Str}
         may_be left, if: right.value.includes?(left.value)
@@ -411,10 +409,6 @@ module Ven
       when "to"
         return left.to_num, right.to_num
       when "is" then case {left, right}
-        when {_, MRegex}
-          return left.to_str, right
-        when {MRegex, _}
-          return right.to_str, left
         when {_, Str}, {Str, _}
           return left.to_str, right.to_str
         when {_, Vec}, {Vec, _}
@@ -516,11 +510,13 @@ module Ven
       when "+"
         return num ((start + end_) * operand.length) / 2
       when "*"
+        start = operand.start.to_big_d
+        end_  = operand.end.to_big_d
+
         # Uses GMP's factorial. If got |*| -A to -B, outputs
         # -(|*| A to B); I don't know whether it's the expected
         # behavior. If |*| (A > 1) to (B > 1), outputs (B - A)!;
         # about this I also do not know.
-        #
         if neg = start < 0 && end_ < 0
           start = -start
           end_  = -end_
@@ -547,10 +543,10 @@ module Ven
       reduce(operator, operand.to_vec)
     end
 
-    # Resolves a field access.
+    # Resolves field access.
     #
-    # Provides the 'callable?' field for any *head*, which
-    # calls `Model.callable?`.
+    # Provides a Ven field named 'callable?' to any *head*;
+    # this field calls `Model.callable?`.
     #
     # If *head* has a field named *field*, returns the value
     # of that field.
@@ -747,7 +743,7 @@ module Ven
               put MAny.new
             # Negates a num: (x1 -- -x1)
             in Opcode::NEG
-              put pop.to_num.neg!
+              put -pop.to_num
             # Converts to num: (x1 -- x1' : num)
             in Opcode::TON
               put pop.to_num
