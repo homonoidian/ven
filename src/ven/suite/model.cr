@@ -488,16 +488,18 @@ module Ven::Suite
 
   # Ven's vector data type.
   class MVector < MClass
-    getter value
+    getter items : Models
 
-    def initialize(@value = Models.new)
+    # Makes a new vector from *items*.
+    def initialize(@items = Models.new)
     end
 
-    def initialize(value : Array(MClass) | Array(MStruct))
-      @value = value.map &.as(Model)
+    # :nodoc:
+    def initialize(raw_items : Array(MClass) | Array(MStruct))
+      @items = raw_items.map &.as(Model)
     end
 
-    # Initializes a vector from *items*, but maps `type.new(item)`
+    # Makes a new vector from *items*, but maps `type.new(item)`
     # for each item.
     #
     # ```
@@ -507,7 +509,7 @@ module Ven::Suite
       new(items.map { |item| type.new(item) })
     end
 
-    delegate :[], :<<, :map, :each, :size, to: @value
+    delegate :[], :<<, :map, :each, :size, to: @items
 
     # Returns the length of this vector.
     def to_num
@@ -530,8 +532,11 @@ module Ven::Suite
       true
     end
 
+    # Returns whether each consequent item of this vector is
+    # equal-by-value to the corresponding item of the *other*
+    # vector.
     def eqv?(other : Vec)
-      lv, rv = @value, other.value
+      lv, rv = @items, other.items
 
       lv.size == rv.size && lv.zip(rv).all? { |li, ri| li.eqv?(ri) }
     end
@@ -541,21 +546,21 @@ module Ven::Suite
     end
 
     def []?(index : Int)
-      @value[index]?
+      @items[index]?
     end
 
     def []?(range : Range)
-      @value[range]?.try { |subset| Vec.new(subset) }
+      @items[range]?.try { |subset| Vec.new(subset) }
     end
 
     def []=(index : Num, value : Model)
       return if size < (index = index.to_i)
 
-      @value[index] = value
+      @items[index] = value
     end
 
     def to_s(io)
-      io << "[" << @value.join(", ") << "]"
+      io << "[" << @items.join(", ") << "]"
     end
   end
 

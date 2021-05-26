@@ -368,7 +368,7 @@ module Ven
       when {"in", Num, MRange}
         may_be left, if: right.includes?(left.value)
       when {"in", _, Vec}
-        may_be left, if: right.value.any? &.eqv?(left)
+        may_be left, if: right.items.any? &.eqv?(left)
       when {"<", Num, Num}
         bool left.value < right.value
       when {">", Num, Num}
@@ -386,11 +386,11 @@ module Ven
       when {"/", Num, Num}
         num left.value / right.value
       when {"&", Vec, Vec}
-        vec left.value + right.value
+        vec left.items + right.items
       when {"~", Str, Str}
         str left.value + right.value
       when {"x", Vec, Num}
-        vec left.value * right.value.to_big_i
+        vec left.items * right.value.to_big_i
       when {"x", Str, Num}
         str left.value * right.value.to_big_i
       else
