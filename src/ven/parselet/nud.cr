@@ -1,38 +1,41 @@
-require "./share"
+require "./parselet"
 
 module Ven::Parselet
   include Suite
 
-  # A parser that is invoked by a null-denotated token.
-  abstract class Nud < Parselet::Share
-    # Performs the parsing.
+  # A kind of parselet that is invoked by a null-denotated
+  # word (a word that initiates an expression).
+  abstract class Nud < Parselet
+    # Invokes this parselet.
     #
-    # Subclasses of `Nud` should not override this method.
-    # They should (actually, must) implement `parse` instead.
-    def parse!(@parser : Reader, tag : QTag, token : Word)
-      # Reset the semicolon want each pass.
+    # *parser* is the parser that invoked this parselet; *tag*
+    # is the location of the invokation; *token* is the null-
+    # denotated word that invoked this parselet.
+    def parse!(@parser, @tag, @token)
+      # Reset the semicolon decision each parse!(), so as to
+      # not get deceived by that made by a previous parse!().
       @semicolon = true
 
-      parse(tag, token)
+      parse
     end
 
     # Performs the parsing.
     #
     # All subclasses of `Nud` should implement this method.
-    abstract def parse(tag : QTag, token : Word)
+    abstract def parse
   end
 
   # Reads a symbol into QSymbol.
   class PSymbol < Nud
-    def parse(tag, token)
-      symbol(tag, token)
+    def parse
+      symbol(@token)
     end
   end
 
   # Reads a number into QNumber.
   class PNumber < Nud
-    def parse(tag, token)
-      QNumber.new(tag, lexeme.to_big_d)
+    def parse
+      QNumber.new(@tag, lexeme.to_big_d)
     end
   end
 
@@ -50,92 +53,85 @@ module Ven::Parselet
       "\\\\" => "\\",
     }
 
-    def parse(tag, token)
-      raw = lexeme[1...-1]
-      chops = [QString.new(tag, "")] of Quote
-      final = 0
+    def parse
+      process(lexeme[1...-1])
+    end
+
+    # Unescapes valid escape codes and unpacks interpolation.
+    def process(content : String) : QString | QBinary
+      ending = 0
       offset = 0
+      pieces = [QString.new(@tag, "")] of Quote
 
       loop do
-        target = chops.last.as(QString)
-
-        case pad = raw[offset..]
-        when .empty? then break
-        #
-        # Interpret escape sequences.
-        #
+        piece = pieces.last.as(QString)
+        case pad = content[offset..]
+        when .empty?
+          break
         when .starts_with? Ven.regex_for(:STRING_ESCAPES)
-          target.value += ESCAPES[$0]? || $0
-        #
-        # Chop according to interpolations.
-        #
-        # Note that "Hello, $" means "Hello, $$" (interpolate
-        # the contextual).
-        #
+          # Note: invalid escapes are skipped over.
+          piece.value += ESCAPES[$0]? || $0
         when .starts_with? /\$(#{Ven.regex_for(:SYMBOL)}?)/
-          chops << QRuntimeSymbol.new(tag, $1.empty? ? "$" : $1) \
-                << QString.new(tag, "")
-          final = offset + $0.size
-        #
-        # Skip over all other characters.
-        #
+          # Note: "Hello, $" is identical to "Hello, $$".
+          pieces << QRuntimeSymbol.new(@tag, $1.empty? ? "$" : $1)
+          pieces << QString.new(@tag, "")
+          ending = offset + $0.size
         else
-          target.value += pad[0]
-          offset += 1
-          next
+          piece.value += pad[0]
+          # Skip other characters.
+          next offset += 1
         end
-
         offset += $0.size
       end
 
-      # Reduce the chops down to a stitching operation (or
-      # a single QString).
-      chops.reduce do |memo, part|
-        QBinary.new(tag, "~", memo, part)
+      # Reduce *pieces* down to a stitching operation (or
+      # a single QString if *pieces* has only one).
+      pieces.reduce do |memo, part|
+        QBinary.new(@tag, "~", memo, part)
       end
     end
   end
 
   # Reads `_` into QUPop.
   class PUPop < Nud
-    def parse(tag, token)
-      QUPop.new(tag)
+    def parse
+      QUPop.new(@tag)
     end
   end
 
   # Reads `&_` into QURef.
   class PURef < Nud
-    def parse(tag, token)
-      QURef.new(tag)
+    def parse
+      QURef.new(@tag)
     end
   end
 
   # Reads a regex pattern into QRegex.
   class PRegex < Nud
-    def parse(tag, token)
-      QRegex.new(tag, lexeme[1...-1])
+    def parse
+      QRegex.new(@tag, lexeme[1...-1])
     end
   end
 
   # Reads a unary operation into QUnary.
   class PUnary < Nud
-    def parse(tag, token)
-      QUnary.new(tag, type.downcase, led)
+    def parse
+      QUnary.new(@tag, type.downcase, led)
     end
   end
 
-  # Reads a grouping (an expression wrapped in parens), or
-  # a lambda (deduces which one in the process).
+  # Reads a grouping (an expression wrapped in parens), or a
+  # lambda (decides which one in the process).
   class PGroup < Nud
-    def lambda(tag, params = [] of String)
+    def lambda(params = [] of String)
       # Notice how lambda consumes the rest of the expression.
-      QLambda.new(tag, params, led, "*".in? params)
+      QLambda.new(@tag, params, led, "*".in? params)
     end
 
-    def parse(tag, token)
+    def parse
       # Empty grouping is always an argumentless lambda:
       # ~> () ...
-      return lambda(tag) if @parser.word!(")")
+      return lambda if @parser.word!(")")
 
       # Agent is the expression that initiates a grouping.
       agent = led
@@ -147,8 +143,8 @@ module Ven::Parselet
 
       # Grouping with a comma in it is always a lambda.
       if @parser.word!(",")
-        return lambda tag, [agent.value] + @parser.repeat(")", ",", -> {
-          lexeme @parser.expect("SYMBOL", "*")
+        return lambda [agent.value] + @parser.repeat(")", ",", -> {
+          @parser.expect("SYMBOL", "*")[:lexeme]
         })
       elsif @parser.expect(")")
         # ~> (x) + 1
@@ -159,7 +155,7 @@ module Ven::Parselet
         #          ^--- is this a strangely-formulated call
         #               or a lambda body?
         if @parser.is_nud?(but: PUnary)
-          return lambda(tag, [agent.value])
+          return lambda([agent.value])
         end
       end
 
@@ -170,15 +166,15 @@ module Ven::Parselet
 
   # Reads a vector into QVector.
   class PVector < Nud
-    def parse(tag, token)
-      QVector.new(tag, @parser.repeat("]", ","))
+    def parse
+      QVector.new(@tag, @parser.repeat("]", ","))
     end
   end
 
   # Reads a block into QBlock.
   class PBlock < Nud
-    def parse(tag, token)
-      QBlock.new(tag, block(opening: false))
+    def parse
+      QBlock.new(@tag, block(opening: false))
     end
   end
 
@@ -188,37 +184,37 @@ module Ven::Parselet
   # `|+_| [1, "2", false]` will die of read error. Hence a
   # grouping should be used: `|(+_)| [1, "2", false]`
   class PSpread < Nud
-    def parse(tag, token)
+    def parse
       kind, body =
         @parser.is_led?(only: PBinary) \
           ? { :R, @parser.word![:lexeme] }
-          : { :M, QBlock.new(tag, [led]) }
+          : { :M, QBlock.new(@tag, [led]) }
 
       _, iterative = @parser.expect("|"), !!@parser.word!(":")
 
       kind == :M \
-        ? QMapSpread.new(tag, body.as(Quote), led, iterative)
-        : QReduceSpread.new(tag, body.as(String), led)
+        ? QMapSpread.new(@tag, body.as(Quote), led, iterative)
+        : QReduceSpread.new(@tag, body.as(String), led)
     end
   end
 
   # Reads an if expression into QIf.
   class PIf < Nud
-    def parse(tag, token)
+    def parse
       cond = if? "(", @parser.before(")", -> led), led
       succ = led
       fail = if? "ELSE", led
 
-      QIf.new(tag, cond, succ, fail)
+      QIf.new(@tag, cond, succ, fail)
     end
   end
 
   # Reads a function definition into QFun.
   class PFun < Nud
-    def parse(tag, token)
+    def parse
       diamond = if? "<", diamond!
 
-      name = symbol(tag)
+      name = symbol()
       params = if? "(", params!, [] of String
       givens = if? "GIVEN", given!, Quotes.new
       slurpy = "*".in?(params)
@@ -235,7 +231,7 @@ module Ven::Parselet
         params.unshift("$"); givens.unshift(diamond)
       end
 
-      QFun.new(tag, name, params, body, givens, slurpy)
+      QFun.new(@tag, name, params, body, givens, slurpy)
     end
 
     # Reads the diamond form.
@@ -275,33 +271,33 @@ module Ven::Parselet
     # *utility* determines whether to allow '*', '$'.
     def param!(utility = true)
       utility \
-        ? lexeme @parser.expect("*", "$", "_", "SYMBOL")
-        : lexeme @parser.expect("_", "SYMBOL")
+        ? @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
+        : @parser.expect("_", "SYMBOL")[:lexeme]
     end
   end
 
   # Reads a 'queue' expression into QQueue: `queue 1 + 2`.
   class PQueue < Nud
-    def parse(tag, token)
-      QQueue.new(tag, led)
+    def parse
+      QQueue.new(@tag, led)
     end
   end
 
   # Reads an 'ensure' expression into QEnsure: `ensure 2 + 2 is 4`.
   class PEnsure < Nud
-    def parse(tag, token)
-      QEnsure.new(tag, led Precedence::CONVERT)
+    def parse
+      QEnsure.new(@tag, led Precedence::CONVERT)
     end
   end
 
   # Reads a 'loop' statement into QInfiniteLoop,  QBaseLoop,
   # QStepLoop, or QComplexLoop.
   class PLoop < Nud
-    def parse(tag, token)
+    def parse
       start : Quote?
-      base : Quote?
-      step : Quote?
-      body : QBlock
+      base  : Quote?
+      step  : Quote?
+      body  : QBlock
 
       if @parser.word!("(")
         head = @parser.repeat(")", sep: ";")
@@ -327,46 +323,37 @@ module Ven::Parselet
       end
 
       if start && base && step
-        QComplexLoop.new(tag, start, base, step, repeatee)
+        QComplexLoop.new(@tag, start, base, step, repeatee)
       elsif base && step
-        QStepLoop.new(tag, base, step, repeatee)
+        QStepLoop.new(@tag, base, step, repeatee)
       elsif base
-        QBaseLoop.new(tag, base, repeatee)
+        QBaseLoop.new(@tag, base, repeatee)
       else
-        QInfiniteLoop.new(tag, repeatee)
+        QInfiniteLoop.new(@tag, repeatee)
       end
     end
   end
 
   # Safety parselet for 'expose'. Always dies.
   class PExpose < Nud
-    def parse(tag, token)
+    def parse
       @parser.die("please move this 'expose' to the start of your program")
     end
   end
 
   # Safety parselet for 'distinct'. Always dies.
   class PDistinct < Nud
-    def parse(tag, token)
+    def parse
       @parser.die("this 'distinct' is meaningless")
     end
   end
 
   # Reads a 'next' expression.
   class PNext < Nud
-    def parse(tag, token)
-      scope =
-        @parser.word!("FUN") ||
-        @parser.word!("LOOP")
-
-      if scope
-        scope = lexeme scope
-      end
-
-      QNext.new(tag, scope,
-        @parser.is_nud? \
-          ? @parser.repeat(sep: ",")
-          : Quotes.new)
+    def parse
+      scope = @parser.word!("FUN") || @parser.word!("LOOP")
+      scope = scope[:lexeme] if scope
+      QNext.new(@tag, scope, @parser.is_nud? ? @parser.repeat(sep: ",") : Quotes.new)
     end
   end
 
@@ -381,8 +368,8 @@ module Ven::Parselet
   #  }
   # ```
   class PBox < PFun
-    def parse(tag, token)
-      name = symbol(tag)
+    def parse
+      name = symbol()
 
       if name.is_a?(QRuntimeSymbol) && !name.value[0].uppercase?
         die("box name must be capitalized")
@@ -402,21 +389,21 @@ module Ven::Parselet
         { target, field.value }
       end
 
-      QBox.new(tag, name, params, givens, namespace.to_h)
+      QBox.new(@tag, name, params, givens, namespace.to_h)
     end
   end
 
   # Reads a statement-level return.
   class PReturnStatement < Nud
-    def parse(tag, token)
-      QReturnStatement.new(tag, led)
+    def parse
+      QReturnStatement.new(@tag, led)
     end
   end
 
   # Reads an expression-level return.
   class PReturnExpression < Nud
-    def parse(tag, token)
-      QReturnExpression.new(tag, led Precedence::IDENTITY)
+    def parse
+      QReturnExpression.new(@tag, led Precedence::IDENTITY)
     end
   end
 
@@ -437,7 +424,7 @@ module Ven::Parselet
     # the keywords that we are able to redefine.
     @@subsidiary = Set(String).new
 
-    def parse(tag, token)
+    def parse
       defee, trigger = lead!
       params = if? "(", params!, [] of String
       expand = block
@@ -448,10 +435,10 @@ module Ven::Parselet
         die("nameless parses are illegal")
       end
 
-      # Create the word:
+      # Create the word.
       mkword defee, trigger
 
-      # And define the macro:
+      # And define the macro.
       @parser.context[defee] = PNudMacro.new(params, expand)
 
       QVoid.new
@@ -465,11 +452,11 @@ module Ven::Parselet
     # Returns the type of the word that has to be defined and
     # the trigger.
     def lead! : {String, Regex | String}
-      case type @parser.word
+      case @parser.word[:type]
       when "REGEX"
-        { fresh, /^#{lexeme(@parser.word!)}/ }
+        { fresh, /^#{@parser.word![:lexeme]}/ }
       when "SYMBOL", .in?(@@subsidiary)
-        { lexeme(@parser.word).upcase, lexeme @parser.word! }
+        { @parser.word[:lexeme].upcase, @parser.word![:lexeme] }
       else
         die("'nud': invalid lead: expected regex or symbol")
       end
@@ -508,24 +495,24 @@ module Ven::Parselet
       @body = QGroup.new(QTag.void, body)
     end
 
-    def parse(tag, token)
+    def parse
       ReadExpansion.new(args!).visit(@body.clone)
     end
 
     # Reads the arguments of this nud macro by interpreting
-    # the parameters it accepts.
+    # its parameters (*@params*).
     #
     # Returns a hash of parameter names mapped to the corresponding
     # arguments. Tail slurpie (`*`) is stored under `$-tail`.
-    def args!
+    private def args!
       @params.to_h do |name|
-        name == "*" ? {"-tail", QVector.new(QTag.void, tail!)} : {name, led}
+        name == "*" ? {"-tail", QVector.new(@tag, tail!)} : {name, led}
       end
     end
 
     # Reads the tail slurpie. Yields each expression to
     # the block.
-    def tail!
+    private def tail!
       leds = Quotes.new
 
       while @parser.is_nud?

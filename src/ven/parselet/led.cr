@@ -1,143 +1,128 @@
-require "./share"
+require "./parselet"
 
 module Ven::Parselet
   include Suite
 
-  # A parser that is invoked by a left-denotated word.
-  #
-  # Left denotation is when something to the left of the
-  # current word assigns meaning to the current word itself.
-  abstract class Led < Parselet::Share
-    # Performs the parsing.
+  # A kind of parselet that is invoked by a left-denotated
+  # word (a word that follows a full nud).
+  abstract class Led < Parselet
+    @left = uninitialized Quote
+
+    # Invokes this parselet.
     #
-    # Subclasses of `Led` should not override this method.
-    # They should (actually, must) implement `parse` instead.
-    def parse!(@parser : Ven::Reader, tag : QTag, left : Quote, token : Ven::Word)
-      # Reset the semicolon want each pass.
+    # *parser* is the parser that invoked this parselet; *tag*
+    # is the location of the invokation; *left* is the nud
+    # that preceded the led word; *token* is the left-denotated
+    # word that invoked this parselet.
+    def parse!(@parser, @tag, @left : Quote, @token)
+      # Reset the semicolon decision each parse!(), so as to
+      # not get deceived by that made by a previous parse!().
       @semicolon = true
 
-      parse(tag, left, token)
+      parse
     end
 
     # Performs the parsing.
     #
     # All subclasses of `Led` should implement this method.
-    abstract def parse(tag : QTag, left : Quote, token : Word)
+    abstract def parse
   end
 
   # Reads a binary operation into QBinary.
   class PBinary < Led
-    # A list of binary operator word types that can be followed
-    # by `not`.
+    # A list of binary operator word types that can be
+    # followed by `not`.
     NOTTABLE = %(IS)
 
-    def parse(tag, left, token)
+    def parse
       notted = type.in?(NOTTABLE) && !!@parser.word!("NOT")
-
-      quote = QBinary.new(tag, lexeme(token), left, led)
-      quote = QUnary.new(tag, "not", quote) if notted
-
+      quote  = QBinary.new(@tag, lexeme, @left, led)
+      quote  = QUnary.new(@tag, "not", quote) if notted
       quote
     end
   end
 
   # Reads a call into QCall.
   class PCall < Led
-    def parse(tag, left, token)
-      QCall.new(tag, left, @parser.repeat(")", ","))
+    def parse
+      QCall.new(@tag, @left, @parser.repeat(")", ","))
     end
   end
 
   # Reads an assignment expression into QAssign.
   class PAssign < Led
-    def parse(tag, left, token)
-      QAssign.new(tag, validate(left), led, type == ":=")
+    def parse
+      QAssign.new(@tag, validate, led, type == ":=")
     end
 
-    # Returns whether *left* is a valid assignment target.
-    def validate?(left : QSymbol) : Bool
-      !left.value.in?("$", "*")
+    # Returns whether this assignment is valid.
+    #
+    # '$' and '*' are currently considered invalid assignment
+    # targets, for expressions like `* = 3`, `$ = 5` may produce
+    # unwanted behavior (especially the latter).
+    def validate? : Bool
+      !@left.as?(QSymbol).try &.value.in?('$', '*') || !@left.is_a?(QCall)
     end
 
-    # :ditto:
-    def validate?(left : QCall)
-      true
-    end
-
-    # :ditto:
-    def validate?(left)
-      false
-    end
-
-    # Returns *left* if it is a valid assignment target, or
+    # Returns *@left* if it is a valid assignment target, orelse
     # dies of `ReadError`.
-    def validate(left : Quote)
-      die("illegal assignment target") unless validate?(left)
-
-      left
+    def validate
+      validate? ? @left : die("illegal assignment target")
     end
   end
 
   # Reads a binary operator assignment expression into QBinaryAssign.
   class PBinaryAssign < PAssign
-    def parse(tag, left, token)
-      QBinaryAssign.new(tag, type[0].to_s, validate(left), led)
+    def parse
+      # type = '+=' ==> ['+', '=']; type = '++=' ==> ['++', '='].
+      QBinaryAssign.new(@tag, type.split('=', 2)[0], validate, led)
     end
   end
 
   # Reads an into-bool expression into QIntoBool.
   class PIntoBool < Led
-    def parse(tag, left, token)
-      QIntoBool.new(tag, left)
+    def parse
+      QIntoBool.new(@tag, @left)
     end
   end
 
   # Reads a return-increment expression into QReturnIncrement.
   class PReturnIncrement < Led
-    def parse(tag, left, token)
-      die("postfix '++' expects a symbol") unless left.is_a?(QSymbol)
-
-      QReturnIncrement.new(tag, left)
+    def parse
+      QReturnIncrement.new(@tag, @left.as?(QSymbol) || die "'++' expects a symbol")
     end
   end
 
   # Reads a return-decrement expression into QReturnDecrement.
   class PReturnDecrement < Led
-    def parse(tag, left, token)
-      die("postfix '--' expects a symbol") unless left.is_a?(QSymbol)
-
-      QReturnDecrement.new(tag, left)
+    def parse
+      QReturnDecrement.new(@tag, @left.as?(QSymbol) || die "'--' expects a symbol")
     end
   end
 
   # Reads a field access expression into QAccessField.
-  #
-  # Also reads dynamic field access (`a.(b)`) and branches
-  # field access (`a.[b.c, d]`).
   class PAccessField < Led
-    def parse(tag, left, token)
-      QAccessField.new(tag, left, accesses)
+    def parse
+      QAccessField.new(@tag, @left, accesses)
     end
 
-    # Reads the accesses (things that are are separated by dots).
+    # Reads multiple accesses (`access` units separated by dots).
     private def accesses
       @parser.repeat(sep: ".", unit: -> access)
     end
 
-    # Reads an individual field access.
-    #
-    # Branches access, dynamic field access and immediate field
-    # access are supported.
+    # Reads an individual field access. This includes branches
+    # access, dynamic field access, or immediate field access.
     private def access
       lead = @parser.expect("[", "(", "SYMBOL")
 
-      case type lead
+      case lead[:type]
       when "["
         FABranches.new(branches)
       when "("
         FADynamic.new(dynamic)
       when "SYMBOL"
-        FAImmediate.new(lexeme lead)
+        FAImmediate.new(lead[:lexeme])
       else
         raise "PAccessField#access(): unknown lead type"
       end
@@ -146,26 +131,21 @@ module Ven::Parselet
     # Reads a branches field access, which is basically a
     # vector (`PVector`).
     private def branches
-      PVector.new.parse!(@parser, QTag.void, word?)
+      PVector.new.parse!(@parser, @tag, @token)
     end
 
     # Reads a dynamic field access, which is basically a
     # grouping (`PGroup`).
     private def dynamic
-      PGroup.new.parse!(@parser, QTag.void, word?)
-    end
-
-    # Makes up a word.
-    private macro word?
-      { type: ".", lexeme: ".", line: 1 }
+      PGroup.new.parse!(@parser, @tag, @token)
     end
   end
 
   # Reads postfix 'dies' into a QDies: `1 dies`,
   # `die("hi") dies`, etc.
   class PDies < Led
-    def parse(tag, left, token)
-      QDies.new(tag, left)
+    def parse
+      QDies.new(@tag, @left)
     end
   end
 end
