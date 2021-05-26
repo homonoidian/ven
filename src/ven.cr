@@ -97,7 +97,7 @@ module Ven
 
         stats.each do |ip, report|
           amount = report[:amount]
-          duration = report[:duration].total_microseconds
+          duration = report[:duration]
 
           amount =
             if amount < 100
@@ -110,18 +110,19 @@ module Ven
               amount.colorize.red
             end
 
-          duration =
-            if duration < 100
-              "#{duration}us".colorize.green
-            elsif duration < 1_000
-              "#{duration}us".colorize.yellow
-            elsif duration < 10_000
-              "#{duration}us".colorize.light_red
+          # Choose the correct unit. Use color to show hotspots.
+          duration, unit =
+            if (ns = duration.total_nanoseconds) < 1000
+              {ns.colorize.green, "ns"}
+            elsif (us = duration.total_microseconds) < 1000
+              {us.colorize.yellow, "us"}
+            elsif (ms = duration.total_milliseconds) < 1000
+              {ms.colorize.light_red, "ms"}
             else
-              "#{duration}us".colorize.red
+              {duration.total_seconds.colorize.red, "sec"}
             end
 
-          puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration}]"
+          puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration} #{unit}]"
         end
       end
     end
