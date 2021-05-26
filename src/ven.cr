@@ -287,6 +287,9 @@ module Ven
         cmd.use  = "ven"
         cmd.long = Ven::VERSION
 
+        # Unmapped flags will go to the program.
+        cmd.ignore_unmapped_flags = true
+
         cmd.flags.add do |flag|
           flag.name        = "port"
           flag.short       = "-p"
@@ -371,11 +374,20 @@ module Ven
             @result = true
             # Fly!
             repl()
-          elsif arguments.size == 1
+          elsif arguments.size >= 1
             file = arguments.first
 
+            # Provide the unmapped flags/remaining arguments
+            # to the orchestra. It's a bit risky, as some user-
+            # defined flags may interfere with this CLI's.
+            #
+            # Note that **all** programs of the orchestra will
+            # have access to these very arguments, including
+            # any exposed library.
+            @orchestra.hub.machine["ARGS"] = Vec.new(arguments[1...].map { |a| Str.new(a) })
+
             if File.exists?(file) && File.file?(file) && File.readable?(file)
-              run file, File.read(file)
+              run File.expand_path(file), File.read(file)
             elsif !@orchestra.isolated && file =~ /^(\w[\.\w]*[^\.])$/
               # If there is no such file, try to look if it's
               # a distinct.
@@ -388,13 +400,11 @@ module Ven
               end
 
               # Trust Inquirer that *candidate* is readable,
-              # is a file, etc.
+              # is a file, is an absolute path, etc.
               run candidate = candidates.first, File.read(candidate)
             else
               die("there is no readable file or distinct named '#{file}'")
             end
-          else
-            puts cmd.help
           end
         end
       end

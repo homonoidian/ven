@@ -22,7 +22,7 @@ module Ven::Suite::Context
     # Extensions already present in this hub.
     @extensions = [] of Extension.class
 
-    delegate :[], :[]?, to: @machine
+    delegate :[], :[]?, :[]=, to: @machine
 
     # Loads *extension* into this hub.
     def extend(extension : Extension)
