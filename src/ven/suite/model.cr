@@ -8,8 +8,8 @@ module Ven::Suite
   end
 
   # Model is the most generic Crystal type for Ven values.
-  # All Ven-accessible entities must inherit either `MClass`
-  # or `MStruct`, which `Model` is a union of.
+  # All entities accessible from Ven must either inherit
+  # `MClass` or `MStruct`, which `Model` is a union of.
   alias Model = MClass | MStruct
 
   # :nodoc:
@@ -78,30 +78,26 @@ module Ven::Suite
       false
     end
 
-    # Returns whether this model is of type *other*.
-    def of?(other : MType) : Bool
+    # Returns whether this model is of the type *other*.
+    #
+    # ```ven
+    # ensure 1 is num;
+    # ensure "hello" is str;
+    # ```
+    def is?(other : MType) : Bool
       other.type.is_a?(MClass.class) \
         ? self.class <= other.type.as(MClass.class)
         : self.class <= other.type.as(MStruct.class)
     end
 
-    # :ditto:
-    def of?(other)
-      other.is_a?(MAny)
-    end
-
-    # Returns whether this model is equal-by-value to *other*.
-    def eqv?(other : Model) : Bool
-      false
-    end
-
-    # Returns whether this model is of type *other*, or is
-    # equal-by-value to *other*.
+    # Returns whether this model is semantically equal to
+    # the *other* model.
     #
-    # This is mostly useful when matching arguments against
-    # the `given` appendix, hence the name.
-    def match(other : Model) : Bool
-      of?(other) || other.eqv?(self)
+    # The whole concept of semantic equality is rather bland
+    # in Ven. Models are free to choose the way they identify
+    # themselves, as well as compare one identity to another.
+    def is?(other)
+      other.is_a?(MAny)
     end
 
     # Returns the weight (see `MWeight`) of this model.
@@ -167,8 +163,8 @@ module Ven::Suite
     def []?(index : Range) : Model?
     end
 
-    # Set-referent is a way of making the following syntax
-    # support this model:
+    # Provides set-referent semantics for this model. In
+    # other words, a way to support the following syntax:
     #
     # ```ven
     # foo(referent) = value
@@ -194,7 +190,7 @@ module Ven::Suite
     def initialize(@value)
     end
 
-    def eqv?(other : MValue)
+    def is?(other : MValue)
       @value == other.value
     end
 
@@ -203,14 +199,14 @@ module Ven::Suite
     end
   end
 
-  # :nodoc:
+  # Crystal number types that Ven's type num can hold.
   alias MNumberType = Int32 | Int64 | BigDecimal
 
   # Ven's number data type (type num).
   #
   # Uses ladder-like technique to get a numeric value from
-  # string input: Int32 -> Int64 -> BigDecimal. Any float
-  # is a BigDecimal.
+  # string input, if any: Int32 -> Int64 -> BigDecimal. Any
+  # given float is always a BigDecimal.
   struct MNumber < MValue(MNumberType)
     def initialize(@value : MNumberType)
     end
@@ -231,8 +227,14 @@ module Ven::Suite
       @value != 0
     end
 
-    def match(range : MRange)
-      range.includes?(@value)
+    # Returns whether this number is in the given range.
+    #
+    # ```ven
+    # ensure 1 is 1 to 10;
+    # ensure 11 is not 1 to 10;
+    # ```
+    def is?(other : MRange)
+      other.includes?(@value)
     end
 
     # Returns the Int32 version of this number.
@@ -318,6 +320,18 @@ module Ven::Suite
       true
     end
 
+    # Returns whether this string matches the given regex.
+    #
+    # It is used only internally. Look for the implementation
+    # of the in-language 'is' shown below in `binary` of `Machine`.
+    #
+    # ```ven
+    # ensure "12" is `12+`;
+    # ```
+    def is?(other : MRegex)
+      other.regex === @value
+    end
+
     def length
       size
     end
@@ -337,18 +351,26 @@ module Ven::Suite
 
   # Ven's regular expression data type.
   struct MRegex < MStruct
-    getter value : Regex
+    getter regex : Regex
 
-    def initialize(@value)
-      @original = @value.to_s
+    # Makes a new Ven regex from the given *regex*.
+    def initialize(@regex)
+      @stringy = @regex.to_s
     end
 
-    def initialize(@original : String)
-      @value = /^(?:#{@original})/
+    # Makes a new Ven regex from the given *stringy*.
+    #
+    # Safely prepends '^' to the *stringy*, unless there is
+    # one there already; this is done to make sure we're
+    # matching strictly from the start of any given matchee,
+    # as opposed to Crystal's default of matching anywhere
+    # within a matchee.
+    def initialize(@stringy : String)
+      @regex = /^(?:#{@stringy.lchop('^')})/
     end
 
     def to_str
-      Str.new(@original)
+      Str.new(@stringy)
     end
 
     # Any regex is true, as any regex (even an empty one)
@@ -357,33 +379,35 @@ module Ven::Suite
       true
     end
 
-    # Returns whether this regex is equal-by-value to the
+    # Returns whether this regex is the same as the
     # *other* regex.
-    def eqv?(other : MRegex)
-      @value == other.value
+    def is?(other : MRegex)
+      @regex === other.regex
     end
 
-    # Returns whether this regex matches the *other* string.
+    # Returns whether this regexes' source is equal to the
+    # contents of the *other* string.
     #
     # ```ven
-    # ensure `12` in ["34", "56", "12"]
+    # ensure `12` is "12";
+    # ensure `a+` is not "aaa";
     # ```
-    def eqv?(other : Str)
-      @value === other.value
+    def is?(other : Str)
+      @stringy == other.value
     end
 
     def length
-      @original.size
+      @stringy.size
     end
 
     def to_s(io)
-      io << "`" << @original << "`"
+      io << "`" << @stringy << "`"
     end
   end
 
   # Ven's range data type.
   struct MRange < MStruct
-    # Maximum amount of values a range to vec conversion
+    # Maximum amount of values a range->vec conversion
     # can handle.
     RANGE_TO_VEC_CAP = 100_000
 
@@ -402,8 +426,8 @@ module Ven::Suite
 
     # Converts this range to vector.
     #
-    # Will raise ModelCastException if the resulting vector
-    # will be too large (see `RANGE_TO_VEC_CAP`).
+    # Raises ModelCastException if the resulting vector will
+    # exceed `RANGE_TO_VEC_CAP`.
     def to_vec
       if @distance > RANGE_TO_VEC_CAP
         raise ModelCastException.new("range #{self} is too large to be a vector")
@@ -429,8 +453,8 @@ module Ven::Suite
       true
     end
 
-    def eqv?(other : MRange)
-      @start.eqv?(other.start) && @end.eqv?(other.end)
+    def is?(other : MRange)
+      @start.is?(other.start) && @end.is?(other.end)
     end
 
     def field(name)
@@ -509,7 +533,7 @@ module Ven::Suite
       new(items.map { |item| type.new(item) })
     end
 
-    delegate :[], :<<, :map, :each, :size, to: @items
+    delegate :[], :<<, :all?, :any?, :map, :each, :size, to: @items
 
     # Returns the length of this vector.
     def to_num
@@ -533,12 +557,10 @@ module Ven::Suite
     end
 
     # Returns whether each consequent item of this vector is
-    # equal-by-value to the corresponding item of the *other*
-    # vector.
-    def eqv?(other : Vec)
-      lv, rv = @items, other.items
-
-      lv.size == rv.size && lv.zip(rv).all? { |li, ri| li.eqv?(ri) }
+    # semantically equal to the corresponding item of the
+    # *other* vector.
+    def is?(other : Vec)
+      size == other.size && @items.zip(other.items).all? { |my, its| my.is?(its) }
     end
 
     def length
@@ -564,12 +586,12 @@ module Ven::Suite
     end
   end
 
-  # Ven's type data type. It represents other Ven data types.
+  # Ven's type for representing other data types + itself.
   class MType < MClass
     # Returns the name of this type.
     getter name : String
-    # Returns the `Model` class this type represents, e.g.,
-    # `MVector`, `MString`.
+    # Returns the class of the `Model` this type represents;
+    # e.g., `MVector`, `MString`.
     getter type : MStruct.class | MClass.class
 
     delegate :==, to: @name
@@ -577,8 +599,10 @@ module Ven::Suite
     def initialize(@name, @type)
     end
 
-    def eqv?(other : MType)
-      @name == other.name
+    # Returns whether this type represents the same model as
+    # the other type.
+    def is?(other : MType)
+      @type == other.type
     end
 
     def weight
@@ -593,7 +617,7 @@ module Ven::Suite
   # The value that represents anything (in other words, the
   # value that matches on anything.)
   class MAny < MClass
-    def eqv?(other)
+    def is?(other)
       true
     end
 
@@ -627,6 +651,19 @@ module Ven::Suite
     end
 
     def callable?
+      true
+    end
+
+    # Returns whether *givens* match *args* (using `is?`).
+    #
+    # Implements the underflow rule (if *givens* underflow
+    # *args*, the last given of *givens* is used to cover
+    # the rest of the *args*).
+    def match?(args : Models, givens : Models) : Bool
+      args.zip?(givens) do |argument, given|
+        return false unless argument.is?(given || givens.last)
+      end
+
       true
     end
 
@@ -666,16 +703,13 @@ module Ven::Suite
       count = args.size
 
       return unless (@slurpy && count >= @arity) || count == @arity
-
-      args.zip?(@given) do |arg, type|
-        return unless arg.match(type || @given.last)
-      end
+      return unless match?(args, @given)
 
       self
     end
 
     def leading?(type, argno = 0)
-      type.match(@given[argno])
+      type.is?(@given[argno])
     end
 
     def field(name)
@@ -714,7 +748,7 @@ module Ven::Suite
       return false unless specificity == other.specificity
 
       @given.zip(other.given) do |our, their|
-        return false unless our.eqv?(their)
+        return false unless our.is?(their)
       end
 
       true
@@ -869,28 +903,25 @@ module Ven::Suite
     def initialize(@name, @given, @params, @arity, @target)
     end
 
-    def variant?(args) : (self)?
+    def variant?(args) : self?
       return unless args.size == @arity
-
-      args.zip?(@given) do |arg, type|
-        return unless arg.match(type || @given.last)
-      end
+      return unless match?(args, @given)
 
       self
     end
 
-    # Returns whether this box is equal-by-value to the
-    # *other* box.
+    # Returns whether this box is equal to the *other* box.
     #
     # Just compares the names of the two.
-    def eqv?(other : MBox)
-      @name == other.name
-    end
-
-    # Returns whether this box is the parent of the *other*
-    # box instance.
-    def eqv?(other : MBoxInstance)
-      self == other.parent
+    #
+    # ```ven
+    # box A;
+    # box B;
+    #
+    # ensure A is not B;
+    # ```
+    def is?(other : MBox)
+      same?(other)
     end
 
     def to_s(io)
@@ -913,23 +944,46 @@ module Ven::Suite
     # Returns whether this box instance is equal to the *other*
     # box instance.
     #
-    # This box instance and *other* box instance are equal if
-    # and only if their hashes are equal.
-    def eqv?(other : MBoxInstance)
-      hash == other.hash
+    # This box instance and the *other* box instance are
+    # considered equal if their parents are equal, and if
+    # their hashes are equal.
+    #
+    # ```ven
+    # box A;
+    # box B;
+    #
+    # a = A();
+    # b = B();
+    #
+    # ensure a is a;
+    # ensure b is b;
+    # ensure a is not b;
+    # ensure b is not a;
+    # ```
+    def is?(other : MBoxInstance)
+      @parent.is?(other.parent) && hash == other.hash
     end
 
-    # Returns whether this box instance is parented by
-    # the *other* box.
-    def eqv?(other : MBox)
-      @parent == other
+    # Returns whether this box instance is parented by the
+    # given box.
+    #
+    # ```ven
+    # box A;
+    #
+    # a = A();
+    #
+    # ensure a is A;
+    # ```
+    def is?(other : MBox)
+      @parent.is?(other)
     end
 
     # Returns one of the fields in the namespace of this box
     # instance.
     #
-    # Provides two other, model specific and prioritized
-    # properties: `.name` and `.parent`.
+    # Additionally, provides two other fields: `.name`, which
+    # returns the name of this box, and `.parent`, which returns
+    # the parent of this box.
     def field(name)
       case name
       when "name"
@@ -956,7 +1010,7 @@ module Ven::Suite
         # parameters, that is.
         typed_at = parent.params.index(field)
 
-        if typed_at && !value.match(type = parent.given[typed_at])
+        if typed_at && !value.is?(type = parent.given[typed_at])
           raise ModelCastException.new(
             "type mismatch in assignment to '#{field}': " \
             "expected #{type}, got #{value}")

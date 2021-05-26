@@ -113,8 +113,8 @@ ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 ensure 1 is 1;
 ensure 1 is not 2;
 # ensure 1 is true;
-ensure 1 is "1";
-ensure 1 is [1];
+# ensure 1 is "1";
+# ensure 1 is [1];
 
 
 # 'in' checks whether a vec contains an item. 'in' is much

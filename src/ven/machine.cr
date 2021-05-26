@@ -350,25 +350,29 @@ module Ven
       case {operator, left, right}
       when {"to", Num, Num}
         MRange.new(left, right)
-      when {"is", MBool, MBool}
-        bool left.eqv?(right)
       when {"is", Str, MRegex}
-        may_be str($0), if: left.value =~ right.value
-      when {"is", _, MType}
-        bool left.of?(right)
-      when {"is", _, MAny}
-        bool true
+        # `str is regex` is a special case for `is`, for it
+        # does not return the value of left, but instead the
+        # whole match result.
+        may_be str($0), if: right.regex === left.value
+      when {"is", MBool, _}
+        # `bool is any`  is also a special case, as, because
+        # `is` returns *left* value, `false is false` will
+        # return false (i.e., the left false); this is, of
+        # course, wrong.
+        bool left.is?(right)
       when {"is", _, _}
-        # 'is' requires explicit, non-strict (does not die if
-        # failed) normalization.
-        normal = normalize?(operator, left, right)
-        may_be left, if: normal && normal[0].eqv?(normal[1])
+        # Note that 'is' is not normalized; identity handling
+        # & all its oddities, sugars etc. is all done by the
+        # *left* Model.
+        may_be left, if: left.is?(right)
       when {"in", Str, Str}
         may_be left, if: right.value.includes?(left.value)
       when {"in", Num, MRange}
         may_be left, if: right.includes?(left.value)
       when {"in", _, Vec}
-        may_be left, if: right.items.any? &.eqv?(left)
+        # 'in' with vector is '|left is _| [...]' on steroids.
+        may_be left, if: right.any? { |item| left.is?(item) }
       when {"<", Num, Num}
         bool left.value < right.value
       when {">", Num, Num}
@@ -408,18 +412,6 @@ module Ven
       case operator
       when "to"
         return left.to_num, right.to_num
-      when "is" then case {left, right}
-        when {_, Str}, {Str, _}
-          return left.to_str, right.to_str
-        when {_, Vec}, {Vec, _}
-          return left.to_vec, right.to_vec
-        when {_, Num}, {Num, _}
-          return left.to_num, right.to_num
-        when {_, MBool}, {MBool, _}
-          return left.to_bool, right.to_bool
-        else
-          return left, right
-        end
       when "x" then case {left, right}
         when {_, Vec}, {_, Str}
           return right, left.to_num
