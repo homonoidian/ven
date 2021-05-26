@@ -384,7 +384,7 @@ module Ven
             # Note that **all** programs of the orchestra will
             # have access to these very arguments, including
             # any exposed library.
-            @orchestra.hub.machine["ARGS"] = Vec.new(arguments[1...].map { |a| Str.new(a) })
+            @orchestra.hub.machine["ARGS"] = Vec.from(arguments[1...], Str)
 
             if File.exists?(file) && File.file?(file) && File.readable?(file)
               run File.expand_path(file), File.read(file)

@@ -497,6 +497,16 @@ module Ven::Suite
       @value = value.map &.as(Model)
     end
 
+    # Initializes a vector from *items*, but maps `type.new(item)`
+    # for each item.
+    #
+    # ```
+    # Vec.from([1, 2, 3], Num) # ==> [Num.new(1), Num.new(2), Num.new(3)]
+    # ```
+    def self.from(items, as type : Model.class)
+      new(items.map { |item| type.new(item) })
+    end
+
     delegate :[], :<<, :map, :each, :size, to: @value
 
     # Returns the length of this vector.
@@ -672,7 +682,7 @@ module Ven::Suite
       when "slurpy"
         MBool.new(@slurpy)
       when "params"
-        Vec.new(params.map { |param| Str.new(param) })
+        Vec.from(params, Str)
       when "specificity"
         Num.new(specificity)
       end
