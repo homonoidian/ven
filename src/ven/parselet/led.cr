@@ -108,7 +108,7 @@ module Ven::Parselet
 
     # Reads multiple accesses (`access` units separated by dots).
     private def accesses
-      @parser.repeat(sep: ".", unit: -> access)
+      @parser.repeat(sep: ".") { access }
     end
 
     # Reads an individual field access. This includes branches

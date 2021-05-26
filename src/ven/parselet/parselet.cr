@@ -66,7 +66,7 @@ module Ven::Parselet
     # is false.
     def block(opening = true, @semicolon = false) : Quotes
       @parser.expect("{") if opening
-      @parser.repeat("}", unit: -> @parser.statement)
+      @parser.repeat("}") { @parser.statement }
     end
 
     # Reads a led of the given *precedence*.

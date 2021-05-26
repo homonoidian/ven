@@ -120,7 +120,7 @@ module Ven
       QTag.new(@file, @lineno)
     end
 
-    # Makes a `Word` given a *type* and a *lexeme*.
+    # Makes a `Word` from the given *type* and *lexeme*.
     private macro word(type, lexeme)
       { type: {{type}}, lexeme: {{lexeme}}, line: @lineno }
     end
@@ -135,7 +135,7 @@ module Ven
 
     # Looks up the nud for word type *type*.
     #
-    # Raises if not found.
+    # Returns nil if not found.
     private macro nud_for?(type)
       @nud[{{type}}]? || @context.nuds[{{type}}]?
     end
@@ -227,28 +227,34 @@ module Ven
 
     # Expects *type* after calling *unit*. Returns whatever
     # *unit* returns.
-    def before(type : String, unit : -> T = ->led) forall T
-      value = unit.call; expect(type); value
+    def before(type : String)
+      value = yield; expect(type); value
     end
 
-    # Calls *after* after calling *unit*. If *after* returned
-    # false, dies of `ReadError`.
-    def before(after : -> Bool, unit = ->led)
-      value = unit.call; after.call || die("unexpected term"); value
+    # Reads a led, and expects *type* to folow it.
+    def before(type : String)
+      before(type) { led }
     end
 
-    # Calls *unit* repeatedly; assembles the results of each
-    # call in an Array, and returns that array on termination.
+    # Evaluates the block, then calls *after*. If *after*
+    # returned false, dies of `ReadError`.
     #
-    # Expects *sep* after each call to *unit*. Terminates
-    # on *stop*.
-    def repeat(stop : String? = nil, sep : String? = nil, unit : -> T = ->led) forall T
-      raise "repeat(): got no stop/sep" unless stop || sep
+    # Returns whatever the block returned.
+    def before(after : -> Bool)
+      value = yield; after.call || die("unexpected term"); value
+    end
+
+    # Yields repeatedly, expecting *sep* after each of the
+    # yields; collects the results of the yields in an Array,
+    # and returns that array on termination. Termination
+    # happens upon encountering *stop*.
+    def repeat(stop : String? = nil, sep : String? = nil, & : -> T) forall T
+      raise "repeat(): expected either stop or sep" unless stop || sep
 
       result = [] of T
 
       until stop && word!(stop)
-        result << unit.call
+        result << yield
 
         if stop && sep
           word!(sep) ? next : break expect(stop, sep)
@@ -260,14 +266,20 @@ module Ven
       result
     end
 
+    # Same as `repeat`, but with no block - defaults to
+    # reading led.
+    def repeat(stop : String? = nil, sep : String? = nil)
+      repeat(stop, sep) { led }
+    end
+
     # Reads a led expression on precedence level *level* (see `Precedence`).
-    def led(level : Precedence = Precedence::ZERO) : Quote
+    def led(level = Precedence::ZERO) : Quote
       die("expected an expression") unless is_nud?
 
       left = nud_for(@word[:type]).parse!(self, tag, word!)
 
       # 'x' is special. If met in nud position, it's a symbol;
-      # if met in operator position, it's a keyword.
+      # if met in operator position, it's a keyword operator.
       if @word[:lexeme] == "x"
         @word = word("X", "x")
       end
@@ -280,12 +292,12 @@ module Ven
     end
 
     # Returns whether the current word is one of the end-of-input
-    # words.
-    def eoi?
+    # words (currently EOF, '}', ';').
+    def eoi? : Bool
       word[:type].in?("EOF", "}", ";")
     end
 
-    # Reads a statement followed by a semicolon (if needed).
+    # Reads a statement followed by a semicolon (if requested).
     #
     # Semicolons are optional before `eoi?` words.
     def statement : Quote
@@ -308,7 +320,7 @@ module Ven
     #
     # SYMBOL {"." SYMBOL}
     private macro path
-      repeat sep: ".", unit: -> { expect("SYMBOL")[:lexeme] }
+      repeat sep: "." { expect("SYMBOL")[:lexeme] }
     end
 
     # Tries to read a 'distinct' statement.
@@ -316,17 +328,16 @@ module Ven
     # Returns the path of the distinct if found one, or nil
     # if did not.
     #
-    # "distinct" PATH (";" | EOI)
+    # "distinct" PATH (';'? EOF | ';')
     def distinct? : Distinct?
       return unless word!("DISTINCT")
 
-      before -> { !!word!(";") || eoi? }, -> { path }
+      before -> { !!word!(";") || eoi? } { path }
     end
 
     # Tries to read a group of 'expose' statements separated
-    # by semicolons. Returns an array of each of those exposes'
-    # paths. If read no expose statements, returns and empty
-    # array.
+    # by semicolons. Returns an array of each of exposes' paths.
+    # Returns and empty array if read no expose statements.
     #
     # {"expose" PATH (";" | EOI)}
     def exposes : Array(Distinct)
@@ -350,9 +361,10 @@ module Ven
     #
     # Raises if this reader is dirty.
     #
-    # NOTE: `expose` and `distinct` are not read by this method.
+    # NOTE: to read `expose`s and `distinct`, call the appropriate
+    # methods (`exposes`, `distinct?`) in the correct order.
     def read
-      raise "read(): this reader is dirty" if @dirty
+      raise "read(): dirty" if @dirty
 
       @dirty = true
 
@@ -361,15 +373,15 @@ module Ven
       end
     end
 
-    # Reads the source into an Array of `Quote`s.
-    #
-    # Returns that array.
+    # Reads the source into an Array of `Quote`s, and returns
+    # that array.
     #
     # Raises if this reader is dirty.
     #
-    # NOTE: `expose` and `distinct` are not read by this method.
+    # NOTE: to read `expose`s and `distinct`, call the appropriate
+    # methods (`exposes`, `distinct?`) in the correct order.
     def read
-      raise "read(): this reader is dirty" if @dirty
+      raise "read(): dirty" if @dirty
 
       @dirty = true
       quotes = Quotes.new
@@ -414,23 +426,21 @@ module Ven
       @stmt.has_key?(@word[:type])
     end
 
-    # Makes an entry for a nud parselet.
+    # Declares a nud parselet.
     #
-    # The entry is made in *storage*.
-    #
-    # *trigger* is the type of the word that will trigger that
-    # nud parselet.
+    # *trigger* is the type of a word that will invoke this
+    # parselet.
     #
     # If the first item in *args* is
     #
-    #   - a String, *args* (plus *trigger* itself) is interpreted
-    #   as a list of unary operators; *precedence* will apply to
-    #   all of them;
+    #   - a String, *args* (plus *trigger*) is interpreted as
+    #   a list of unary operators (`PUnary`); *precedence*
+    #   applies to each one of these operators;
     #
-    #   - something other than String, then that first item will
-    #   be interpreted as a nud parselet (subclass of `Nud`);
-    #   *precedence* will not apply to it; all other items in
-    #   *args* are ignored.
+    #   - something other than a String, then that first item
+    #   is interpreted as a nud parselet (subclass of `Nud`);
+    #   *precedence* does not apply to it; the rest of *args*
+    #   is thrown away.
     private macro defnud(trigger, *args, storage = @nud, precedence = PREFIX)
       {% unless args.first.is_a?(StringLiteral) %}
         {{storage}}[{{trigger}}] = {{args.first}}.new
@@ -441,24 +451,22 @@ module Ven
       {% end %}
     end
 
-    # Makes an entry for a led parselet.
+    # Declares a led parselet.
     #
-    # The entry is made in `@leds`.
-    #
-    # *trigger* is the type of the word that will trigger that
-    # led parselet.
+    # *trigger* is the type of a word that will invoke this
+    # parselet.
     #
     # If the first item of *args* is
     #
-    #   - a String, *args* (plus *trigger* itself) are interpreted
-    #   as a list of binary operators (or, if got *common*, of
-    #   *common* led parselet triggers); *precedence* will be
-    #   applied to all of them;
+    #   - a String, *args* (plus *trigger*) are interpreted
+    #   as a list of binary operators (or, if got *common*,
+    #   of triggers for *common*); *precedence* applies to
+    #   each one of these operators;
     #
-    #   - something other than String, then that first item will
-    #   be interpreted as a led parselet (subclass of `Led`);
-    #   *precedence* will be applied to it; all other items in
-    #   *args* are going to be ignored.
+    #   - something other than a String, then that first item
+    #   is interpreted as a led parselet (subclass of `Led`);
+    #   *precedence* is applied to it; the rest of *args* is
+    #   thrown away.
     private macro defled(trigger, *args, common = Parselet::PBinary, precedence = ZERO)
       {% if args.first && !args.first.is_a?(StringLiteral) %}
         @led[{{trigger}}] = {{args.first}}.new(Precedence::{{precedence}})
@@ -469,19 +477,17 @@ module Ven
       {% end %}
     end
 
-    # Makes an entry for a statement parselet.
+    # Declares a statement parselet.
     #
-    # The entry is made in `@stmt`.
+    # *trigger* is the type of a word that will invoke this
+    # parselet.
     #
-    # *trigger* is the type of the word that will trigger that
-    # statement parselet.
-    #
-    # See `defnud` to see how *args* are interpreted.
+    # To see how *args* are interpreted, look at `defnud`.
     private macro defstmt(trigger, *args)
       defnud({{trigger}}, {{*args}}, storage: @stmt)
     end
 
-    # Prepares this reader so it is able to read Ven.
+    # Declares all parselets.
     def prepare
       # Prefixes (NUDs):
 
@@ -529,9 +535,9 @@ module Ven
 
       # Statements:
 
-      # Always dies (use `exposes?`):
+      # Always dies (see `exposes?`):
       defstmt("EXPOSE", Parselet::PExpose)
-      # Always dies (use `distinct?`):
+      # Always dies (see `distinct?`):
       defstmt("DISTINCT", Parselet::PDistinct)
 
       defstmt("NUD", Parselet::PDefineNud)
@@ -547,8 +553,7 @@ module Ven
       io << "<reader for '#{@file}'>"
     end
 
-    # Makes an instance of `Reader`, immediately reads *source*
-    # and disposes the instance.
+    # Makes a new `Reader` and uses it to read the *source*.
     #
     # *source* (the only required argument) is for the source
     # code; *file* is for the filename; *context* is for the
@@ -556,7 +561,7 @@ module Ven
     #
     # Ignores valid `expose` and `distinct`.
     #
-    # See `read`.
+    # See `Reader#read`.
     def self.read(source : String, file = "untitled", context = Context::Reader.new)
       reader = new(source, file, context)
 

@@ -138,14 +138,16 @@ module Ven::Parselet
 
       # Any agent but runtime symbol is always a grouping.
       unless agent.is_a?(QRuntimeSymbol)
-        return @parser.before(")", -> { agent })
+        return @parser.before(")") { agent }
       end
 
       # Grouping with a comma in it is always a lambda.
       if @parser.word!(",")
-        return lambda [agent.value] + @parser.repeat(")", ",", -> {
+        remaining = @parser.repeat(")", ",") do
           @parser.expect("SYMBOL", "*")[:lexeme]
-        })
+        end
+
+        return lambda([agent.value] + remaining)
       elsif @parser.expect(")")
         # ~> (x) + 1
         #        ^-- Clashes: `(x) { +1 }`
@@ -201,7 +203,7 @@ module Ven::Parselet
   # Reads an if expression into QIf.
   class PIf < Nud
     def parse
-      cond = if? "(", @parser.before(")", -> led), led
+      cond = if? "(", @parser.before(")"), led
       succ = led
       fail = if? "ELSE", led
 
@@ -236,12 +238,12 @@ module Ven::Parselet
 
     # Reads the diamond form.
     def diamond!
-      @parser.before ">", -> { led(Precedence::FIELD) }
+      @parser.before(">") { led(Precedence::FIELD) }
     end
 
     # Reads the body of a 'given' appendix.
     def given!
-      @parser.repeat(sep: ",", unit: -> { led(Precedence::ASSIGNMENT) })
+      @parser.repeat(sep: ",") { led(Precedence::ASSIGNMENT) }
     end
 
     # Reads a list of parameters.
@@ -253,7 +255,7 @@ module Ven::Parselet
     #
     # Ensures that there is only one '$'.
     def params!(utility = true)
-      params = @parser.repeat(")", ",", -> { param!(utility) })
+      params = @parser.repeat(")", ",") { param!(utility) }
 
       if params.count("*") > 1
         die("more than one slurpie in the parameter list")
