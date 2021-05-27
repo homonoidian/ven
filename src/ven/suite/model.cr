@@ -187,7 +187,7 @@ module Ven::Suite
   abstract struct MValue(T) < MStruct
     getter value : T
 
-    def initialize(@value)
+    def initialize(@value : T)
     end
 
     def is?(other : MValue)
@@ -199,24 +199,13 @@ module Ven::Suite
     end
   end
 
-  # Crystal number types that Ven's type num can hold.
-  alias MNumberType = Int32 | Int64 | BigDecimal
-
   # Ven's number data type (type num).
-  #
-  # Uses ladder-like technique to get a numeric value from
-  # string input, if any: Int32 -> Int64 -> BigDecimal. Any
-  # given float is always a BigDecimal.
-  struct MNumber < MValue(MNumberType)
-    def initialize(@value : MNumberType)
+  struct MNumber < MValue(BigDecimal)
+    def initialize(@value)
     end
 
-    def initialize(input : String)
-      @value = input.to_i? || input.to_i64? || input.to_big_d
-    end
-
-    def initialize(value : BigInt | Float)
-      @value = value.to_big_d
+    def initialize(input : Int | BigInt | Float | String)
+      @value = input.to_big_d
     end
 
     def to_num
@@ -241,28 +230,9 @@ module Ven::Suite
     #
     # Raises `ModelCastException` on overflow.
     def to_i : Int32
-      case @value
-      in Int32
-        @value.as(Int32)
-      in Int64, BigDecimal
-        @value.to_i32
-      end
+      @value.to_i32
     rescue OverflowError
-      raise ModelCastException.new(
-        "internal number conversion overflow: to_i")
-    end
-
-    # Returns the Int64 version of this number.
-    #
-    # Raises `ModelCastException` on overflow.
-    def to_i64 : Int64
-      @value.to_i64? || raise ModelCastException.new(
-        "internal number conversion overflow: to_i64")
-    end
-
-    # Returns the BigDecimal version of this number.
-    def to_big_d : BigDecimal
-      @value.to_big_d
+      raise ModelCastException.new("numeric overflow")
     end
 
     # Negates this number.
@@ -418,7 +388,7 @@ module Ven::Suite
 
     # Contains the distance between the end of this range
     # and the start of this range.
-    @distance : MNumberType
+    @distance : BigDecimal
 
     def initialize(@start : Num, @end : Num)
       @distance = (@end.value - @start.value).abs + 1
@@ -499,7 +469,7 @@ module Ven::Suite
     end
 
     # Returns whether this range includes *num*.
-    def includes?(num : MNumberType)
+    def includes?(num : BigDecimal)
       num >= @start.value && num <= @end.value
     end
   end

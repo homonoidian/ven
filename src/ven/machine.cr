@@ -402,6 +402,8 @@ module Ven
       end
     rescue DivisionByZeroError
       die("'#{operator}': division by zero given #{left}, #{right}")
+    rescue OverflowError
+      die("'#{operator}': numeric overflow")
     end
 
     # Normalizes a binary operation (i.e., converts it to its
@@ -502,8 +504,8 @@ module Ven
       when "+"
         return num ((start + end_) * operand.length) / 2
       when "*"
-        start = operand.start.to_big_d
-        end_  = operand.end.to_big_d
+        start = operand.start.value
+        end_  = operand.end.value
 
         # Uses GMP's factorial. If got |*| -A to -B, outputs
         # -(|*| A to B); I don't know whether it's the expected

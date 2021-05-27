@@ -11,7 +11,7 @@ distinct sanity;
 
 # Ideally, we `expose ven.tests`. But the order they will be
 # exposed in is not really guaranteed (by Ven); and we ourselves
-# did not specify one.
+# did not specify any.
 
 expose ven.tests.language.base;
 expose ven.tests.language.scope;
