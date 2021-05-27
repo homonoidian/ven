@@ -54,7 +54,7 @@ module Ven::Parselet
     }
 
     def parse
-      process(lexeme[1...-1])
+      process(lexeme)
     end
 
     # Unescapes valid escape codes and unpacks interpolation.
@@ -109,7 +109,7 @@ module Ven::Parselet
   # Reads a regex pattern into QRegex.
   class PRegex < Nud
     def parse
-      QRegex.new(@tag, lexeme[1...-1])
+      QRegex.new(@tag, lexeme)
     end
   end
 
@@ -278,17 +278,41 @@ module Ven::Parselet
     end
   end
 
-  # Reads a 'queue' expression into QQueue: `queue 1 + 2`.
+  # Reads a 'queue' expression into QQueue.
   class PQueue < Nud
     def parse
       QQueue.new(@tag, led)
     end
   end
 
-  # Reads an 'ensure' expression into QEnsure: `ensure 2 + 2 is 4`.
+  # Reads an 'ensure' assertion into QEnsure. Reads an 'ensure'
+  # test into QEnsureTest.
   class PEnsure < Nud
     def parse
-      QEnsure.new(@tag, led Precedence::CONVERT)
+      agent = led(Precedence::CONVERT)
+
+      return QEnsure.new(@tag, agent) unless @parser.word!("{")
+
+      @semicolon = false
+
+      # If we have a block opening after the agent, we're
+      # QEnsureTest:
+      #
+      # ~> ensure <...> {
+      #  we are here ---^
+      shoulds = @parser.repeat(stop: "}") { should }
+
+      QEnsureTest.new(@tag, agent, shoulds)
+    end
+
+    # Reads a should.
+    private def should : QEnsureShould
+      @parser.expect("SHOULD")
+
+      section = @parser.expect("STRING")
+      cases   = @parser.repeat(sep: ";")
+
+      QEnsureShould.new(@tag, section[:lexeme], cases)
     end
   end
 

@@ -191,7 +191,7 @@ module Ven
     # Pops *amount* values from the stack. Keeps their order.
     # *cast* can be passed to ensure the type of each value.
     # Raises on underflow.
-    private macro pop(amount = 1, cast = Model)
+    private macro pop(amount = 1, as cast = Model)
       {% if amount == 1 %}
         frame.stack.pop.as({{cast}})
       {% elsif cast != Model %}
@@ -941,7 +941,7 @@ module Ven
             # the callee and N arguments: (x1 ...N --)
             in Opcode::NEXT_FUN
               args = pop static(Int32)
-              callee = pop.as(MFunction)
+              callee = pop(as: MFunction)
 
               # Pop frames until we meet the nearest surrounding
               # function. We know there is one because we trust
@@ -1007,7 +1007,7 @@ module Ven
             # stack: (B -- I), where B is the box parent to this
             # instance, and I is the instance.
             in Opcode::BOX_INSTANCE
-              put MBoxInstance.new(pop.as(MFunction), @context.scopes[-1].dup)
+              put MBoxInstance.new(pop(as: MFunction), @context.scopes[-1].dup)
             # Makes a lambda from the function it receives
             # as the argument. Assumes there is at least
             # one scope in the scope hierarchy.
@@ -1021,6 +1021,27 @@ module Ven
                 lambda.params,
                 lambda.target,
               )
+            # Pops and uses that to print ensure test title.
+            in Opcode::TEST_TITLE
+              puts "[#{chunk.file}]: #{pop(as: Str).value}".colorize.bold
+            # Checks if tap is false, and, if it is, emits
+            # a failure.
+            in Opcode::TEST_ASSERT
+              if tap.false?
+                frame.failures << "#{chunk.file}:#{this.line}: got #{tap}"
+              end
+            # Checks if there are any failures in this frame's
+            # `failures` and, if there are, prints them under a
+            # test case section (provided by static).
+            in Opcode::TEST_SHOULD
+              if frame.failures.empty?
+                puts " #{"✓".colorize.bold.green} #{static}"
+              else
+                puts " ❌ #{static}".colorize.bold.red
+                frame.failures.each do |failure|
+                  puts "\t◦ #{failure}"
+                end
+              end
             end
           rescue error : ModelCastException | Context::VenAssignmentError
             die(error.message.not_nil!)

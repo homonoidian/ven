@@ -26,6 +26,11 @@ module Ven::Suite
     # according to plan.
     property returns : Model?
 
+    # An array of failure messages. Used inside ensure tests
+    # but generic in nature (may be used to wait for all non-
+    # fatal errors).
+    property failures = [] of String
+
     def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
     end
 

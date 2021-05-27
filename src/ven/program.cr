@@ -71,7 +71,7 @@ module Ven
       when Step::Read
         @quotes = @reader.read
       when Step::Compile
-        @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin)
+        @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin, @legate)
       when Step::Optimize
         @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...], @legate.optimize)
       when Step::Evaluate

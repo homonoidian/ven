@@ -22,11 +22,11 @@ module Ven
       # `&_` and `_` should be handled as if they were keywords.
       /(?:(?:[$_a-zA-Z](?:\-?\w)+|[a-zA-Z])[?!]?|&?_|\$)/
     {% elsif type == :STRING %}
-      /"(?:[^\n"\\]|#{Ven.regex_for(:STRING_ESCAPES)})*"/
+      /"((?:[^\n"\\]|#{Ven.regex_for(:STRING_ESCAPES)})*)"/
     {% elsif type == :STRING_ESCAPES %}
       /\\[$a-z\\"]/
     {% elsif type == :REGEX %}
-      /`(?:[^\\`]|\\.)*`/
+      /`((?:[^\\`]|\\.)*)`/
     {% elsif type == :NUMBER %}
       /(?:(?:\d(?:_?\d)*)?\.(?:_?\d)+|[1-9](?:_?\d)*|0)/
     {% elsif type == :SPECIAL %}
@@ -74,7 +74,8 @@ module Ven
     KEYWORDS = %w(
       _ &_ nud not is in if else fun
       given loop next queue ensure expose
-      distinct box and or return dies to)
+      distinct box and or return dies to
+      should)
 
     # Returns the current word.
     getter word = { type: "START", lexeme: "<start>", line: 1 }
@@ -192,9 +193,9 @@ module Ven
           when match(RX_NUMBER)
             word("NUMBER", $0)
           when match(RX_STRING)
-            word("STRING", $0)
+            word("STRING", $1)
           when match(RX_REGEX)
-            word("REGEX", $0)
+            word("REGEX", $1)
           when pair = @context.triggers.find { |_, lead| match(lead) }
             word(pair[0], $0)
           when match(RX_SPECIAL)
@@ -247,7 +248,7 @@ module Ven
     # Yields repeatedly, expecting *sep* after each of the
     # yields; collects the results of the yields in an Array,
     # and returns that array on termination. Termination
-    # happens upon encountering *stop*.
+    # happens upon consuming *stop*.
     def repeat(stop : String? = nil, sep : String? = nil, & : -> T) forall T
       raise "repeat(): expected either stop or sep" unless stop || sep
 
@@ -305,8 +306,12 @@ module Ven
         this = stmt.parse!(self, tag, word!)
         semi = stmt.semicolon
       else
+        nud  = @nud[(@word[:type])]?
         this = led
-        semi = true
+        # XXX: the decision made by *nud* remains with it
+        # even after it finished reading. Doing a bit hairy
+        # here; this may cause some problems.
+        semi = nud.try(&.semicolon)
       end
 
       if !word!(";") && semi && !eoi?

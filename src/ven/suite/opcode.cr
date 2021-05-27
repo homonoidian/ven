@@ -36,6 +36,8 @@ module Ven::Suite
     SETUP_RET
     ANY
     BOX_INSTANCE
+    TEST_TITLE
+    TEST_ASSERT
 
     # Opcodes that take a static payload.
 
@@ -51,6 +53,7 @@ module Ven::Suite
     FIELD_IMMEDIATE
     NEXT_FUN
     REST
+    TEST_SHOULD
 
     # Opcodes that take a jump payload.
 

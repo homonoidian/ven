@@ -16,6 +16,9 @@ module Ven
     # (and your program runs faster); if false, Ven handles
     # SIGINT interrupt.
     property fast_interrupt = false
+    # `Compiler`: if true, enables test mode (i.e., disignores
+    # 'ensure' tests).
+    property test_mode = false
 
     # `Machine`: returns the resulting timetable (if had
     # `measure` enabled).

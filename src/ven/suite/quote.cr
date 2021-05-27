@@ -132,7 +132,6 @@ module Ven::Suite
     given : Quotes,
     slurpy : Bool)
 
-  defquote(QEnsure, expression : Quote)
   defquote(QQueue, value : Quote)
 
   defquote(QInfiniteLoop, repeatee : Quote)
@@ -158,4 +157,8 @@ module Ven::Suite
     params : Array(String),
     body : Quote,
     slurpy : Bool)
+
+  defquote(QEnsure, expression : Quote)
+  defquote(QEnsureTest, comment : Quote, shoulds : Array(QEnsureShould))
+  defquote(QEnsureShould, section : String, pad : Quotes)
 end

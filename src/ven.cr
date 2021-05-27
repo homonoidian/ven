@@ -353,6 +353,14 @@ module Ven
           flag.description = "Enable system SIGINT handling (makes your program run faster)."
         end
 
+        cmd.flags.add do |flag|
+          flag.name        = "test-mode"
+          flag.short       = "-t"
+          flag.long        = "--test"
+          flag.default     = false
+          flag.description = "Enable test mode (disignores 'ensure' test blocks)."
+        end
+
         cmd.run do |options, arguments|
           port = options.int["port"].as Int32
 
@@ -367,6 +375,7 @@ module Ven
           @legate.inspect = options.bool["inspect"]
           @legate.optimize = options.int["optimize"].to_i * 8
           @legate.fast_interrupt = options.bool["fast-interrupt"]
+          @legate.test_mode = options.bool["test-mode"]
 
           if arguments.empty?
             # Do not quit after errors:

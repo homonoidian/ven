@@ -32,7 +32,7 @@ module Ven
     # No arguments are required, but *file* (for a file name),
     # *context* (for a compiler context) and *origin* (for the
     # point of origin of chunk emission) can be provided.
-    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0)
+    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0, @legate = Legate.new)
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
@@ -702,6 +702,33 @@ module Ven
       issue(Opcode::LAMBDA, lambda)
     end
 
+    def visit(q : QEnsureTest)
+      if @legate.test_mode
+        visit(q.comment)
+        issue(Opcode::TEST_TITLE)
+        visit(q.shoulds)
+      end
+
+      # Didn't think of a better idea other than to
+      # return true... Why not?
+      issue(Opcode::TRUE)
+    end
+
+    def visit(q : QEnsureShould)
+      target = uninitialized Int32
+
+      under "[ensure test: should]" do |target|
+        q.pad.each do |quote|
+          visit(quote)
+          issue(Opcode::TEST_ASSERT)
+        end
+        issue(Opcode::TEST_SHOULD, q.section)
+        issue(Opcode::RET)
+      end
+
+      issue(Opcode::GOTO, target)
+    end
+
     # Makes a compiler, compiles *quotes* with it and disposes
     # the compiler.
     #
@@ -710,8 +737,8 @@ module Ven
     # is the compiler context of the compilation.
     #
     # Returns unstitched chunks.
-    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0)
-      compiler = new(file, context, origin)
+    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0, legate = Legate.new)
+      compiler = new(file, context, origin, legate)
       compiler.visit(quotes)
       compiler.@chunks
     end
