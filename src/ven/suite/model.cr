@@ -1009,6 +1009,21 @@ module Ven::Suite
     getter params : Array(String)
 
     def initialize(@scope, @arity, @slurpy, @params, @target)
+      @myselfed = false
+    end
+
+    # Sets the name by this lambda knows itself under.
+    #
+    # This method only works once, i.e., if the name is not
+    # already there.
+    #
+    # This is useful to make recursive lambdas (when they're
+    # the value of an assignment).
+    def myself=(name : String)
+      unless @myselfed
+        @scope[name] = self
+        @myselfed    = true
+      end
     end
 
     def variant?(args)

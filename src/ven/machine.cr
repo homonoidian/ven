@@ -287,6 +287,9 @@ module Ven
     private macro revoke(export = false)
       %frame = @frames.pop
 
+      # Disable scope isolation (if it was enabled).
+      @context.isolate = false
+
       unless @context.size == 1
         @context.pop
       end
@@ -340,6 +343,39 @@ module Ven
           break it
         end
       end
+    end
+
+    # Assigns `VSymbol` *target* to *value*.
+    #
+    # If *value* is a lambda, does `MLambda#myself=` with
+    # *target*.
+    #
+    # Returns *value*.
+    private macro assign(target, value)
+      %target = {{target}}.as(VSymbol)
+      %value  = {{value}}
+
+      # A snippet of slapcode to make lambdas recursive.
+      #
+      # Lambda assignment happens outside of lambda's isolated
+      # scope, so it has no access to itself. Let it have one.
+      #
+      # The 'myself=' assignment should happen only once, so
+      # this snippet:
+      #
+      # ```ven
+      # x = (a) [x, y];
+      # y = x;
+      # y();
+      # ```
+      #
+      # Will die because 'y' is not defined inside the lambda
+      # (while 'x' is).
+      if %value.is_a?(MLambda)
+        %value.myself = %target.name
+      end
+
+      @context[%target] = %value
     end
 
     # Performs a binary operation on *left*, *right*.
@@ -794,10 +830,10 @@ module Ven
               tap.false? ? jump target : pop
             # Pops and assigns it to a symbol: (x1 --)
             in Opcode::POP_ASSIGN
-              @context[symbol] = pop
+              assign symbol, pop
             # Taps and assigns it to a symbol: (x1 -- x1)
             in Opcode::TAP_ASSIGN
-              @context[symbol] = tap
+              assign symbol, tap
             # Implements inplace-increment semantics: (-- x1)
             in Opcode::INC
               this = symbol
@@ -859,6 +895,11 @@ module Ven
                   # worth it to make this a special-case of
                   # invoke():
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
+                  # Lambdas are isolated from the other scopes,
+                  # although globals can still be accessed
+                  # (their nest is known, and lookup prefers
+                  # nest over isolation).
+                  @context.isolate = true
                   # Worked without the 'dup', but it's required
                   # by semantics (is it?)
                   @context.scopes << found.scope.dup

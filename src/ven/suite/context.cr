@@ -141,6 +141,10 @@ module Ven::Suite::Context
     # The traceback of this context.
     getter traces = [] of Trace
 
+    # Whether to forbid lookups farther than the localmost
+    # scope.
+    property isolate = false
+
     @scopes = [Scope.new]
 
     # Returns the amount of scopes (aka scope depth, nesting)
@@ -170,6 +174,12 @@ module Ven::Suite::Context
       if value = @scopes[maybe || -1][symbol]?
         return value
       end
+
+      # Prefer *maybe*/localmost over the *isolate*
+      # preference. Although bounds seem to pass
+      # through to here. The whole thing is a bit
+      # shaky, to say the least.
+      return if @isolate
 
       @scopes.reverse_each do |scope|
         if value = scope[symbol]?
