@@ -42,9 +42,12 @@ module Ven
     @cache  = Set(String).new
     @client : Inquirer::Client
 
-    # Legate with all defaults, since we really do not want
-    # to create a new Legate every time we do `expose`/`from`.
+    # Legate with all defaults; we don't want to create a new
+    # Legate every time we do `expose`/`from`, considering all
+    # stuff is identical.
     @legate = Legate.new
+
+    delegate :test_mode, :test_mode=, to: @legate
 
     # Makes an Orchestra for an Inquirer server running at
     # the given *port*.

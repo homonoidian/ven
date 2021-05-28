@@ -365,6 +365,7 @@ module Ven
           port = options.int["port"].as Int32
 
           @orchestra = Orchestra.new(port)
+          @orchestra.test_mode = options.bool["test-mode"]
 
           @final = options.string["final"]
           @result = options.bool["result"]
@@ -375,7 +376,6 @@ module Ven
           @legate.inspect = options.bool["inspect"]
           @legate.optimize = options.int["optimize"].to_i * 8
           @legate.fast_interrupt = options.bool["fast-interrupt"]
-          @legate.test_mode = options.bool["test-mode"]
 
           if arguments.empty?
             # Do not quit after errors:
