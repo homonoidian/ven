@@ -1012,7 +1012,7 @@ module Ven::Suite
       @myselfed = false
     end
 
-    # Sets the name by this lambda knows itself under.
+    # Sets the name this lambda knows itself under.
     #
     # This method only works once, i.e., if the name is not
     # already there.

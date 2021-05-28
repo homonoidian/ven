@@ -175,9 +175,8 @@ module Ven::Suite::Context
         return value
       end
 
-      # Prefer *maybe*/localmost over the *isolate*
-      # preference. Although bounds seem to pass
-      # through to here. The whole thing is a bit
+      # Prefer *maybe*/localmost over *isolate*. Although bounds
+      # seem to pass through to here. The whole thing is a bit
       # shaky, to say the least.
       return if @isolate
 
