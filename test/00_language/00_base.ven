@@ -1,150 +1,126 @@
 distinct ven.tests.language.base;
 
-say("00_language/00_base.ven");
+ensure "Sanity of data types" {
+  should "be of correct type"
+    0.0 is num;
+    12.345678 is num;
+    1234567890 is num;
+    1_234_567_890 is num;
 
-# Basic 'ensure' behavior: dies only if 'false':
+    "foo bar baz" is str;
+    "\n\t\r" is str;
+    "\"qux\"" is str;
 
-ensure true;
-ensure false dies;
+    [] is vec;
+    [0] is vec;
+    [[[]]] is vec;
+    [0, "1", "2"] is vec;
+    [0, "1", "2", [3],] is vec;
+    [[0], [1], [2]] is vec
+}
 
+ensure "Valid principles of falsehood (/ truthiness)" {
+  should "view certain values as falsey"
+    0? is false;
+    ""? is false;
+    []? is false;
+    (false)? is false
 
-# The principles of falsehood (/ truthiness):
-#
-# If conversion to boolean was requested explicitly, the
-# following values must be false (and their inverse, thus,
-# must be true):
+  should "correctly invert falsey values"
+    not 0 is true;
+    not "" is true;
+    not [] is true;
+    not false is true
 
-ensure 0? is false;
-ensure ""? is false;
-ensure []? is false;
-ensure (false)? is false;
+  should "view all other values as truthy"
+    12? is true;
+    "foobar"? is true;
+    (true)? is true;
+    [1]? is true;
+    [1, 2, 3]? is true
 
-ensure not 0 is true;
-ensure not "" is true;
-ensure not [] is true;
-ensure not false is true;
+  should "correctly invert truthy values"
+    not 12? is false;
+    not "foobar"? is false;
+    not (true)? is false;
+    not [1]? is false;
+    not [1, 2, 3]? is false
+}
 
-# However, if conversion to boolean was requested implicitly,
-# all values are true except for `false`:
+ensure "Sanity of unary operators" {
+  should "return correct result when operand of expected type"
+    +1 is 1;
+    -1 is -1;
+    ~"hello" is "hello";
+    &[1] is [1];
+    #[1, 2, 3] is 3;
+    #"hello" is 5
 
-ensure 0;
-ensure "";
-ensure [];
-ensure false dies;
+  should "return correct result when operand of unexpected type"
+    +"1" is 1;
+    +[2, 4, 6] is 3;
+    +true is 1;
+    +false is 0;
 
+    -"1" is -1;
+    -[2, 4, 6] is -3;
+    -true is -1;
+    -false is 0;
 
-# Data types. Ven has three data types that persist during
-# all stages of program evaluation (reading, compilation and
-# interpretation). These are:
-#   - num
-#   - str
-#   - vec
+    ~123 is "123";
+    ~[1, 2, 3] is "[1, 2, 3]";
+    ~true is "true";
+    ~false is "false";
 
-ensure 0.0 is num;
-ensure 12.345678 is num;
-ensure 1234567890 is num;
-ensure 1_234_567_890 is num;
+    &1 is [1];
+    &"1" is ["1"];
+    &true is [true];
+    &false is [false];
 
-ensure "foo bar baz" is str;
-ensure "\n\t\r" is str;
-ensure "\"qux\"" is str;
+    #123 is 3;
+    #true is 4;
+    #false is 5
+}
 
-ensure [] is vec;
-ensure [0] is vec;
-ensure [[[]]] is vec;
-ensure [0, "1", "2"] is vec;
-ensure [0, "1", "2", [3],] is vec;
-ensure [[0], [1], [2]] is vec;
+ensure "Sanity of binary operators" {
+  should "return correct result when operands of expected types"
+    1 < 2;
+    2 > 1;
+    2 <= 2;
+    5 >= 4;
 
+    1 + 1 is 2;
+    2 - 2 is 0;
+    2 * 2 is 4;
+    2 / 2 is 1;
 
-# There are eight unary operators in Ven:
-#   - '+' (convert to num unless num, else identity)
-#   - '-' (convert to negative num unless num, else negate)
-#   - '~' (convert to str unless str, else identity)
-#   - '#' (measure length)
-#   - '&' (wrap in vec unless vec, else identity)
-#   - 'not' (convert to inverse boolean)
-#   - postfix '?' (convert to boolean)
-#   - postifx 'dies' (true if dies, else identity)
+    [1] & [2] is [1, 2];
+    "lead" ~ "tail" is "leadtail";
 
-ensure +1 is 1;
-ensure +true is 1;
-ensure +false is 0;
-ensure +"1" is 1;
-ensure +[1, 2] is 2;
+    "a" x 10 is "aaaaaaaaaa";
+    [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    [1, 2, 3] x 3 is [1, 2, 3, 1, 2, 3, 1, 2, 3]
 
-ensure -1 is -1;
-ensure -true is -1;
-ensure -"1" is -1;
-ensure -[1, 2] is -2;
+  should "return correct result when operands of unexpected types"
+    [1] < "12";
+    "123" > [1, 2];
+    [1, 2] <= [1, 2, 3];
+    "123" >= 3;
 
-ensure ~1 is "1";
-ensure ~"1" is "1";
-ensure ~[1, 2] is "[1, 2]";
+    "1" + 1 is 2;
+    2 - "2" is 0;
+    "2" * ["two", "items"] is 4;
+    "2" / true is 2;
 
-ensure #12 is 2;
-ensure #"12" is 2;
-ensure #[1, 2] is 2;
+    1 & 2 is [1, 2];
+    [1] & 2 is [1, 2];
+    1 & [2] is [1, 2];
 
-ensure &1 is [1];
-ensure &"1" is ["1"];
-ensure &[1, 2] is [1, 2];
+    1 ~ 2 is "12";
+    "1" ~ 2 is "12";
+    1 ~ "2" is "12";
 
-ensure not 1 is false;
-ensure not "1" is false;
-ensure not [1, 2] is false;
-
-ensure (ensure false) dies;
-ensure (ensure "false, of course!") dies is "false, of course!";
-
-
-# There are many binary operators in Ven. A binary operator
-# performs a binary operation, which can be of two forms:
-# normal and abnormal (not normal). Ven tries to convert any
-# abnormal operation into a normal one by performing what is
-# called normalization.
-
-# Normal binary operations:
-
-ensure 1 < 2;
-ensure 2 > 1;
-ensure 2 <= 2;
-ensure 5 >= 4;
-
-ensure 1 + 1 is 2;
-ensure 2 - 2 is 0;
-ensure 2 * 2 is 4;
-ensure 2 / 2 is 1;
-
-ensure [1] & [2] is [1, 2];
-ensure "lead" ~ "tail" is "leadtail";
-
-ensure "a" x 10 is "aaaaaaaaaa";
-ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-ensure [1, 2, 3] x 3 is [1, 2, 3, 1, 2, 3, 1, 2, 3];
-
-# Abnormal binary operations:
-
-ensure [1] < "12";
-ensure "123" > [1, 2];
-ensure [1, 2] <= [1, 2, 3];
-ensure "123" >= 3;
-
-ensure "1" + 1 is 2;
-ensure 2 - "2" is 0;
-ensure "2" * ["two", "items"] is 4;
-ensure "2" / true is 2;
-
-ensure 1 & 2 is [1, 2];
-ensure [1] & 2 is [1, 2];
-ensure 1 & [2] is [1, 2];
-
-ensure 1 ~ 2 is "12";
-ensure "1" ~ 2 is "12";
-ensure 1 ~ "2" is "12";
-
-ensure 10 x "a" is "aaaaaaaaaa";
-ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-say("-> [PASS]");
+    10 x "a" is "aaaaaaaaaa";
+    10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}
