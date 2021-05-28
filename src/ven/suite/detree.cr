@@ -247,8 +247,16 @@ module Ven::Suite
       "next #{q.scope || ""} #{commaed(q.args)}"
     end
 
+    def visit!(q : QQueue)
+      "queue #{visit(q.value)}"
+    end
+
     def visit!(q : QReturnStatement | QReturnExpression)
       "return #{visit(q.value)}"
+    end
+
+    def visit!(q : QReturnQueue)
+      "return queue"
     end
 
     def visit!(q : QBox)

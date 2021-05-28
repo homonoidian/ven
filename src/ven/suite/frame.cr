@@ -31,6 +31,11 @@ module Ven::Suite
     # fatal errors).
     property failures = [] of String
 
+    # The queue values of this frame. They are appended here
+    # by Opcode::QUEUE, and used by RET/FORCE_RET, depending
+    # on the situation.
+    property queue = Models.new
+
     def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
     end
 

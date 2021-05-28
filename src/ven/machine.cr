@@ -84,7 +84,7 @@ module Ven
 
     # Returns the current frame.
     private macro frame
-      @frames.last
+      @frames[-1]
     end
 
     # Returns the current chunk.
@@ -185,7 +185,7 @@ module Ven
     # Returns the last value of the stack. *cast* can be passed
     # to ensure the type of the value. Raises on underflow.
     private macro tap(cast = Model)
-      frame.stack.last.as({{cast}})
+      frame.stack[-1].as({{cast}})
     end
 
     # Pops *amount* values from the stack. Keeps their order.
@@ -876,7 +876,9 @@ module Ven
             # the last value from the function frame's operand
             # stack.
             in Opcode::RET
-              if returns = frame.returns
+              if !(queue = frame.queue).empty?
+                revoke && put vec queue
+              elsif returns = frame.returns
                 revoke && put returns
               elsif !revoke(export: true)
                 die("void expression")
@@ -976,9 +978,14 @@ module Ven
               value = pop
 
               @frames.reverse_each do |it|
-                revoke
-
-                break put value if it.goal.function?
+                revoke; break put value if it.goal.function?
+              end
+            # Force-returns the queue of the nearest surrounding
+            # function. Revokes all frames up to & including
+            # the frame of that nearest surrounding function.
+            in Opcode::FORCE_RET_QUEUE
+              @frames.reverse_each do |it|
+                revoke; break put vec it.queue if it.goal.function?
               end
             # Finds the nearest surrounding function and sets
             # its return value to whatever was tapped. Does
@@ -1015,7 +1022,7 @@ module Ven
               lambda = function
 
               put MLambda.new(
-                @context.scopes.last.dup,
+                @context.scopes[-1].dup,
                 lambda.arity,
                 lambda.slurpy,
                 lambda.params,
@@ -1041,6 +1048,12 @@ module Ven
                 frame.failures.each do |failure|
                   puts "\t◦ #{failure}"
                 end
+              end
+            # Appends the tapped value to the queue of the
+            # frame of the closest surrounding function.
+            in Opcode::QUEUE
+              @frames.reverse_each do |it|
+                break it.queue << tap if it.goal.function?
               end
             end
           rescue error : ModelCastException | Context::VenAssignmentError

@@ -419,10 +419,15 @@ module Ven::Parselet
     end
   end
 
-  # Reads a statement-level return.
+  # Reads a statement-level return. Reads a statement-level
+  # `return queue` expression.
   class PReturnStatement < Nud
     def parse
-      QReturnStatement.new(@tag, led)
+      if !!@parser.word!("QUEUE")
+        QReturnQueue.new(@tag)
+      else
+        QReturnStatement.new(@tag, led)
+      end
     end
   end
 

@@ -611,6 +611,12 @@ module Ven
       end
     end
 
+    def visit!(q : QReturnQueue)
+      die("'return' outside of function") unless @function
+
+      issue(Opcode::FORCE_RET_QUEUE)
+    end
+
     def visit!(q : QBox)
       # Boxes and functions are just too similar to
       # differentiate them under the hood.
@@ -727,6 +733,13 @@ module Ven
       end
 
       issue(Opcode::GOTO, target)
+    end
+
+    def visit(q : QQueue)
+      die("'queue' outside a function") unless @function
+
+      visit(q.value)
+      issue(Opcode::QUEUE)
     end
 
     # Makes a compiler, compiles *quotes* with it and disposes

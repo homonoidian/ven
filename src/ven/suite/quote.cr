@@ -144,6 +144,7 @@ module Ven::Suite
     repeatee : Quote)
 
   defquote(QNext, scope : String?, args : Quotes)
+  defquote(QReturnQueue)
   defquote(QReturnStatement, value : Quote)
   defquote(QReturnExpression, value : Quote)
 

@@ -38,6 +38,8 @@ module Ven::Suite
     BOX_INSTANCE
     TEST_TITLE
     TEST_ASSERT
+    QUEUE
+    FORCE_RET_QUEUE
 
     # Opcodes that take a static payload.
 
@@ -94,8 +96,9 @@ module Ven::Suite
       end
     end
 
-     # Returns whether this opcode puts exactly one value on
-     # the operand stack **no matter what**, and consumes none.
+    # Returns whether this opcode consumes no values from
+    # the operand stack and puts exactly one value on the
+    # operand stack **with no side effects**.
     def puts_one?
       self.in?(
         DUP,
