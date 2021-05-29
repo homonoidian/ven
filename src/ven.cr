@@ -376,6 +376,7 @@ module Ven
           @legate.inspect = options.bool["inspect"]
           @legate.optimize = options.int["optimize"].to_i * 8
           @legate.fast_interrupt = options.bool["fast-interrupt"]
+          @legate.test_mode = options.bool["test-mode"]
 
           if arguments.empty?
             # Do not quit after errors:
