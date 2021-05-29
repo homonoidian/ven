@@ -982,8 +982,10 @@ module Ven
             # Implements the semantics of 'next fun', which is
             # an explicit tail-call (elimination) request. Pops
             # the callee and N arguments: (x1 ...N --)
+            #
+            # Queue is always preserved.
             in Opcode::NEXT_FUN
-              args = pop static(Int32)
+              args   = pop static(Int32)
               callee = pop(as: MFunction)
 
               # Pop frames until we meet the nearest surrounding
@@ -998,8 +1000,15 @@ module Ven
                   die("improper 'next fun': #{callee}: #{args.join(", ")}")
                 end
 
-                break revoke &&
-                  invoke(variant.to_s, variant.target, args, Frame::Goal::Function)
+                # Revoke that surrounding function & invoke
+                # the one requested by 'next'.
+                revoke && invoke(variant.to_s, variant.target, args, Frame::Goal::Function)
+
+                # But keep queue values from the revoked
+                # function.
+                frame.queue = it.queue
+
+                break
               end
 
               next
