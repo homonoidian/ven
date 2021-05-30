@@ -155,8 +155,17 @@ module Ven::Suite
     # support.
     #
     # Returns nil if *range* is invalid (too long, etc.)
-    def []?(range : MRange) : Model?
-      self[range.start.to_i...range.end.to_i]?
+    def []?(range : MFullRange) : Model?
+      self[range.begin.to_i..range.end.to_i]?
+    end
+
+    # :ditto:
+    def []?(range : MPartialRange) : Model?
+      if begin_ = range.begin
+        self[begin_.to_i...]?
+      elsif end_ = range.end
+        self[...end_.to_i]?
+      end
     end
 
     # :ditto:
@@ -375,14 +384,18 @@ module Ven::Suite
     end
   end
 
-  # Ven's range data type.
-  struct MRange < MStruct
+  # Ven's umbrella range data type.
+  abstract struct MRange < MStruct
+  end
+
+  # Ven's full range datatype (`1 to 10`, `0 to 100`, etc.).
+  struct MFullRange < MRange
     # Maximum amount of values a range->vec conversion
     # can handle.
     RANGE_TO_VEC_CAP = 100_000
 
-    # Returns the start of this range.
-    getter start : Num
+    # Returns the beginning of this range.
+    getter begin : Num
     # Returns the end of this range.
     getter end : Num
 
@@ -390,8 +403,8 @@ module Ven::Suite
     # and the start of this range.
     @distance : BigDecimal
 
-    def initialize(@start : Num, @end : Num)
-      @distance = (@end.value - @start.value).abs + 1
+    def initialize(from @begin : Num, to @end : Num)
+      @distance = (@end.value - @begin.value).abs + 1
     end
 
     # Converts this range to vector.
@@ -407,13 +420,13 @@ module Ven::Suite
 
       # These will not overflow for there is RANGE_TO_VEC_CAP,
       # which is (at least, should be) much lower than max Int32.
-      start = @start.to_i
-      end_  = @end.to_i
+      begin_ = @begin.to_i
+      end_   = @end.to_i
 
-      if start > end_
-        start.downto(end_) { |it| result << Num.new(it) }
-      elsif start < end_
-        start.upto(end_) { |it| result << Num.new(it) }
+      if begin_ > end_
+        begin_.downto(end_) { |it| result << Num.new(it) }
+      elsif begin_ < end_
+        begin_.upto(end_) { |it| result << Num.new(it) }
       end
 
       result
@@ -424,17 +437,17 @@ module Ven::Suite
     end
 
     def is?(other : MRange)
-      @start.is?(other.start) && @end.is?(other.end)
+      @begin.is?(other.begin) && @end.is?(other.end)
     end
 
     def field(name)
       case name
-      when "start"
-        @start
+      when "begin"
+        @begin
       when "end"
         @end
       when "empty?"
-        MBool.new(@start.value == @end.value)
+        MBool.new(@begin.value == @end.value)
       end
     end
 
@@ -443,34 +456,63 @@ module Ven::Suite
     end
 
     def []?(index : Int)
-      start = @start.value
-      end_  = @end.value
+      begin_ = @begin.value
+      end_   = @end.value
 
       if index < 0
         # E.g., (1 to 10)(-1) is same as (10 to 1)(0);
         #       (10 to 1)(-1) is same as (1 to 10)(0).
         index = -index - 1
-        start, end_ = end_, start
+        begin_, end_ = end_, begin_
       end
 
-      if start > end_
+      if begin_ > end_
         # E.g., 10 to 1
-        return unless (value = start - index) && value >= end_
+        return unless (value = begin_ - index) && value >= end_
       else
         # E.g., 1 to 10
-        return unless (value = start + index) && value <= end_
+        return unless (value = begin_ + index) && value <= end_
       end
 
       Num.new(value)
     end
 
     def to_s(io)
-      io << @start << " to " << @end
+      io << @begin << " to " << @end
     end
 
     # Returns whether this range includes *num*.
     def includes?(num : BigDecimal)
-      num >= @start.value && num <= @end.value
+      num >= @begin.value && num <= @end.value
+    end
+  end
+
+  # Ven's partial range datatype (e.g., `from 10`, `to 100`, etc.)
+  struct MPartialRange < MRange
+    # Returns the beginning of this range, if there is one.
+    getter begin : Num?
+    # Returns the end of this range, if there is one.
+    getter end : Num?
+
+    def initialize(from @begin = nil, to @end = nil)
+    end
+
+    def field(name)
+      case name
+      when "beginless?"
+        MBool.new(@begin == nil)
+      when "endless?"
+        MBool.new(@end == nil)
+      end
+    end
+
+    def to_s(io)
+      @begin ? (io << "from " << @begin) : (io << "to " << @end)
+    end
+
+    # Returns whether this range includes *num*.
+    def includes?(num : BigDecimal)
+      @begin ? num >= @begin.not_nil!.value : num <= @end.not_nil!.value
     end
   end
 

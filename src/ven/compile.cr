@@ -241,6 +241,8 @@ module Ven
         when "#" then Opcode::LEN
         when "&" then Opcode::TOV
         when "not" then Opcode::TOIB
+        when "to" then Opcode::TOR_BL
+        when "from" then Opcode::TOR_EL
         end
 
       issue(opcode)

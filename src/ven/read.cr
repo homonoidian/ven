@@ -75,7 +75,7 @@ module Ven
       _ &_ nud not is in if else fun
       given loop next queue ensure expose
       distinct box and or return dies to
-      should)
+      should from)
 
     # Returns the current word.
     getter word = { type: "START", lexeme: "<start>", line: 1 }
@@ -496,7 +496,7 @@ module Ven
     def prepare
       # Prefixes (NUDs):
 
-      defnud("+", "-", "~", "&", "#", "NOT")
+      defnud("+", "-", "~", "&", "#", "NOT", "TO", "FROM")
 
       defnud("$SYMBOL", Parselet::PSymbol)
       defnud("IF", Parselet::PIf)

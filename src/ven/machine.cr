@@ -385,7 +385,7 @@ module Ven
     def binary(operator : String, left : Model, right : Model)
       case {operator, left, right}
       when {"to", Num, Num}
-        MRange.new(left, right)
+        MFullRange.new(left, right)
       when {"is", Str, MRegex}
         # `str is regex` is a special case for `is`, for it
         # does not return the value of left, but instead the
@@ -532,15 +532,15 @@ module Ven
     end
 
     # Reduces range *operand* using a binary *operator*.
-    def reduce(operator, operand : MRange)
-      start = operand.start.value
+    def reduce(operator, operand : MFullRange)
+      start = operand.begin.value
       end_  = operand.end.value
 
       case operator
       when "+"
         return num ((start + end_) * operand.length) / 2
       when "*"
-        start = operand.start.value
+        start = operand.begin.value
         end_  = operand.end.value
 
         # Uses GMP's factorial. If got |*| -A to -B, outputs
@@ -797,6 +797,12 @@ module Ven
             # Puts length of an entity: (x1 -- x2)
             in Opcode::LEN
               put num pop.length
+            # Make a beginless range: (x1 -- x2)
+            in Opcode::TOR_BL
+              put MPartialRange.new(to: pop.to_num)
+            # Make an endless range: (x1 -- x2)
+            in Opcode::TOR_EL
+              put MPartialRange.new(from: pop.to_num)
             # Evaluates a binary operation: (x1 x2 -- x3)
             in Opcode::BINARY
               gather { |lhs, rhs| put binary(static, lhs, rhs) }

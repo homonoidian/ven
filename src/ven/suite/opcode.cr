@@ -40,6 +40,8 @@ module Ven::Suite
     TEST_ASSERT
     QUEUE
     FORCE_RET_QUEUE
+    TOR_BL # beginless
+    TOR_EL # endless
 
     # Opcodes that take a static payload.
 

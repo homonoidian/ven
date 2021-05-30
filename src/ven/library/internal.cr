@@ -58,6 +58,7 @@ module Ven::Library
     vec = Vec
     bool = MBool
     regex = MRegex
+    range = MRange
 
     partial = MPartial
     lambda = MLambda
