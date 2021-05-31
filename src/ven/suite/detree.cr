@@ -4,15 +4,10 @@ module Ven::Suite
   # A visitor that provides **detreeing**, which means converting
   # a `Quote` back into source code.
   class Detree < Visitor(String)
+    # Current indentation level.
     @indent = 0
 
-    # Returns an empty string if *condition* is false. Otherwise,
-    # returns *value*.
-    private macro maybe(value, if condition)
-      {{condition}} ? {{value}} : ""
-    end
-
-    # Executes the block with increased indentation level.
+    # Yields with increased indentation.
     #
     # Returns whatever the block returned.
     private macro indented
@@ -22,35 +17,34 @@ module Ven::Suite
       result
     end
 
-    # Makes *quotes* formatted and comma-separated.
+    # Returns visited and comma-separated *quotes*.
     private macro commaed(quotes)
       visit({{quotes}}).join(", ")
     end
 
-    # Visits *quotes* with respect to indentation.
+    # Returns visited and indented *q*.
     #
-    # Prepends a newline.
-    private def i_visit(quotes : Quotes)
+    # NOTE: Prepends a newline.
+    private def i_visit(q : Quotes)
       indented do
-        String.build do |buffer|
-          buffer << "\n" << quotes.map { |quote| "#{" " * @indent}#{visit(quote)}" }.join(";\n")
+        String.build do |io|
+          io << "\n"
+          # Go over the quotes, indenting them & appending
+          # a ';' & newline.
+          q.each_with_index do |quote, index|
+            io << " " * @indent << visit(quote)
+            io << ";\n" if index < q.size - 1
+          end
         end
       end
     end
 
-    # Visits *quote* with respect to indentation.
-    private def i_visit(quote : QBlock)
-      visit(quote)
-    end
-
     # :ditto:
-    private def i_visit(quote)
-      indented do
-        "\n#{" " * @indent}#{visit(quote)}"
-      end
+    private def i_visit(q : Quote)
+      i_visit([q])
     end
 
-    def visit(q : QVoid)
+    def visit!(q : QVoid)
       ""
     end
 
@@ -83,35 +77,37 @@ module Ven::Suite
     end
 
     def visit!(q : QUnary)
-      String.build do |buffer|
-        buffer << "("
-
+      String.build do |io|
+        io << "("
         if q.operator == "not"
-          buffer << q.operator << " " << "(" << visit(q.operand) << ")"
+          io << q.operator << " " << "(" << visit(q.operand) << ")"
         else
-          buffer << q.operator << visit(q.operand)
+          io << q.operator << visit(q.operand)
         end
-
-        buffer << ")"
+        io << ")"
       end
     end
 
     def visit!(q : QBinary)
-      String.build do |buffer|
+      String.build do |io|
         left, right = q.left, q.right
 
         if left.is_a?(QAssign) || left.is_a?(QBinaryAssign)
-          buffer << "(" << visit(q.left) << ")"
+          # Don't let `(x = 2) and 3` produce `x = 2 and 3`.
+          # Produce `(x = 2) and 3` instead.
+          io << "(" << visit(q.left) << ")"
         else
-          buffer << visit(q.left)
+          io << visit(q.left)
         end
 
-        buffer << " " << q.operator << " "
+        io << " " << q.operator << " "
 
         if right.is_a?(QAssign) || right.is_a?(QBinaryAssign)
-          buffer << "(" << visit(q.right) << ")"
+          # Don't let `3 and (x = 2)` produce `3 and x = 2`.
+          # Produce `3 and (x = 2)` instead.
+          io << "(" << visit(q.right) << ")"
         else
-          buffer << visit(q.right)
+          io << visit(q.right)
         end
       end
     end
@@ -144,7 +140,7 @@ module Ven::Suite
       "#{visit(q.target)}--"
     end
 
-    # Formats field *accessor*.
+    # Formats field accessor *accessor*.
     private def field(accessor : FAImmediate)
       accessor.access
     end
@@ -156,16 +152,16 @@ module Ven::Suite
 
     # :ditto:
     private def field(accessor : FABranches)
-      visit(accessor.access) # QVector
+      visit(accessor.access) # always QVector
     end
 
-    # Formats field *accessors*.
+    # Formats an array field accessors *accessors*.
     private def field(accessors : FieldAccessors)
-      accessors.map { |x| field(x) }.join(".")
+      accessors.map { |a| field(a) }.join(".")
     end
 
     def visit!(q : QAccessField)
-      "(#{visit(q.head)}).#{field(q.tail)}"
+      "#{visit(q.head)}.#{field(q.tail)}"
     end
 
     def visit!(q : QReduceSpread)
@@ -173,31 +169,90 @@ module Ven::Suite
     end
 
     def visit!(q : QMapSpread)
-      "|#{visit(q.operator)}|#{maybe(":", if: q.iterative)} #{visit(q.operand)}"
+      String.build do |io|
+        io << "|" << visit(q.operator) << "|"
+        io << ":" if q.iterative
+        io << " " << visit(q.operand)
+      end
+    end
+
+    # Formulates a short if from *cond*, *suc* and *alt*.
+    #
+    # ```ven
+    # if (cond) suc else alt
+    # ```
+    #
+    # NOTE: *suc* and *alt* mustn't be blocks.
+    private def fmt_short_if(cond : Quote, suc : Quote, alt : Quote)
+      "if (#{visit(cond)}) #{visit(suc)} else #{visit(alt)}"
+    end
+
+    # :ditto:
+    private def fmt_short_if(cond, suc, alt : Nil)
+      "if (#{visit(cond)}) #{visit(suc)}"
+    end
+
+    # Formulates a long if from *cond*, *suc* and *alt*.
+    #
+    # ```ven
+    # if (cond)
+    #   suc
+    # else
+    #   alt
+    # ```
+    #
+    # NOTE: *suc* and *alt* mustn't be blocks.
+    private def fmt_long_if(cond : Quote, suc : Quote, alt : Quote)
+      String.build do |io|
+        io << "if (" << visit(cond) << ")" << i_visit(suc)
+        io << "\n" << " " * @indent << "else" << i_visit(alt)
+      end
+    end
+
+    # :ditto:
+    private def fmt_long_if(cond, suc, alt : Nil)
+      "if (#{visit(cond)})#{i_visit(suc)}"
+    end
+
+    # Formulates a blocky if.
+    #
+    # ```ven
+    # if (cond) {
+    #   suc
+    # } else {
+    #   alt
+    # }
+    private def fmt_blocky_if(cond : Quote, suc : QBlock, alt : QBlock)
+      "if (#{visit(cond)})#{visit(suc)} else #{visit(alt)}"
+    end
+
+    # :ditto:
+    private def fmt_blocky_if(cond : Quote, suc : QBlock, alt : Nil)
+      "if (#{visit(cond)})#{visit(suc)}"
     end
 
     def visit!(q : QIf)
-      blocky = q.suc.is_a?(QBlock)
+      suc = q.suc
+      alt = q.alt
 
-      String.build do |buffer|
-        buffer << "if (" << visit(q.cond) << ") " << i_visit(q.suc)
-
-        if alt = q.alt
-          if blocky
-            buffer << " "
-          else
-            buffer << "\n" << " " * @indent
-          end
-
-          buffer << "else "
-
-          if alt.is_a?(QIf)
-            buffer << visit(alt)
-          else
-            buffer << i_visit(alt)
-          end
-        end
+      case {suc, alt}
+      when {QBlock, QBlock}
+        return fmt_blocky_if(q.cond, suc, alt)
+      when {_, QBlock}
+        return fmt_blocky_if(q.cond, QBlock.new(q.tag, [suc]), alt)
+      when {QBlock, _}
+        return fmt_blocky_if(q.cond, suc, alt.try { |me| QBlock.new(q.tag, [me]) })
       end
+
+      short = fmt_short_if(q.cond, q.suc, q.alt)
+
+      # If the short form is around 60ch, accept it. Otherwise,
+      # generate the block if.
+      if short.size <= 60
+        return short
+      end
+
+      fmt_long_if(q.cond, q.suc, q.alt)
     end
 
     def visit!(q : QBlock)
@@ -212,17 +267,47 @@ module Ven::Suite
       "ensure #{visit(q.expression)}"
     end
 
-    def visit!(q : QFun)
-      equals = q.body.size == 1
-
-      String.build do |buffer|
-        buffer << "fun " << visit(q.name) << "(" << q.params.join(", ") << maybe(", *", if: q.slurpy) << ")"
-        buffer << " given " << commaed(q.given) unless q.given.empty?
-
-        if equals
-          buffer << " =" << i_visit(q.body)
+    private def fmt_params(io, params : Parameters)
+      params.each do |param|
+        io << "(" if param.index == 0
+        if param.slurpy
+          io << "*"
+        elsif param.contextual
+          io << "$"
         else
-          buffer << " {" << i_visit(q.body) << "\n" << " " * @indent << "}"
+          io << param.name
+        end
+        # ')' is just like ',', but at the end.
+        io << (param.index == params.size - 1 ? ")" : ", ")
+      end
+    end
+
+    private def fmt_givens(io, params : Parameters)
+      params.each do |param|
+        if given = param.given
+          io << " given " if param.index == 0
+          io << visit(given)
+          io << ", " unless param.index == params.givens.size - 1
+        end
+      end
+    end
+
+    def visit!(q : QFun)
+      String.build do |io|
+        io << "fun " << visit(q.name) \
+           << fmt_params(io, q.params) \
+           << fmt_givens(io, q.params)
+        # Print the body. If it's blocky, use block. If it's
+        # not but it's too long (> 60ch), newline and indent.
+        # Otherwise, use '='.
+        if q.blocky
+          io << " " << visit QBlock.new(q.tag, q.body)
+        elsif expr = visit(first = q.body.first)
+          if expr.size <= 60
+            io << " = " << expr
+          else
+            io << " =" << i_visit(first)
+          end
         end
       end
     end
@@ -251,32 +336,27 @@ module Ven::Suite
       "queue #{visit(q.value)}"
     end
 
-    def visit!(q : QReturnStatement | QReturnExpression)
-      "return #{visit(q.value)}"
-    end
-
     def visit!(q : QReturnQueue)
       "return queue"
     end
 
+    def visit!(q : QReturnStatement | QReturnExpression)
+      "return #{visit(q.value)}"
+    end
+
     def visit!(q : QBox)
-      String.build do |buffer|
-        buffer << "box " << visit(q.name) << "(" << q.params.join(", ") << ")"
+      String.build do |io|
+        ns = q.namespace
 
-        unless q.given.empty?
-          buffer << " given #{commaed(q.given)}"
-        end
+        io << "box " << visit(q.name) \
+           << fmt_params(io, q.params) \
+           << fmt_givens(io, q.params)
 
-        unless q.namespace.empty?
-          buffer << "{\n"
-
-          indented do
-            q.namespace.each do |name, value|
-              buffer << " " * @indent << name << " = " << visit(value) << ";\n"
-            end
-          end
-
-          buffer << "}"
+        unless ns.empty?
+          # Again, box namespace is just a block of assignments.
+          # Detree it as such.
+          assigns = ns.map { |n, v| QAssign.new(q.tag, n, v, false).as(Quote) }
+          io << " " << visit QBlock.new(q.tag, assigns)
         end
       end
     end

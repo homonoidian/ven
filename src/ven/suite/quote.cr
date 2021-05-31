@@ -127,10 +127,9 @@ module Ven::Suite
 
   defquote(QFun,
     name : QSymbol,
-    params : Array(String),
+    params : Parameters,
     body : Quotes,
-    given : Quotes,
-    slurpy : Bool)
+    blocky : Bool)
 
   defquote(QQueue, value : Quote)
 
@@ -150,8 +149,7 @@ module Ven::Suite
 
   defquote(QBox,
     name : QSymbol,
-    params : Array(String),
-    given : Quotes,
+    params : Parameters,
     namespace : Hash(QSymbol, Quote))
 
   defquote(QLambda,

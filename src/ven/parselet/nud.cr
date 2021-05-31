@@ -216,47 +216,66 @@ module Ven::Parselet
     def parse
       diamond = if? "<", diamond!
 
-      name = symbol()
-      params = if? "(", params!, [] of String
+      name   = symbol
+      params = if? "(", validate(params!), [] of String
       givens = if? "GIVEN", given!, Quotes.new
-      slurpy = "*".in?(params)
-      body = if? "=", [body_source = led], block
 
+      # Get the body. Let it always be an Array, but, in case
+      # it was an '='-function, store the source led so we
+      # know it was one:
+      body = if? "=", [equals = led], block
+
+      # See how everything plays together.
       if body.empty?
         die("empty function body illegal")
-      elsif body_source.is_a?(QBlock)
-        # Don't need a semicolon if there's a block after '='.
+      elsif equals.is_a?(QBlock)
+        # Don't need a semicolon after the function if there's
+        # a block after '=':
         @semicolon = false
-      elsif !slurpy && !params && givens
-        die("zero-arity functions cannot have a 'given'")
-      elsif diamond
-        params.unshift("$"); givens.unshift(diamond)
+      elsif params.empty? && !givens.empty?
+        die("there is no reason to have 'given' here")
+      elsif diamond && !"$".in?(params)
+        # Unpack the diamond, so `fun<a> foo(b, c)` becomes
+        # `fun foo($, b, c) given a`.
+        params.unshift("$")
+        givens.unshift(diamond)
       end
 
-      QFun.new(@tag, name, params, body, givens, slurpy)
+      # Build the parameters.
+      parameters = Array(Parameter).new(params.size) do |index|
+        param = params[index]
+
+        Parameter.new(index, param,
+          givens[index]?,
+          param == "*",
+          param == "$",
+        )
+      end
+
+      QFun.new(@tag, name, Parameters.new(parameters), body, !equals)
     end
 
-    # Reads the diamond form.
+    # Reads a diamond.
+    #
+    # Assumes that the diamond starter, '<', was already
+    # consumed.
     def diamond!
       @parser.before(">") { led(Precedence::FIELD) }
     end
 
-    # Reads the body of a 'given' appendix.
+    # Reads a 'given' appendix (`given <led>, <led>, <led>`).
+    #
+    # Assumes that the 'given' keyword itself was already
+    # consumed.
     def given!
       @parser.repeat(sep: ",") { led(Precedence::ASSIGNMENT) }
     end
 
-    # Reads a list of parameters.
+    # Validates *params*, an array of raw parameters.
     #
-    # *utility* determines whether to allow '*', '$'.
-    #
-    # Ensures that there is one slurpie and it is at the end
-    # of the list.
-    #
-    # Ensures that there is only one '$'.
-    def params!(utility = true)
-      params = @parser.repeat(")", ",") { param!(utility) }
-
+    # Dies if validation failed. If OK, returns the
+    # parameters back.
+    def validate(params : Array(String)) : Array(String)
       if params.count("*") > 1
         die("more than one slurpie in the parameter list")
       elsif params.index("*").try(&.< params.size - 1)
@@ -268,13 +287,25 @@ module Ven::Parselet
       params
     end
 
-    # Reads a parameter.
+    # Reads zero or more comma-separated parameters. Assumes
+    # that the opening paren was already consumed, and the
+    # closing one isn't.
     #
-    # *utility* determines whether to allow '*', '$'.
-    def param!(utility = true)
-      utility \
-        ? @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
-        : @parser.expect("_", "SYMBOL")[:lexeme]
+    # *special*, if false, forbids the usage of the special
+    # parameters '*' and '$'.
+    #
+    # Returns raw parameter list.
+    def params!(special = true) : Array(String)
+      @parser.repeat(")", ",") { param!(special) }
+    end
+
+    # Reads one parameter.
+    #
+    # *special*, if false, forbids the usage of the special
+    # parameters '*' and '$'.
+    def param!(special = true) : String
+      special ? @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
+              : @parser.expect("_", "SYMBOL")[:lexeme]
     end
   end
 
@@ -378,14 +409,14 @@ module Ven::Parselet
   class PNext < Nud
     def parse
       scope = @parser.word!("FUN") || @parser.word!("LOOP")
-      scope = scope[:lexeme] if scope
+      scope &&= scope[:lexeme]
       QNext.new(@tag, scope, @parser.is_nud? ? @parser.repeat(sep: ",") : Quotes.new)
     end
   end
 
   # Reads a 'box' statement. Box name must be capitalized.
-  # Boxes can define namespaces by providing a block, which
-  # may contain solely assignments.
+  # Boxes can declare fields with default values by providing
+  # a block. This block must consist solely of assignments.
   #
   # ```ven
   #   box Foo(a, b) given num, str {
@@ -395,27 +426,39 @@ module Ven::Parselet
   # ```
   class PBox < PFun
     def parse
-      name = symbol()
-
-      if name.is_a?(QRuntimeSymbol) && !name.value[0].uppercase?
-        die("box name must be capitalized")
-      end
-
-      params = if? "(", params!, [] of String
+      name   = symbol
+      params = if? "(", validate(params!), [] of String
       givens = if? "GIVEN", given!, Quotes.new
       fields = if? "{", block(opening: false), {} of QSymbol => Quote
 
-      # Make sure that the `fields` block consists of assignments,
-      # and construct the namespace.
+      # See if everything conforms to the norms.
+      if name.is_a?(QRuntimeSymbol) && !name.value[0].uppercase?
+        die("box name must be capitalized")
+      elsif params.count('$') != 0
+        die("boxes cannot accept a '$'")
+      end
+
+      # Build the namespace, making sure the box block is
+      # correct on the way.
       namespace = fields.map do |field|
         unless field.is_a?(QAssign) && (target = field.target).is_a?(QSymbol)
-          die("expected an assignment to a symbol")
+          die("box block must consist of assignments only")
         end
-
         { target, field.value }
       end
 
-      QBox.new(@tag, name, params, givens, namespace.to_h)
+      # Build the parameters.
+      parameters = Array(Parameter).new(params.size) do |index|
+        param = params[index]
+
+        Parameter.new(index, param,
+          givens[index]?,
+          param == "*",
+          param == "$",
+        )
+      end
+
+      QBox.new(@tag, name, Parameters.new(parameters), namespace.to_h)
     end
   end
 

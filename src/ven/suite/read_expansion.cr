@@ -60,14 +60,15 @@ module Ven::Suite
       quote.alt = quote.alt.try { |it| visit(it) }
     end
 
-    defvisit QBox do |quote|
-      apply to: quote.name, as: QSymbol
-      apply to: quote.given
-      quote.namespace = quote.namespace.to_h do |pair|
-        { visit(pair[0]).as(QSymbol),
-          visit(pair[1]).as(Quote) }
-      end
-    end
+    # TODO:
+    # defvisit QBox do |quote|
+    #   apply to: quote.name, as: QSymbol
+    #   apply to: quote.given
+    #   quote.namespace = quote.namespace.to_h do |pair|
+    #     { visit(pair[0]).as(QSymbol),
+    #       visit(pair[1]).as(Quote) }
+    #   end
+    # end
 
     defvisit! QString
     defvisit! QRegex
@@ -91,7 +92,7 @@ module Ven::Suite
     defvisit! QReduceSpread, operand
     defvisit! QGroup, body
     defvisit! QBlock, body
-    defvisit! QFun, name : QSymbol, given, body
+    # TODO: defvisit! QFun, name : QSymbol, given, body
     defvisit! QEnsure, expression
     defvisit! QQueue, value
     defvisit! QInfiniteLoop, repeatee

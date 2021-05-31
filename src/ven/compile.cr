@@ -166,28 +166,6 @@ module Ven
       accessors.each { |accessor| field!(accessor) }
     end
 
-    # Emits 'given' appendix values, *givens*, according to
-    # *params*.
-    #
-    # If there are no *givens*, emits `Opcode::ANY` per each
-    # param of *params*.
-    #
-    # On underflow of *givens*, emits the last given until
-    # all *params* convered.
-    private def given!(params : Array(String), givens : Quotes)
-      repeat = false
-
-      params.zip?(givens) do |_, given|
-        if !given && !repeat
-          issue(Opcode::ANY)
-        elsif given.nil?
-          visit(givens.last)
-        elsif repeat = true
-          visit(given)
-        end
-      end
-    end
-
     # Passes without returning anything.
     def visit(quote : QVoid)
     end
@@ -435,24 +413,23 @@ module Ven
       function = uninitialized VFunction
 
       name = q.name.value
-      givens = q.given
-      slurpy = q.slurpy
-      params = q.params
 
-      # Parameters affecting the minimum arity.
-      #
-      aritious = q.params.reject("*")
-      arity = aritious.size
+      # Emit the function's given - they're a prerequisite
+      # to FUN.
+      last = nil
+      q.params.each do |param|
+        !param.given && !last \
+          ? issue(Opcode::ANY)
+          : visit(last = (param.given || last).not_nil!)
+      end
 
-      # Issue the function's given appendix.
+      # A concrete is bound to the scope where it was
+      # first created.
       #
-      given!(params, givens)
-
-      # Functions are bound to the scope of their creation.
+      # A generic is bound to the scope of it's first
+      # ever concrete.
       #
-      # Generic functions are bound to the scope where the
-      # first concrete of that generic was created.
-      #
+      # This does that:
       unless @context.bound?(name)
         @context.bound(name)
       end
@@ -461,36 +438,37 @@ module Ven
         @context.child do
           under name do |target|
             function = VFunction.new(
-              sym(name),   # function's name
-              target,      # body chunk
-              params,      # params
-              params.size, # amount of 'given's (see `given!`)
-              arity,       # minimum amount of params
-              slurpy,      # slurpiness
+              # Name:
+              sym(name),
+              # Body chunk:
+              target,
+              # Parameter names:
+              q.params.names,
+              # How many values 'given'?
+              q.params.size,
+              # How many parameters guaranteed?
+              q.params.guaranteed.size,
+              # Slurpy or not?
+              !q.params.slurpies.empty?,
             )
 
-            # `Opcode::REST` interprets the slurpie ('*').
-            #
-            issue(Opcode::REST, arity) if slurpy
-
-            aritious.reverse_each do |param|
-              case param
+            q.params.reverse_each do |param|
+              case param.name
+              when "*"
+                issue(Opcode::REST, param.index)
               when "_"
-                # Ignore the parameter, but put on the
+                # Ignore, but not really. Put on the
                 # underscores stack.
-                #
                 issue(Opcode::POP_UPUT)
               else
-                # Assign the parameter in the local scope.
-                #
-                issue(Opcode::POP_ASSIGN, mksym param)
+                # Assign in the local scope.
+                issue(Opcode::POP_ASSIGN, mksym param.name)
               end
             end
 
-            # Now `return` and `next` will know that they're
-            # inside a function, as well as have access to
-            # the function's metainfo.
-            #
+            # Visit the body insoway `return`s and `next`s
+            # inside know not just that they're, well, inside,
+            # but also what they're inside.
             having @function, be: function do
               visit(q.body)
             end
@@ -621,22 +599,22 @@ module Ven
 
     def visit!(q : QBox)
       # Boxes and functions are just too similar to
-      # differentiate them under the hood.
-      #
+      # make them differ under the hood.
       box = uninitialized VFunction
 
       name = q.name.value
-      givens = q.given
-      params = q.params
-      namespace = q.namespace
 
-      # Again, we first visit the givens.
-      #
-      given!(params, givens)
+      # Emit the box's given; they're, too, a prerequisite
+      # to BOX.
+      last = nil
+      q.params.each do |param|
+        !param.given && !last \
+          ? issue(Opcode::ANY)
+          : visit(last = (param.given || last).not_nil!)
+      end
 
-      # Much like functions, boxes are bound to the scope of
-      # their creation.
-      #
+      # Much like a function, a box is bound to the scope
+      # where it was first created.
       unless @context.bound?(name)
         @context.bound(name)
       end
@@ -644,25 +622,36 @@ module Ven
       @context.child do
         under name do |target|
           box = VFunction.new(
-            sym(name),   # boxes' name
-            target,      # body chunk
-            params,      # params
-            params.size, # amount of 'given's (see `given!`)
-            params.size, # minimum amount of params
-            false,       # slurpiness
+            # Name:
+            sym(name),
+            # Body chunk:
+            target,
+            # Parameter names:
+            q.params.names,
+            # How many values 'given'?
+            q.params.size,
+            # How many parameters guaranteed?
+            q.params.guaranteed.size,
+            # Slurpy or not?
+            false,
           )
 
-          params.reverse_each do |param|
+          # Boxes do not accept *, $, etc. So just go over
+          # the names, no need to worry about meta.
+          q.params.names.reverse_each do |param|
             issue(Opcode::POP_ASSIGN, mksym param)
           end
 
-          # Box namespace is just a bunch of assignments.
-          #
-          namespace.each do |name, value|
+          # Unpack the box namespace - it's simply a bunch
+          # of assignments.
+          q.namespace.each do |name, value|
             visit(value)
             issue(Opcode::POP_ASSIGN, mksym name.value)
           end
 
+          # When this chunk is called, a new instance of
+          # this box is returned. SYM is there so BOX_INSTANCE
+          # knows who it's an instance of.
           issue(Opcode::SYM, sym name)
           issue(Opcode::BOX_INSTANCE)
           issue(Opcode::RET)
@@ -710,19 +699,18 @@ module Ven
       issue(Opcode::LAMBDA, lambda)
     end
 
-    def visit(q : QEnsureTest)
+    def visit!(q : QEnsureTest)
       if @legate.test_mode
         visit(q.comment)
         issue(Opcode::TEST_TITLE)
         visit(q.shoulds)
       end
 
-      # Didn't think of a better idea other than to
-      # return true... Why not?
+      # Hmm... Return true... Why not?
       issue(Opcode::TRUE)
     end
 
-    def visit(q : QEnsureShould)
+    def visit!(q : QEnsureShould)
       target = uninitialized Int32
 
       under "[ensure test: should]" do |target|
@@ -737,7 +725,7 @@ module Ven
       issue(Opcode::GOTO, target)
     end
 
-    def visit(q : QQueue)
+    def visit!(q : QQueue)
       die("'queue' outside a function") unless @function
 
       visit(q.value)
