@@ -633,9 +633,9 @@ module Ven
 
     # Starts a primitive state inspector prompt.
     #
-    # Returns false if the user wanted to terminate inspector
-    # functionality, or true if the user requested the next
-    # instruction.
+    # Returns false if the user wanted to terminate the
+    # inspector altogether, or true if the user requested
+    # the next instruction.
     def inspector
       loop do
         begin
@@ -1122,7 +1122,7 @@ module Ven
 
           unless dies
             # Re-raise if climbed up all frames & didn't find
-            # a handler.
+            # a 'dies' handler.
             raise error
           end
 
@@ -1136,7 +1136,10 @@ module Ven
             record!(this, Time.monotonic - began, cp, ip)
           end
 
-          if @inspect
+          # If there is anything left to inspect (there is
+          # nothing in case of an error), and if inspector
+          # functionality itself is enabled, then inspect.
+          if !@frames.empty? && @inspect
             @inspect = inspector
           end
         end
