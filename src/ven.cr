@@ -134,50 +134,65 @@ module Ven
       puts value if @result && value
     end
 
+    # Evaluates a piece of *source* under the given *file*
+    # using the active orchestra.
     #
-    #
-    #
-    def run(file : String, source : String)
-      result  = nil
+    # Respects the final step chosen by the user. Returns
+    # the result that this step produced.
+    def eval(file : String, source : String)
       program = @orchestra.from(source, file, @legate, run: false)
 
-      # Measure the duration of the whole thing.
+      case @final
+      when "read"
+        program
+          .step(Program::Step::Read)
+          .quotes
+      when "compile"
+         program
+          .step(Program::Step::Read)
+          .then(Program::Step::Compile)
+          .chunks
+      when "optimize"
+        program
+          .step(Program::Step::Read)
+          .then(Program::Step::Compile)
+          .then(Program::Step::Optimize)
+          .chunks
+      when "eval"
+        program.run(@orchestra.pool)
+      else
+        die("invalid final step: #{@final}")
+      end
+    end
+
+    # Runs *source* under the given *file* using the active
+    # orchestra.
+    #
+    # `run` is a front-end to `eval`, in that it beautifies
+    # the errors and implements various suite features which
+    # the user might want (measurements, timetable display,
+    # etc.)
+    #
+    # Returns nothing.
+    def run(file : String, source : String)
+      result = nil
+
+      # Measure the duration of full eval. This duration is
+      # what is shown by '-m'.
       duration = Time.measure do
-        case @final
-        when "read"
-          result = program
-            .step(Program::Step::Read)
-            .quotes
-        when "compile"
-          result = program
-            .step(Program::Step::Read)
-            .then(Program::Step::Compile)
-            .chunks
-        when "optimize"
-          result = program
-            .step(Program::Step::Read)
-            .then(Program::Step::Compile)
-            .then(Program::Step::Optimize)
-            .chunks
-        when "eval"
-          result = program.run(@orchestra.pool)
-        else
-          die("invalid final step: #{@final}")
-        end
+        result = eval(file, source)
       end
 
       # Although they have very similar names, `@legate.measure`
       # is much more thorough (per-instruction) than `@measure`.
-      # And they can be combined (for seeing the total time)!
+      # And they can be combined!
       if @legate.measure
-        # We're sure it's there at this point.
+        # We're sure timetable's there at this point.
         display(@legate.timetable)
       end
 
       display(result)
 
-      # Again, we show **the total time** it took the program
-      # to execute here.
       if @measure
         puts "[took #{duration.total_microseconds}us]".colorize.bold
       end
