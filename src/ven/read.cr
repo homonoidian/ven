@@ -1,9 +1,9 @@
 module Ven
-  # A word is a tagged lexeme. A lexeme is a verbatim citation
-  # of the source code.
+  # In terms of Ven, a word is a tagged lexeme. A lexeme is a
+  # verbatim citation of the source code.
   alias Word = { type: String, lexeme: String, line: Int32 }
 
-  # Path to a Ven distinct.
+  # The type that represents a Ven distinct.
   alias Distinct = Array(String)
 
   # Returns the regex pattern for word type *type*. *type*
@@ -11,12 +11,13 @@ module Ven
   #
   #   * `:SYMBOL`
   #   * `:STRING`
+  #   * `:STRING_ESCAPES`
   #   * `:REGEX`
   #   * `:NUMBER`
   #   * `:SPECIAL`
   #   * `:IGNORE`.
   #
-  # Raises if there is no such word.
+  # Raises at compile-time if *type* is invalid.
   macro regex_for(type)
     {% if type == :SYMBOL %}
       # `&_` and `_` should be handled as if they were keywords.
@@ -34,7 +35,7 @@ module Ven
     {% elsif type == :IGNORE %}
       /(?:[ \n\r\t]+|#(?:[ \t][^\n]*|\n+))/
     {% else %}
-      {{ raise "regex_for(): no regex for #{type}" }}
+      {{ raise "regex_for(): invalid type: #{type}" }}
     {% end %}
   end
 
@@ -55,11 +56,18 @@ module Ven
     FIELD
   end
 
-  # A reader capable of parsing Ven.
+  # The Ven reader.
   #
-  # ```
-  # puts Ven::Reader.read("2 + 2")
-  # ```
+  # This is a vital part of the Ven programming language.
+  # Without it, well, Ven would not have a syntax.
+  #
+  # Internally, this reader is a Pratt parser with parselets
+  # on top (see Bob Nystrom). It's an intricate and powerful
+  # combo, allowing for read-time evaluation & self-parsing
+  # (read macros). If done well, of course.
+  #
+  # **Instances of Reader should be disposed after the
+  # first use.**
   class Reader
     include Suite
 
@@ -86,21 +94,19 @@ module Ven
     @dirty = false
     # Current line number.
     @lineno = 1
-    # Current offset.
+    # Current character offset.
     @offset = 0
 
-    # Makes a reader.
+    # Makes a new reader.
     #
-    # *source* (the only required argument) is for the source
-    # code, *file* is for the filename, and *context* is for
-    # the reader context.
+    # *source*, the source code of your program, is the only
+    # required argument.
     #
-    # NOTE: Instances of Reader should be disposed after the
-    # first use.
+    # *file* is the name by which this source code will be
+    # identified; normally it's filename, hence the name.
     #
-    # ```
-    # puts Reader.new("1 + 1").read
-    # ```
+    # *context* is the context for this Reader (see
+    # `Context::Reader`).
     def initialize(@source : String, @file = "untitled", @context = Context::Reader.new)
       # Read the first word:
       word!
@@ -128,38 +134,38 @@ module Ven
 
     # Returns whether *lexeme* is a keyword.
     #
-    # On conflict, built-in keywords (see `KEYWORDS`) take
-    # precedence over the user-defined keywords.
+    # On conflict, built-in keywords (`KEYWORDS`) take precedence
+    # over the user-defined keywords.
     private macro keyword?(lexeme)
       {{lexeme}}.in?(KEYWORDS) || @context.keyword?({{lexeme}})
     end
 
-    # Looks up the nud for word type *type*.
+    # Looks up the nud parselet for word type *type*.
     #
     # Returns nil if not found.
     private macro nud_for?(type)
       @nud[{{type}}]? || @context.nuds[{{type}}]?
     end
 
-    # Looks up the led for word type *type*.
+    # Looks up the led parselet for word type *type*.
     #
     # Returns nil if not found.
     private macro led_for?(type)
       @led[{{type}}]?
     end
 
-    # Looks up the nud for word type *type*.
+    # Looks up the nud parselet for word type *type*.
     #
     # Raises if not found.
     private macro nud_for(type)
-      nud_for?({{type}}) || raise "nud for '#{{{type}}}' not found"
+      nud_for?({{type}}) || raise "nud parselet for '#{{{type}}}' not found"
     end
 
-    # Looks up the led for word type *type*.
+    # Looks up the led parselet for word type *type*.
     #
     # Raises if not found.
     private macro led_for(type)
-      led_for?({{type}}) || raise "led for '#{{{type}}}' not found"
+      led_for?({{type}}) || raise "led parselet for '#{{{type}}}' not found"
     end
 
     # Looks up the precedence of the current word (see `Precedence`)
@@ -169,8 +175,8 @@ module Ven
       @led[(@word[:type])]?.try(&.precedence) || Precedence::ZERO
     end
 
-    # Matches offset source against a regex *pattern*. If successful,
-    # increments the offset by matches' length.
+    # Matches offset source against a regex *pattern*. If
+    # successful, increments the offset by matches' length.
     private macro match(pattern)
       @offset += $0.size if @source[@offset..].starts_with?({{pattern}})
     end
@@ -226,8 +232,8 @@ module Ven
       die("expected #{types.map(&.dump).join(", ")}")
     end
 
-    # Expects *type* after calling *unit*. Returns whatever
-    # *unit* returns.
+    # Yields and expects *type* to follow. If expectation
+    # fulfilled, returns whatever the block returned.
     def before(type : String)
       value = yield; expect(type); value
     end
@@ -237,18 +243,18 @@ module Ven
       before(type) { led }
     end
 
-    # Evaluates the block, then calls *after*. If *after*
-    # returned false, dies of `ReadError`.
+    # Yields, then calls *succ*. If *succ* returned false,
+    # dies of `ReadError`.
     #
     # Returns whatever the block returned.
-    def before(after : -> Bool)
-      value = yield; after.call || die("unexpected term"); value
+    def before(succ : -> Bool)
+      value = yield; succ.call || die("unexpected term"); value
     end
 
-    # Yields repeatedly, expecting *sep* after each of the
-    # yields; collects the results of the yields in an Array,
-    # and returns that array on termination. Termination
-    # happens upon consuming *stop*.
+    # Yields repeatedly, expecting *sep* to follow each and
+    # every time; stores the results of the yields in an Array,
+    # and returns that array on termination. Termination happens
+    # upon consuming *stop*.
     def repeat(stop : String? = nil, sep : String? = nil, & : -> T) forall T
       raise "repeat(): expected either stop or sep" unless stop || sep
 
@@ -267,13 +273,13 @@ module Ven
       result
     end
 
-    # Same as `repeat`, but with no block - defaults to
+    # Same as `repeat`, but with no block; defaults to
     # reading led.
     def repeat(stop : String? = nil, sep : String? = nil)
       repeat(stop, sep) { led }
     end
 
-    # Reads a led expression on precedence level *level* (see `Precedence`).
+    # Reads a led expression with precedence *level* (see `Precedence`).
     def led(level = Precedence::ZERO) : Quote
       die("expected an expression") unless is_nud?
 
@@ -300,7 +306,7 @@ module Ven
 
     # Reads a statement followed by a semicolon (if requested).
     #
-    # Semicolons are optional before `eoi?` words.
+    # Semicolons are always optional before `eoi?` words.
     def statement : Quote
       if stmt = @stmt[(@word[:type])]?
         this = stmt.parse!(self, tag, word!)
@@ -341,8 +347,10 @@ module Ven
     end
 
     # Tries to read a group of 'expose' statements separated
-    # by semicolons. Returns an array of each of exposes' paths.
-    # Returns and empty array if read no expose statements.
+    # by semicolons.
+    #
+    # Returns an array of those exposes (may be empty if read
+    # no exposes).
     #
     # {"expose" PATH (";" | EOI)}
     def exposes : Array(Distinct)
@@ -350,7 +358,6 @@ module Ven
 
       while word!("EXPOSE")
         exposes << path
-
         unless word!(";") || eoi?
           die("'expose': expected semicolon or end-of-input")
         end
@@ -359,15 +366,12 @@ module Ven
       exposes
     end
 
-    # Reads the source, yielding each top-level statement
-    # to the block.
-    #
-    # Returns nothing.
-    #
+    # Yields top-level quotes to the block. Returns nothing.
     # Raises if this reader is dirty.
     #
-    # NOTE: to read `expose`s and `distinct`, call the appropriate
-    # methods (`exposes`, `distinct?`) in the correct order.
+    # To read `expose`s and `distinct`, call the appropriate
+    # methods (`exposes`, `distinct?`) in the correct order
+    # **before** attempting to `read`.
     def read
       raise "read(): dirty" if @dirty
 
@@ -378,21 +382,17 @@ module Ven
       end
     end
 
-    # Reads the source into an Array of `Quote`s, and returns
-    # that array.
+    # Returns an array of top-level quotes. Raises if this
+    # reader is dirty.
     #
-    # Raises if this reader is dirty.
-    #
-    # NOTE: to read `expose`s and `distinct`, call the appropriate
-    # methods (`exposes`, `distinct?`) in the correct order.
+    # To read `expose`s and `distinct`, call the appropriate
+    # methods (`exposes`, `distinct?`) in the correct order
+    # **before** attempting to `read`.
     def read
-      raise "read(): dirty" if @dirty
-
-      @dirty = true
       quotes = Quotes.new
 
-      until word!("EOF")
-        quotes << statement
+      read do |quote|
+        quotes << quote
       end
 
       quotes
@@ -558,31 +558,20 @@ module Ven
       io << "<reader for '#{@file}'>"
     end
 
-    # Makes a new `Reader` and uses it to read the *source*.
-    #
-    # *source* (the only required argument) is for the source
-    # code; *file* is for the filename; *context* is for the
-    # reader context.
-    #
-    # Ignores valid `expose` and `distinct`.
-    #
-    # See `Reader#read`.
+    # A shorthand for `Reader#read`. **Ignores `expose` and
+    # `distinct` statements.**
     def self.read(source : String, file = "untitled", context = Context::Reader.new)
       reader = new(source, file, context)
-
       reader.distinct?
       reader.exposes
-
       reader.read
     end
 
     # :ditto:
     def self.read(source, file = "untitled", context = Context::Reader.new)
       reader = new(source, file, context)
-
       reader.distinct?
       reader.exposes?
-
       reader.read do |quote|
         yield quote
       end
