@@ -26,17 +26,17 @@ module Ven
     # *origin* is the first chunk that will be evaluated (the
     # main chunk).
     def initialize(@chunks : Chunks, @context = Context::Machine.new,
-                   origin = 0, @legate = Legate.new)
-      @inspect = @legate.inspect.as Bool
-      @measure = @legate.measure.as Bool
-      @fast_interrupt = @legate.fast_interrupt.as Bool
+                   origin = 0, @enquiry = Enquiry.new)
+      @inspect = @enquiry.inspect.as Bool
+      @measure = @enquiry.measure.as Bool
+      @fast_interrupt = @enquiry.fast_interrupt.as Bool
 
       # Remember: per each frame there should always be a scope;
       # if you push a frame, that is, you have to push a scope
       # too. This has to be done so that the frames and the
       # context scopes are in sync.
       @frames = [Frame.new(cp: origin)]
-      @timetable = @legate.timetable = Timetable.new
+      @timetable = @enquiry.timetable = Timetable.new
     end
 
     # Dies of runtime error with *message*, which should explain
@@ -1183,7 +1183,7 @@ module Ven
     # Returns the result that was produced by the Machine, or
     # nil if nothing was produced.
     def self.run(chunks, context = Context::Machine.new, origin = 0,
-                 legate = Legate.new)
+                 legate = Enquiry.new)
       new(chunks, context, origin, legate).start.return!
     end
   end

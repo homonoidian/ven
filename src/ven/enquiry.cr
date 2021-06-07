@@ -1,11 +1,11 @@
 module Ven
-  # Legate convoys various configurations from the heights
-  # of abstraction (i.e., `Orchestra`) down, to `Program`,
+  # Enquiry convoys various configurations from the heights
+  # of abstraction (i.e., `Orchestra`) down to `Program`,
   # `Machine`, or anyone else willing.
   #
   # It does the same in the opposite direction; i.e., one can
-  # also *send* data with `Legate` back to the top.
-  class Legate
+  # also *send* data with `Enquiry` back to the top.
+  class Enquiry
     # `Machine`: whether to run the inspector.
     property inspect = false
     # `Machine`: whether to build the timetable.

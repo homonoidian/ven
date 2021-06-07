@@ -55,7 +55,7 @@ module Ven
     # its filename (or unit name); *hub* is the context hub
     # that this program will use.
     def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new,
-                   @legate = Legate.new)
+                   @enquiry = Enquiry.new)
       @reader = Reader.new(@source, @file, @hub.reader)
       # WARNING: order is important!
       @distinct = @reader.distinct?
@@ -71,11 +71,11 @@ module Ven
       when Step::Read
         @quotes = @reader.read
       when Step::Compile
-        @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin, @legate)
+        @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin, @enquiry)
       when Step::Optimize
-        @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...], @legate.optimize)
+        @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...], @enquiry.optimize)
       when Step::Evaluate
-        @result = Machine.run(@chunks, @hub.machine, @origin, @legate)
+        @result = Machine.run(@chunks, @hub.machine, @origin, @enquiry)
       end
 
       self

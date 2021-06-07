@@ -32,7 +32,7 @@ module Ven
     # No arguments are required, but *file* (for a file name),
     # *context* (for a compiler context) and *origin* (for the
     # point of origin of chunk emission) can be provided.
-    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0, @legate = Legate.new)
+    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0, @enquiry = Enquiry.new)
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 
@@ -700,7 +700,7 @@ module Ven
     end
 
     def visit!(q : QEnsureTest)
-      if @legate.test_mode
+      if @enquiry.test_mode
         visit(q.comment)
         issue(Opcode::TEST_TITLE)
         visit(q.shoulds)
@@ -740,7 +740,7 @@ module Ven
     # is the compiler context of the compilation.
     #
     # Returns unstitched chunks.
-    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0, legate = Legate.new)
+    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0, legate = Enquiry.new)
       compiler = new(file, context, origin, legate)
       compiler.visit(quotes)
       compiler.@chunks

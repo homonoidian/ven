@@ -42,12 +42,12 @@ module Ven
     @cache  = Set(String).new
     @client : Inquirer::Client
 
-    # Legate with all defaults; we don't want to create a new
-    # Legate every time we do `expose`/`from`, considering all
+    # Enquiry with all defaults; we don't want to create a new
+    # Enquiry every time we do `expose`/`from`, considering all
     # stuff is identical.
-    @legate = Legate.new
+    @enquiry = Enquiry.new
 
-    delegate :test_mode, :test_mode=, to: @legate
+    delegate :test_mode, :test_mode=, to: @enquiry
 
     # Makes an Orchestra for an Inquirer server running at
     # the given *port*.
@@ -94,7 +94,7 @@ module Ven
 
     # Exposes the program found at *filepath*, and containing
     # the given *source*.
-    private def expose(filepath : String, source : String, legate = @legate, run = true)
+    private def expose(filepath : String, source : String, legate = @enquiry, run = true)
       program = Program.new(source, filepath, @hub, legate)
 
       if @isolated && !program.exposes.empty?
@@ -150,7 +150,7 @@ module Ven
 
     # Runs the given *source* code, which can be found in *file*,
     # as a composer program.
-    def from(source : String, file = "composer", legate = Legate.new, run = true)
+    def from(source : String, file = "composer", legate = Enquiry.new, run = true)
       # WARNING: do not remove this, as doing so will provoke
       # infinite expose (in some cases).
       @cache << file

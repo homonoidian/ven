@@ -4,27 +4,27 @@ require "commander"
 require "./lib"
 
 module Ven
-  # Ven command line interface builds an `Orchestra` and a
-  # `Legate`, and uses them to run a program from a file,
-  # interactive prompt, or a particular distinct.
+  # Ven command line interface builds an `Orchestra` and an
+  # `Enquiry`, and uses them to run a program from a file,
+  # interactive prompt, or distinct.
   class CLI
     include Suite
 
-    # Contains the path to Ven REPL history file.
+    # The path where the REPL history file can be found.
     HISTORY = ENV["VEN_HISTORY"]? || Path.home / ".ven_history"
 
     # These represent the flags. Look into their corresponding
-    # helps in the Commander scaffold to know what they are for.
+    # helps in the Commander scaffold to know what they're for.
     @quit = true
     @final = "eval"
     @result = false
     @measure = false
 
-    # The orchestra and legate cannot be initialized at
-    # this point, and they cannot be used before they've
-    # been initialized. That's why these `uninitialized`s
-    # are safe (are they?)
-    @legate = uninitialized Legate
+    # The orchestra and Enquiry cannot be initialized at this
+    # point; they are never used before they've been initialized
+    # anyways. That's why these `uninitialized`s are safe (but
+    # are they?)
+    @enquiry = uninitialized Enquiry
     @orchestra = uninitialized Orchestra
 
     def initialize
@@ -32,19 +32,14 @@ module Ven
     end
 
     # Prints an error according to the following template:
-    # `[*embraced*] *message*`.
-    #
-    # Decides whether to quit by looking at `@quit`.
-    #
-    # Quits with status 1 if decided to quit.
+    # `[*embraced*] *message*`. If `@quit` is true, quits
+    # with status 1 afterwards.
     private def err(embraced : String, message : String)
       puts "#{"[#{embraced}]".colorize(:red)} #{message}"
       exit(1) if @quit
     end
 
-    # Dies of an *error*.
-    #
-    # See `err`.
+    # Dies of an *error* (see `err`).
     private def die(error e : ReadError)
       err("read error", "#{e.message} (in #{e.file}:#{e.line}, near '#{e.lexeme}')")
     end
@@ -71,26 +66,20 @@ module Ven
 
     # :ditto:
     private def die(error)
-      err("general error", error.to_s)
+      err("unknown error", error.to_s)
     end
 
-    # Displays the given *quotes*.
-    #
-    # Returns nothing.
+    # Displays the *quotes*. Returns nothing.
     def display(quotes : Quotes)
       puts Detree.detree(quotes)
     end
 
-    # Displays the given *chunks*.
-    #
-    # Returns nothing.
+    # Displays the *chunks*. Returns nothing.
     def display(chunks : Chunks)
-      chunks.each { |chunk| puts chunk }
+      puts chunks.join("\n\n")
     end
 
-    # Displays the given *timetable*.
-    #
-    # Returns nothing.
+    # Displays the *timetable*. Returns nothing.
     def display(timetable : Machine::Timetable)
       timetable.each do |cidx, stats|
         puts "chunk #{cidx}".colorize.underline
@@ -127,20 +116,20 @@ module Ven
       end
     end
 
-    # Displays the given *value*.
-    #
-    # Returns nothing.
+    # Displays the *value*. Returns nothing.
     def display(value)
       puts value if @result && value
     end
 
-    # Evaluates a piece of *source* under the given *file*
-    # using the active orchestra.
+    # Evaluates the *source* using the active orchestra.
     #
-    # Respects the final step chosen by the user. Returns
-    # the result that this step produced.
+    # *file* is the filename by which the source will
+    # be identified.
+    #
+    # Respects the chosen final step. Returns the result that
+    # this step produced.
     def eval(file : String, source : String)
-      program = @orchestra.from(source, file, @legate, run: false)
+      program = @orchestra.from(source, file, @enquiry, run: false)
 
       case @final
       when "read"
@@ -165,30 +154,31 @@ module Ven
       end
     end
 
-    # Runs *source* under the given *file* using the active
-    # orchestra.
+    # Evaluates the *source* using the active orchestra.
+    #
+    # *file* is the filename by which the source will
+    # be identified.
     #
     # `run` is a front-end to `eval`, in that it beautifies
-    # the errors and implements various suite features which
-    # the user might want (measurements, timetable display,
-    # etc.)
+    # the errors and implements various supplement features
+    # (measurements, timetable display, etc.)
     #
     # Returns nothing.
     def run(file : String, source : String)
       result = nil
 
-      # Measure the duration of full eval. This duration is
-      # what is shown by '-m'.
+      # Measure the duration of full `eval`. This duration
+      # is what is shown by '-m'.
       duration = Time.measure do
         result = eval(file, source)
       end
 
-      # Although they have very similar names, `@legate.measure`
-      # is much more thorough (per-instruction) than `@measure`.
-      # And they can be combined!
-      if @legate.measure
+      # Although they have very similar names, `@enquiry.measure`
+      # is much more thorough (it's per-instruction) than
+      # `@measure`. They can be combined.
+      if @enquiry.measure
         # We're sure timetable's there at this point.
-        display(@legate.timetable)
+        display(@enquiry.timetable)
       end
 
       display(result)
@@ -240,10 +230,8 @@ module Ven
 
           begin
             unless snippet = fancy.readline("... ").try(&.strip)
-              # CTRL+D pressed.
-              break
+              break # CTRL+D pressed.
             end
-
             source += "\n#{snippet}"
           rescue Fancyline::Interrupt
             break
@@ -303,7 +291,7 @@ module Ven
         cmd.use  = "ven"
         cmd.long = Ven::VERSION
 
-        # Unmapped flags will go to the program.
+        # Unmapped flags are passed to the program.
         cmd.ignore_unmapped_flags = true
 
         cmd.flags.add do |flag|
@@ -327,14 +315,14 @@ module Ven
           flag.short       = "-m"
           flag.long        = "--measure"
           flag.default     = false
-          flag.description = "Enable execution time output."
+          flag.description = "Show total execution time."
         end
 
         cmd.flags.add do |flag|
           flag.name        = "timetable"
           flag.short       = "-M"
           flag.default     = false
-          flag.description = "Enable per-instruction execution time output (timetable)."
+          flag.description = "Show per-instruction execution time (timetable)."
         end
 
         cmd.flags.add do |flag|
@@ -350,7 +338,7 @@ module Ven
           flag.short       = "-r"
           flag.long        = "--result"
           flag.default     = false
-          flag.description = "Print the result of the final step."
+          flag.description = "Show result of the final step."
         end
 
         cmd.flags.add do |flag|
@@ -365,7 +353,7 @@ module Ven
           flag.name        = "fast-interrupt"
           flag.long        = "--fast-interrupt"
           flag.default     = false
-          flag.description = "Enable system SIGINT handling (makes your program run faster)."
+          flag.description = "Disable domestic SIGINT handling."
         end
 
         cmd.flags.add do |flag|
@@ -373,7 +361,7 @@ module Ven
           flag.short       = "-t"
           flag.long        = "--test"
           flag.default     = false
-          flag.description = "Enable test mode (disignores 'ensure' test blocks)."
+          flag.description = "Disignore ensure tests."
         end
 
         cmd.run do |options, arguments|
@@ -386,12 +374,12 @@ module Ven
           @result = options.bool["result"]
           @measure = options.bool["measure"]
 
-          @legate = Legate.new
-          @legate.measure = options.bool["timetable"]
-          @legate.inspect = options.bool["inspect"]
-          @legate.optimize = options.int["optimize"].to_i * 8
-          @legate.fast_interrupt = options.bool["fast-interrupt"]
-          @legate.test_mode = options.bool["test-mode"]
+          @enquiry = Enquiry.new
+          @enquiry.measure = options.bool["timetable"]
+          @enquiry.inspect = options.bool["inspect"]
+          @enquiry.optimize = options.int["optimize"].to_i * 8
+          @enquiry.fast_interrupt = options.bool["fast-interrupt"]
+          @enquiry.test_mode = options.bool["test-mode"]
 
           if arguments.empty?
             # Do not quit after errors:
@@ -408,8 +396,7 @@ module Ven
             # defined flags may interfere with this CLI's.
             #
             # Note that **all** programs of the orchestra will
-            # have access to these very arguments, including
-            # any exposed library.
+            # have access to ARGS, including any side library.
             @orchestra.hub.machine["ARGS"] = Vec.from(arguments[1...], Str)
 
             if File.exists?(file) && File.file?(file) && File.readable?(file)
