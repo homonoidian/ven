@@ -343,7 +343,7 @@ module Ven
           flag.short = "-j"
           flag.long = "--just"
           flag.default = "evaluate"
-          flag.description = "Set the final step (read, compile, optimize, evaluate)"
+          flag.description = "Can be: read, transform, optimize, compile, evaluate."
         end
 
         cmd.flags.add do |flag|
