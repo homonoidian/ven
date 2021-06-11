@@ -55,8 +55,7 @@ module Ven
     # *source* is the source code of this program; *file* is
     # its filename (or unit name); *hub* is the context hub
     # that this program will use.
-    def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new,
-                   @enquiry = Enquiry.new)
+    def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new, @enquiry = Enquiry.new)
       @reader = Reader.new(@source, @file, @hub.reader)
       # WARNING: order is important!
       @distinct = @reader.distinct?
@@ -84,9 +83,22 @@ module Ven
       self
     end
 
-    # Alias for `step`.
+    # An alias for `step`.
     def then(*args, **options)
       step(*args, **options)
+    end
+
+    # Returns the result for the given *step*, or nil if
+    # there wasn't any.
+    def result_for(step : Step)
+      case step
+      in .read?, .transform?
+        @quotes
+      in .compile?, .optimize?
+        @chunks
+      in .evaluate?
+        @result
+      end
     end
 
     # Makes chunks of *pool* precede chunks of this program,

@@ -16,7 +16,7 @@ module Ven
     # These represent the flags. Look into their corresponding
     # helps in the Commander scaffold to know what they're for.
     @quit = true
-    @final = "eval"
+    @final = "evaluate"
     @result = false
     @measure = false
 
@@ -131,27 +131,41 @@ module Ven
     def eval(file : String, source : String)
       program = @orchestra.from(source, file, @enquiry, run: false)
 
-      case @final
-      when "read"
-        program
-          .step(Program::Step::Read)
-          .quotes
-      when "compile"
-        program
-          .step(Program::Step::Read)
-          .then(Program::Step::Compile)
-          .chunks
-      when "optimize"
-        program
-          .step(Program::Step::Read)
-          .then(Program::Step::Compile)
-          .then(Program::Step::Optimize)
-          .chunks
-      when "eval"
-        program.run(@orchestra.pool)
-      else
-        die("invalid final step: #{@final}")
-      end
+      {% begin %}
+        case @final
+        {% for step, order in Program::Step.constants %}
+          {% if step == Program::Step::Evaluate %}
+            # Evaluate is an edge-case because it needs coop
+            # not only with Program, but with runtime Orchestra
+            # too. Nothing else does.
+            when "evaluate"
+              return program.run(@orchestra.pool)
+          {% else %}
+            # To illustrate this, let's look what this will
+            # expand into given `step = Program::Step::Compile`.
+            #
+            # ```
+            # when "compile"
+            #   program
+            #     .then(Program::Step::Read)
+            #     .then(Program::Step::Transform)
+            #     .then(Program::Step::Compile)
+            # ```
+            when {{step.stringify.downcase}}
+              program
+                # Including *step*!
+                {% for predecessor in Program::Step.constants[0..order] %}
+                  .then(Program::Step::{{predecessor}})
+                {% end %}
+              # `result_for` will return the result of the
+              # given step, if it ever was performed.
+              program.result_for(Program::Step::{{step}})
+          {% end %}
+        {% end %}
+        else
+          die("invalid final step: #{@final}")
+        end
+      {% end %}
     end
 
     # Evaluates the *source* using the active orchestra.
@@ -329,8 +343,8 @@ module Ven
           flag.name = "final"
           flag.short = "-j"
           flag.long = "--just"
-          flag.default = "eval"
-          flag.description = "Set the final step (read, compile, optimize, eval)"
+          flag.default = "evaluate"
+          flag.description = "Set the final step (read, compile, optimize, evaluate)"
         end
 
         cmd.flags.add do |flag|
