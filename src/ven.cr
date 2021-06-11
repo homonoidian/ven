@@ -133,14 +133,13 @@ module Ven
 
       {% begin %}
         case @final
+        # Evaluate is an edge-case because it needs coop
+        # not only with Program, but with runtime Orchestra
+        # too. Nothing else does.
+        when "evaluate"
+          program.run(@orchestra.pool)
         {% for step, order in Program::Step.constants %}
-          {% if step == Program::Step::Evaluate %}
-            # Evaluate is an edge-case because it needs coop
-            # not only with Program, but with runtime Orchestra
-            # too. Nothing else does.
-            when "evaluate"
-              return program.run(@orchestra.pool)
-          {% else %}
+          {% unless step.stringify == "Evaluate" %}
             # To illustrate this, let's look what this will
             # expand into given `step = Program::Step::Compile`.
             #
