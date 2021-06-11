@@ -48,10 +48,9 @@ module Ven::Suite
         {% for subclass in Quote.subclasses %}
           when {{subclass}}
             {% for instance_var in subclass.instance_vars %}
-              %field = quote.{{instance_var}}
-              if %field.is_a?(Quote)
-                quote.{{instance_var}} = transform(%field)
-              end
+              {% unless instance_var.stringify == "tag" %}
+                quote.{{instance_var}} = transform(quote.{{instance_var}})
+              {% end %}
             {% end %}
         {% end %}
         else
