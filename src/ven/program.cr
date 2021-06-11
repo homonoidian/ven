@@ -23,6 +23,7 @@ module Ven
     # of steps.
     enum Step
       Read
+      Transform
       Compile
       Optimize
       Evaluate
@@ -68,13 +69,15 @@ module Ven
     # See `Step` for the available steps.
     def step(step : Step)
       case step
-      when Step::Read
+      in Step::Read
         @quotes = @reader.read
-      when Step::Compile
+      in Step::Transform
+        @quotes = Transform.transform(@quotes)
+      in Step::Compile
         @chunks += Compiler.compile(@quotes, @file, @hub.compiler, @origin, @enquiry)
-      when Step::Optimize
+      in Step::Optimize
         @chunks[@origin...] = Optimizer.optimize(@chunks[@origin...], @enquiry.optimize)
-      when Step::Evaluate
+      in Step::Evaluate
         @result = Machine.run(@chunks, @hub.machine, @origin, @enquiry)
       end
 
