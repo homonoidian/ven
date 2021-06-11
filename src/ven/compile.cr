@@ -174,10 +174,6 @@ module Ven
       issue(Opcode::SYM, sym q.value)
     end
 
-    def visit!(q : QReadtimeSymbol)
-      die("readtime symbol caught at compile-time")
-    end
-
     def visit!(q : QNumber)
       issue(Opcode::NUM, q.value)
     end

@@ -48,13 +48,13 @@ module Ven::Suite
         {% for subclass in Quote.subclasses %}
           when {{subclass}}
             {% for instance_var in subclass.instance_vars %}
-              {% unless instance_var.stringify == "tag" %}
-                quote.{{instance_var}} = transform(quote.{{instance_var}})
+              # To cause a recursive transform, instance_var
+              # should be either of Quote+, or of Quotes.
+              {% if instance_var.type <= Quote || instance_var.type == Quotes %}
+                quote.{{instance_var}} = transform(quote.{{instance_var}}).as({{instance_var.type}})
               {% end %}
             {% end %}
         {% end %}
-        else
-          raise "unreachable"
         end
       {% end %}
 

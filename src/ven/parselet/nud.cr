@@ -187,16 +187,19 @@ module Ven::Parselet
   # grouping should be used: `|(+_)| [1, "2", false]`
   class PSpread < Nud
     def parse
-      kind, body =
-        @parser.is_led?(only: PBinary) \
-          ? { :R, @parser.word![:lexeme] }
-          : { :M, QBlock.new(@tag, [led]) }
+      if @parser.is_led?(only: PBinary)
+        kind, body = {:R, @parser.word![:lexeme]}
+      else
+        kind, body = {:M, QBlock.new(@tag, [led])}
+      end
 
       _, iterative = @parser.expect("|"), !!@parser.word!(":")
 
-      kind == :M \
-        ? QMapSpread.new(@tag, body.as(Quote), led, iterative)
-        : QReduceSpread.new(@tag, body.as(String), led)
+      if kind == :M
+        QMapSpread.new(@tag, body.as(Quote), led, iterative)
+      else
+        QReduceSpread.new(@tag, body.as(String), led)
+      end
     end
   end
 
@@ -216,7 +219,7 @@ module Ven::Parselet
     def parse
       diamond = if? "<", diamond!
 
-      name   = symbol
+      name = symbol
       params = if? "(", validate(params!), [] of String
       givens = if? "GIVEN", given!, Quotes.new
 
@@ -304,8 +307,11 @@ module Ven::Parselet
     # *special*, if false, forbids the usage of the special
     # parameters '*' and '$'.
     def param!(special = true) : String
-      special ? @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
-              : @parser.expect("_", "SYMBOL")[:lexeme]
+      if special
+        @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
+      else
+        @parser.expect("_", "SYMBOL")[:lexeme]
+      end
     end
   end
 
@@ -341,7 +347,7 @@ module Ven::Parselet
       @parser.expect("SHOULD")
 
       section = @parser.expect("STRING")
-      cases   = @parser.repeat(sep: ";")
+      cases = @parser.repeat(sep: ";")
 
       QEnsureShould.new(@tag, section[:lexeme], cases)
     end
@@ -352,9 +358,9 @@ module Ven::Parselet
   class PLoop < Nud
     def parse
       start : Quote?
-      base  : Quote?
-      step  : Quote?
-      body  : QBlock
+      base : Quote?
+      step : Quote?
+      body : QBlock
 
       if @parser.word!("(")
         head = @parser.repeat(")", sep: ";")
@@ -426,7 +432,7 @@ module Ven::Parselet
   # ```
   class PBox < PFun
     def parse
-      name   = symbol
+      name = symbol
       params = if? "(", validate(params!), [] of String
       givens = if? "GIVEN", given!, Quotes.new
       fields = if? "{", block(opening: false), {} of QSymbol => Quote
@@ -444,7 +450,7 @@ module Ven::Parselet
         unless field.is_a?(QAssign) && (target = field.target).is_a?(QSymbol)
           die("box block must consist of assignments only")
         end
-        { target, field.value }
+        {target, field.value}
       end
 
       # Build the parameters.
@@ -528,9 +534,9 @@ module Ven::Parselet
     def lead! : {String, Regex | String}
       case @parser.word[:type]
       when "REGEX"
-        { fresh, /^#{@parser.word![:lexeme]}/ }
+        {fresh, /^#{@parser.word![:lexeme]}/}
       when "SYMBOL", .in?(@@subsidiary)
-        { @parser.word[:lexeme].upcase, @parser.word![:lexeme] }
+        {@parser.word[:lexeme].upcase, @parser.word![:lexeme]}
       else
         die("'nud': invalid lead: expected regex or symbol")
       end
@@ -570,7 +576,8 @@ module Ven::Parselet
     end
 
     def parse
-      ReadExpansion.new(args!).visit(@body.clone)
+      # Clone: we do not want to modify the original body.
+      ReadExpansion.new(args!).transform(@body.clone)
     end
 
     # Reads the arguments of this nud macro by interpreting

@@ -10,6 +10,14 @@ module Ven
   class Transform < Ven::Suite::Transformer
     include Suite
 
+    # Dies of readtime symbol leak.
+    #
+    # I know this is not the place where we should catch
+    # these, but where else?
+    def transform(q : QReadtimeSymbol)
+      raise ReadError.new(q.tag, "readtime symbol leaked")
+    end
+
     # Implements the call-assign protocol hook.
     #
     # ```
