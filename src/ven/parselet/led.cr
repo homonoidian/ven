@@ -36,8 +36,8 @@ module Ven::Parselet
 
     def parse
       notted = type.in?(NOTTABLE) && !!@parser.word!("NOT")
-      quote  = QBinary.new(@tag, lexeme, @left, led)
-      quote  = QUnary.new(@tag, "not", quote) if notted
+      quote = QBinary.new(@tag, lexeme, @left, led)
+      quote = QUnary.new(@tag, "not", quote) if notted
       quote
     end
   end
@@ -61,7 +61,8 @@ module Ven::Parselet
     # targets, for expressions like `* = 3`, `$ = 5` may produce
     # unwanted behavior (especially the latter).
     def validate? : Bool
-      !@left.as?(QSymbol).try &.value.in?('$', '*') || !@left.is_a?(QCall)
+      @left.as?(QSymbol).try { |it| !it.value.in?("$", "*") } ||
+        @left.is_a?(QCall)
     end
 
     # Returns *@left* if it is a valid assignment target, orelse
