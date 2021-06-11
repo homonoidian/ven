@@ -137,7 +137,7 @@ module Ven
           .step(Program::Step::Read)
           .quotes
       when "compile"
-         program
+        program
           .step(Program::Step::Read)
           .then(Program::Step::Compile)
           .chunks
@@ -205,7 +205,7 @@ module Ven
       end
 
       puts "[Ven #{VERSION}]",
-           "Hit CTRL+D to exit."
+        "Hit CTRL+D to exit."
 
       loop do
         begin
@@ -288,79 +288,79 @@ module Ven
     # Returns the Commander command line interface for Ven.
     def main
       Commander::Command.new do |cmd|
-        cmd.use  = "ven"
+        cmd.use = "ven"
         cmd.long = Ven::VERSION
 
         # Unmapped flags are passed to the program.
         cmd.ignore_unmapped_flags = true
 
         cmd.flags.add do |flag|
-          flag.name        = "port"
-          flag.short       = "-p"
-          flag.long        = "--port"
-          flag.default     = 12879
+          flag.name = "port"
+          flag.short = "-p"
+          flag.long = "--port"
+          flag.default = 12879
           flag.description = "Set the referent Inquirer port."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "inspect"
-          flag.short       = "-i"
-          flag.long        = "--inspect"
-          flag.default     = false
+          flag.name = "inspect"
+          flag.short = "-i"
+          flag.long = "--inspect"
+          flag.default = false
           flag.description = "Enable instruction-by-instruction inspector."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "measure"
-          flag.short       = "-m"
-          flag.long        = "--measure"
-          flag.default     = false
+          flag.name = "measure"
+          flag.short = "-m"
+          flag.long = "--measure"
+          flag.default = false
           flag.description = "Show total execution time."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "timetable"
-          flag.short       = "-M"
-          flag.default     = false
+          flag.name = "timetable"
+          flag.short = "-M"
+          flag.default = false
           flag.description = "Show per-instruction execution time (timetable)."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "final"
-          flag.short       = "-j"
-          flag.long        = "--just"
-          flag.default     = "eval"
+          flag.name = "final"
+          flag.short = "-j"
+          flag.long = "--just"
+          flag.default = "eval"
           flag.description = "Set the final step (read, compile, optimize, eval)"
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "result"
-          flag.short       = "-r"
-          flag.long        = "--result"
-          flag.default     = false
+          flag.name = "result"
+          flag.short = "-r"
+          flag.long = "--result"
+          flag.default = false
           flag.description = "Show result of the final step."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "optimize"
-          flag.short       = "-O"
-          flag.long        = "--optimize"
-          flag.default     = 1
+          flag.name = "optimize"
+          flag.short = "-O"
+          flag.long = "--optimize"
+          flag.default = 1
           flag.description = "Set the amount of optimization passes."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "fast-interrupt"
-          flag.long        = "--fast-interrupt"
-          flag.default     = false
+          flag.name = "fast-interrupt"
+          flag.long = "--fast-interrupt"
+          flag.default = false
           flag.description = "Disable domestic SIGINT handling."
         end
 
         cmd.flags.add do |flag|
-          flag.name        = "test-mode"
-          flag.short       = "-t"
-          flag.long        = "--test"
-          flag.default     = false
+          flag.name = "test-mode"
+          flag.short = "-t"
+          flag.long = "--test"
+          flag.default = false
           flag.description = "Disignore ensure tests."
         end
 
