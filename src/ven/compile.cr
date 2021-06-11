@@ -123,11 +123,6 @@ module Ven
       VSymbol.new({{name}}, {{nest}})
     end
 
-    # Issues a hook call to a function called *name*.
-    private macro hook(tag, name, *args)
-      visit QCall.new({{tag}}, QRuntimeSymbol.new(QTag.void, {{name}}), {{*args}})
-    end
-
     # Issues the appropriate field gathering instructions
     # for field accessor *accessor*.
     private def field!(accessor : FAImmediate)
@@ -146,7 +141,7 @@ module Ven
 
       branches.each_with_index do |branch, index|
         issue(Opcode::SWAP) unless index == 0
-        issue(Opcode::DUP)  unless index == branches.size -  1
+        issue(Opcode::DUP) unless index == branches.size - 1
 
         if branch.is_a?(QAccessField)
           field! [FADynamic.new(branch.head)] + branch.tail
@@ -213,13 +208,13 @@ module Ven
 
       opcode =
         case q.operator
-        when "+" then Opcode::TON
-        when "-" then Opcode::NEG
-        when "~" then Opcode::TOS
-        when "#" then Opcode::LEN
-        when "&" then Opcode::TOV
-        when "not" then Opcode::TOIB
-        when "to" then Opcode::TOR_BL
+        when "+"    then Opcode::TON
+        when "-"    then Opcode::NEG
+        when "~"    then Opcode::TOS
+        when "#"    then Opcode::LEN
+        when "&"    then Opcode::TOV
+        when "not"  then Opcode::TOIB
+        when "to"   then Opcode::TOR_BL
         when "from" then Opcode::TOR_EL
         end
 
@@ -247,48 +242,22 @@ module Ven
     end
 
     def visit!(q : QAssign)
-      case target = q.target
-      when QSymbol
-        visit(q.value)
-        @context.bound(target.value) if q.global
-        issue(Opcode::TAP_ASSIGN, sym target.value)
-      when QCall
-        # We'll transform this:
-        #   ~> x(0) = 1
-        # To this:
-        #   ~> __call_assign(x, 1, 0)
-        # And this:
-        #   ~> x("foo")(0) = 1
-        # To this:
-        #   ~> __call_assign(x("foo"), 1, 0)
-        # Et cetera.
-        hook(q.tag, "__call_assign", [target.callee, q.value] + target.args)
-      end
+      return unless target = q.target.as?(QSymbol)
+
+      visit(q.value)
+      @context.bound(target.value) if q.global
+      issue(Opcode::TAP_ASSIGN, sym target.value)
     end
 
     def visit!(q : QBinaryAssign)
-      case target = q.target
-      when QSymbol
-        symbol = sym(target.value)
+      return unless target = q.target.as?(QSymbol)
 
-        visit(q.value)
-        issue(Opcode::SYM, symbol)
-        issue(Opcode::BINARY_ASSIGN, q.operator)
-        issue(Opcode::POP_ASSIGN, symbol)
-      when QCall
-        # We'll transform this:
-        #   ~> x(0) += 1
-        # Into this:
-        #   ~> __call_assign(x, x(0) + 1, 0)
-        # And this:
-        #   ~> x("foo")(0) += 1
-        # Into this:
-        #   ~> __call_assign(x("foo"), x("foo")(0) + 1, 0)
-        # Et cetera.
-        hook(q.tag, "__call_assign",
-          [target.callee, QBinary.new(q.tag, q.operator, target, q.value)] +
-           target.args)
-      end
+      symbol = sym(target.value)
+
+      visit(q.value)
+      issue(Opcode::SYM, symbol)
+      issue(Opcode::BINARY_ASSIGN, q.operator)
+      issue(Opcode::POP_ASSIGN, symbol)
     end
 
     def visit!(q : QCall)
@@ -418,9 +387,11 @@ module Ven
       # to FUN.
       last = nil
       q.params.each do |param|
-        !param.given && !last \
-          ? issue(Opcode::ANY)
-          : visit(last = (param.given || last).not_nil!)
+        if !param.given && !last
+          issue(Opcode::ANY)
+        else
+          visit(last = (param.given || last).not_nil!)
+        end
       end
 
       # A concrete is bound to the scope where it was
@@ -496,7 +467,7 @@ module Ven
 
     def visit!(q : QBaseLoop)
       start = label
-      stop  = label
+      stop = label
 
       label start
       visit(q.base)
@@ -520,7 +491,7 @@ module Ven
 
     def visit!(q : QStepLoop)
       start = label
-      stop  = label
+      stop = label
 
       label start
       visit(q.base)
@@ -541,7 +512,7 @@ module Ven
 
     def visit!(q : QComplexLoop)
       start = label
-      stop  = label
+      stop = label
 
       visit(q.start)
       issue(Opcode::POP)
@@ -608,9 +579,11 @@ module Ven
       # to BOX.
       last = nil
       q.params.each do |param|
-        !param.given && !last \
-          ? issue(Opcode::ANY)
-          : visit(last = (param.given || last).not_nil!)
+        if !param.given && !last
+          issue(Opcode::ANY)
+        else
+          visit(last = (param.given || last).not_nil!)
+        end
       end
 
       # Much like a function, a box is bound to the scope
@@ -670,17 +643,17 @@ module Ven
       lambda = uninitialized VFunction
 
       aritious = params.reject("*")
-      arity    = aritious.size
+      arity = aritious.size
 
       @context.child do
         under "lambda" do |target|
           lambda = VFunction.new(
             VSymbol.nameless,
-            target,      # body chunk
-            params,      # params
-            0,           # amount of 'given's
-            arity,       # minimum amount of params
-            slurpy,      # slurpiness
+            target, # body chunk
+            params, # params
+            0,      # amount of 'given's
+            arity,  # minimum amount of params
+            slurpy, # slurpiness
           )
 
           # `Opcode::REST` interprets the slurpie ('*').

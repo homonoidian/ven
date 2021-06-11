@@ -10,9 +10,39 @@ module Ven
   class Transform < Ven::Suite::Transformer
     include Suite
 
-    # Makes an instance of this class, transforms *quotes* with
-    # it **in-place**, and disposes the instance immediately
-    # afterwards.
+    # Implements the call-assign protocol hook.
+    #
+    # ```
+    # x(0) = 1 is __call_assign(x, 1, 0);
+    # x("foo")(0) = 1 is __call_assign(x("foo"), 1, 0);
+    # ```
+    def transform(q : QAssign)
+      return q unless target = q.target.as?(QCall)
+
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, "__call_assign"),
+        [target.callee, q.value] + target.args)
+    end
+
+    # Implements the call-assign protocol hook.
+    #
+    # ```
+    # x(0) += 1 is __call_assign(x, x(0) + 1, 0)
+    # x("foo")(0) += 1 is __call_assign(x("foo"), x("foo")(0) + 1, 0)
+    # ```
+    def transform(q : QBinaryAssign)
+      return q unless target = q.target.as?(QCall)
+
+      QCall.new(q.tag,
+        QRuntimeSymbol.new(q.tag, "__call_assign"),
+        [target.callee,
+         QBinary.new(q.tag, q.operator,
+           target,
+           q.value)] + target.args)
+    end
+
+    # Makes an instance of this class, transforms *quotes*,
+    # uses it to transform *quotes* **in-place**, and disposes
+    # the instance immediately afterwards.
     #
     # Returns the transformed quotes (although they are mutated
     # in-place anyways).

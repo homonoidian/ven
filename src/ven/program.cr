@@ -133,14 +133,13 @@ module Ven
     #
     # Returns self.
     def run(with parenthood = [] of Chunk)
-      import(parenthood)
-
-      step(Step::Read)
-        .then(Step::Compile)
-        .then(Step::Optimize)
-        .then(Step::Evaluate)
-
-      export(parenthood)
+      {% begin %}
+        import(parenthood)
+        {% for step in Step.constants %}
+          .then(Step::{{step}})
+        {% end %}
+          .export(parenthood)
+      {% end %}
     end
 
     # Appends the result of this program's evaluation of the
