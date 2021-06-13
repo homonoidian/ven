@@ -20,7 +20,7 @@ module Ven::Suite
       visit!(@last = quote)
     end
 
-    # Fallback visitor (raises interla 'no such visitor').
+    # Fallback visitor (raises internal 'no such visitor').
     def visit!(quote)
       raise InternalError.new("#{self.class}: could not visit: #{quote}")
     end
@@ -40,8 +40,9 @@ module Ven::Suite
     # applies itself recursively on these fields. If not, leaves
     # the fields untouched.
     #
-    # Can be overridden to transform one quote, located no matter
-    # how deep in the quote tree, but ignore all others.
+    # Can be concretized to transform a particular kind of
+    # quote, located no matter how deep in the quote tree,
+    # while ignoring all others.
     def transform(quote : Quote)
       {% begin %}
         case quote

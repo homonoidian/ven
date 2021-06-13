@@ -295,8 +295,8 @@ module Ven::Suite
     def visit!(q : QFun)
       String.build do |io|
         io << "fun " << visit(q.name) \
-           << fmt_params(io, q.params) \
-           << fmt_givens(io, q.params)
+          << fmt_params(io, q.params) \
+            << fmt_givens(io, q.params)
         # Print the body. If it's blocky, use block. If it's
         # not but it's too long (> 60ch), newline and indent.
         # Otherwise, use '='.
@@ -348,9 +348,9 @@ module Ven::Suite
       String.build do |io|
         ns = q.namespace
 
-        io << "box " << visit(q.name) \
-           << fmt_params(io, q.params) \
-           << fmt_givens(io, q.params)
+        io << "box " << visit(q.name) <<
+          fmt_params(io, q.params) <<
+          fmt_givens(io, q.params)
 
         unless ns.empty?
           # Again, box namespace is just a block of assignments.
@@ -359,6 +359,10 @@ module Ven::Suite
           io << " " << visit QBlock.new(q.tag, assigns)
         end
       end
+    end
+
+    def visit!(q : QLambda)
+      "((#{q.params.join(", ")}) #{visit(q.body)})"
     end
 
     # Returns the detreed *quotes*.
