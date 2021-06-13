@@ -18,9 +18,9 @@ module Ven
       QRuntimeSymbol.new(QTag.void, "__temp#{@@symno += 1}")
     end
 
-    # Constructs a pattern lambda for matching over number
-    # or a string.
-    def to_pattern_lambda(p : QNumber | QString)
+    # Constructs a pattern lambda for primitive patterns
+    # (those where just 'is' will suffice)
+    def to_pattern_lambda(p : QNumber | QString | QRegex)
       arg = gensym
 
       QLambda.new(p.tag, [arg.value],
@@ -38,9 +38,8 @@ module Ven
       matchers = Quotes.new
       accesses = Quotes.new
 
-      # 1. Go over the vector:
-      #   1.1 Collect matchers (match lambdas);
-      #   1.2 Collect [item] accesses.
+      # Go over the vector. Collect matchers (match lambdas)
+      # and [item] accesses.
       p.items.each_with_index do |item, index|
         matchers << to_pattern_lambda(item)
         accesses << QCall.new(item.tag, arg.as(Quote), [QNumber.new(item.tag, index.to_big_d).as(Quote)])
@@ -65,11 +64,15 @@ module Ven
         clauses[0],
         clauses[1])
 
+      # Reduce the remaining clauses.
       joint = clauses[2..].reduce(memo) do |memo, clause|
         QBinary.new(clause.tag, "and", memo, clause)
       end
 
-      # Then reduce the rest of the clauses.
+      # Wrap the joint clauses in '<joint> and <arg>', so that
+      # if the match was successful, 'and' returns <arg>.
+      joint = QBinary.new(p.tag, "and", joint, arg)
+
       QLambda.new(p.tag, [arg.value], joint, false)
     end
 
