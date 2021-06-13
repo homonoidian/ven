@@ -603,4 +603,12 @@ module Ven::Parselet
       leds
     end
   end
+
+  # Reads a pattern (pattern lambda) expression and wraps
+  # it in `QPatternShell`.
+  class PPattern < Nud
+    def parse
+      QPatternShell.new(@tag, led Precedence::FIELD)
+    end
+  end
 end

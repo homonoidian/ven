@@ -1,7 +1,7 @@
 module Ven
   # In terms of Ven, a word is a tagged lexeme. A lexeme is a
   # verbatim citation of the source code.
-  alias Word = { type: String, lexeme: String, line: Int32 }
+  alias Word = {type: String, lexeme: String, line: Int32}
 
   # The type that represents a Ven distinct.
   alias Distinct = Array(String)
@@ -86,7 +86,7 @@ module Ven
       should from)
 
     # Returns the current word.
-    getter word = { type: "START", lexeme: "<start>", line: 1 }
+    getter word = {type: "START", lexeme: "<start>", line: 1}
     # Returns this reader's context.
     getter context
 
@@ -312,7 +312,7 @@ module Ven
         this = stmt.parse!(self, tag, word!)
         semi = stmt.semicolon
       else
-        nud  = @nud[(@word[:type])]?
+        nud = @nud[(@word[:type])]?
         this = led
         # XXX: the decision made by *nud* remains with it
         # even after it finished reading. Doing a bit hairy
@@ -343,7 +343,7 @@ module Ven
     def distinct? : Distinct?
       return unless word!("DISTINCT")
 
-      before -> { !!word!(";") || eoi? } { path }
+      before ->{ !!word!(";") || eoi? } { path }
     end
 
     # Tries to read a group of 'expose' statements separated
@@ -515,6 +515,7 @@ module Ven
       defnud("[", Parselet::PVector)
       defnud("_", Parselet::PUPop)
       defnud("&_", Parselet::PURef)
+      defnud("'", Parselet::PPattern)
 
       # Infixes (LEDs):
 

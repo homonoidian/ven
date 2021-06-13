@@ -160,4 +160,6 @@ module Ven::Suite
   defquote(QEnsure, expression : Quote)
   defquote(QEnsureTest, comment : Quote, shoulds : Array(QEnsureShould))
   defquote(QEnsureShould, section : String, pad : Quotes)
+
+  defquote(QPatternShell, pattern : Quote)
 end
