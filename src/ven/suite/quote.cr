@@ -158,7 +158,7 @@ module Ven::Suite
     slurpy : Bool)
 
   defquote(QEnsure, expression : Quote)
-  defquote(QEnsureTest, comment : Quote, shoulds : Array(QEnsureShould))
+  defquote(QEnsureTest, comment : Quote, shoulds : Quotes)
   defquote(QEnsureShould, section : String, pad : Quotes)
 
   defquote(QPatternShell, pattern : Quote)

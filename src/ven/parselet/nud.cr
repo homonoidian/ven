@@ -343,13 +343,13 @@ module Ven::Parselet
     end
 
     # Reads a should.
-    private def should : QEnsureShould
+    private def should : Quote
       @parser.expect("SHOULD")
 
       section = @parser.expect("STRING")
       cases = @parser.repeat(sep: ";")
 
-      QEnsureShould.new(@tag, section[:lexeme], cases)
+      QEnsureShould.new(@tag, section[:lexeme], cases).as(Quote)
     end
   end
 
