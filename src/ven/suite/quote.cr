@@ -135,13 +135,13 @@ module Ven::Suite
       io << @value
     end
 
-    # Returns the value of this symbol. Thanks to this, it
-    # can be used as a  key in a JSON object.
+    # Returns the value of this symbol. Thanks to this, QSymbols
+    # can be used as keys in a JSON object.
     def to_json_object_key
       value
     end
 
-    # Makes a RuntimeSymbol from the given JSON object *key*.
+    # Makes a QRuntimeSymbol from the given JSON object *key*.
     def self.from_json_object_key?(key)
       QRuntimeSymbol.new(QTag.void, key)
     end
