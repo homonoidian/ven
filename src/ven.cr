@@ -13,6 +13,10 @@ module Ven
     # The path where the REPL history file can be found.
     HISTORY = ENV["VEN_HISTORY"]? || Path.home / ".ven_history"
 
+    # The regex matching a REPL command word. Command words
+    # begin a REPL command (see `command`).
+    COMMAND_WORD = /\\\w+/
+
     # These represent the flags. Look into their corresponding
     # helps in the Commander scaffold to know what they're for.
     @quit = true
@@ -66,7 +70,7 @@ module Ven
 
     # :ditto:
     private def die(error)
-      err("unknown error", error.to_s)
+      err("error", error.to_s)
     end
 
     # Displays the *quotes*. Returns nothing.
@@ -203,12 +207,40 @@ module Ven
       die(e)
     end
 
+    # Processes a REPL command.
+    def command(head : String, tail : String)
+      case {head, tail}
+      when {"help", _}
+        puts "TODO"
+      when {"serialize", _}
+        puts Program.new(tail).step(Program::Step::Read).quotes.to_json
+      when {"deserialize", _}
+        puts Quotes.from_json(tail)
+      when {"deserialize_detree", _}
+        puts Detree.detree(Quotes.from_json(tail))
+      when {"context", "reader"}
+        puts @orchestra.hub.reader.to_pretty_json
+      when {"context", "compiler"}
+        puts "compiler context"
+      when {"context", "machine"}
+        puts "machine context"
+      else
+        die("Invalid REPL command: '#{head}'.")
+      end
+    end
+
     # Launches the read-eval-print loop.
     def repl
       fancy = Fancyline.new
 
       fancy.display.add do |ctx, line, yielder|
-        yielder.call ctx, highlight(line)
+        if line.starts_with?(COMMAND_WORD)
+          # Highlight the REPL instruction, given a line that
+          # starts with one.
+          yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
+        else
+          yielder.call ctx, highlight(line)
+        end
       end
 
       if File.exists?(HISTORY) && File.file?(HISTORY) && File.readable?(HISTORY)
@@ -231,6 +263,10 @@ module Ven
           break
         elsif source.empty?
           next
+        elsif source.starts_with?(COMMAND_WORD)
+          # Interpret the rest of the input as a REPL command,
+          # and not as Ven code.
+          next command($0.lstrip("\\"), source[$0.size..].strip)
         end
 
         loop do

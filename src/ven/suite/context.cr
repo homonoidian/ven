@@ -1,3 +1,4 @@
+require "json"
 require "./model"
 
 module Ven::Suite::Context
@@ -37,6 +38,8 @@ module Ven::Suite::Context
   #
   # The reader uses context to store and look up user-defined
   # nuds, leds and words.
+  #
+  # Can be serialized (**but not yet deserialized**).
   class Reader
     # Returns a hash of word types mapped to nud macros
     # they trigger.
@@ -46,6 +49,9 @@ module Ven::Suite::Context
     # Returns a hash of word types mapped to regex patterns
     # used to match them.
     getter triggers = {} of String => Regex
+
+    # Defines a new keyword.
+    delegate :<<, to: @keywords
 
     # Returns whether *lexeme* is a keyword under this context.
     def keyword?(lexeme : String)
@@ -66,8 +72,13 @@ module Ven::Suite::Context
       @triggers[type] = pattern
     end
 
-    # Defines a new keyword.
-    delegate :<<, to: @keywords
+    def to_json(json : JSON::Builder)
+      json.object do
+        json.field("nuds", @nuds)
+        json.field("keywords", @keywords)
+        json.field("triggers", @triggers.transform_values(&.to_s))
+      end
+    end
   end
 
   # The context for a `Compiler`.

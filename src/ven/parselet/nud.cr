@@ -602,6 +602,20 @@ module Ven::Parselet
 
       leds
     end
+
+    # Serializes this nud macro into a JSON object.
+    #
+    # The object contains three fields: *tweakable*, which
+    # tells to outsiders whether this object is tweakable,
+    # *params*, an array of parameters of this nud macro,
+    # and *body*, a serialized array of body Quotes.
+    def to_json(json : JSON::Builder)
+      json.object do
+        json.field("tweakable", false)
+        json.field("params", @params)
+        json.field("body", @body.body)
+      end
+    end
   end
 
   # Reads a pattern (pattern lambda) expression and wraps

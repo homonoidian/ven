@@ -1,6 +1,10 @@
+require "big/json"
+
 module Ven::Suite
   # The location (*file*name and *line*number) of a `Quote`.
   struct QTag
+    include JSON::Serializable
+
     getter file : String
     getter line : Int32
 
@@ -24,8 +28,29 @@ module Ven::Suite
 
   # The base class of all Ven AST nodes, which are called
   # **quotes** in Ven.
+  #
+  # Supports JSON serialization & deserialization.
   abstract class Quote
+    include JSON::Serializable
+
+    macro finished
+      # This (supposedly) makes it possible to reconstruct
+      # a Quote tree from JSON. Will probably be useful in
+      # the future, i.e., when debugging?
+      use_json_discriminator("__quote", {
+        {% for subclass in @type.all_subclasses %}
+          {{subclass.name.split("::").last}} => {{subclass}},
+        {% end %}
+      })
+    end
+
     macro inherited
+      # Internal (although not so much) instance variable that
+      # stores the typename of this quote (QRuntimeSymbol, QBox,
+      # QFun, etc.) It is used to determine the type of Quote
+      # to deserialize to.
+      @__quote = {{@type.name.split("::").last}}
+
       macro defquote!(*fields)
         getter tag : QTag
         property \{{*fields.map(&.var.id)}}
@@ -38,18 +63,16 @@ module Ven::Suite
 
         # Lisp-like pretty-printing.
         #
-        # Use `Qtos` for Ven-like results.
+        # This is more of an internal way to print Quotes. If
+        # you want to see Quotes as Ven code, use `Detree`.
         def to_s(io)
           io << "(" << {{@type.name.split("::").last}}
 
-          \{% if !fields.empty? %}
-            \{% for field in fields %}
-              %field = \{{field.var}}
-
-              %field.is_a?(Array) \
-                ? io << " " << "[" << %field.join(" ") << "]"
-                : io << " " << %field
-            \{% end %}
+          \{% for field in fields %}
+            %field = \{{field.var}}
+            %field.is_a?(Array) \
+              ? io << " " << "[" << %field.join(" ") << "]"
+              : io << " " << %field
           \{% end %}
 
           io << ")"
@@ -89,7 +112,41 @@ module Ven::Suite
     end
   end
 
-  defquote(QSymbol, value : String)
+  # The parent of all kinds of Ven symbols.
+  #
+  # It is serializable; it is possible to have QSymbol be a
+  # key in a JSON object.
+  class QSymbol < Quote
+    include JSON::Serializable
+
+    # QSymbols should always be resolved to either QRuntimeSymbol
+    # or QReadtimeSymbol, orelse a lot of stuff will break. This
+    # should not have been required, as __quote is already present
+    # on each Quote; but it is!
+    use_json_discriminator("__quote", {
+      "QRuntimeSymbol"  => QRuntimeSymbol,
+      "QReadtimeSymbol" => QReadtimeSymbol,
+    })
+
+    getter tag : QTag
+    getter value : String
+
+    def to_s(io)
+      io << @value
+    end
+
+    # Returns the value of this symbol. Thanks to this, it
+    # can be used as a  key in a JSON object.
+    def to_json_object_key
+      value
+    end
+
+    # Makes a RuntimeSymbol from the given JSON object *key*.
+    def self.from_json_object_key?(key)
+      QRuntimeSymbol.new(QTag.void, key)
+    end
+  end
+
   defquote(QRuntimeSymbol, value : _, under: QSymbol)
   defquote(QReadtimeSymbol, value : _, under: QSymbol)
 

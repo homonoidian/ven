@@ -5,6 +5,25 @@ module Ven::Suite
   # field path. And, in `b.c`, `b` is the first field accessor
   # and `c` is the second.
   abstract struct FieldAccessor
+    include JSON::Serializable
+
+    macro finished
+      # This (supposedly) makes it possible to reconstruct
+      # a FieldAccessor from JSON.
+      use_json_discriminator("__access_type", {
+        {% for subclass in @type.subclasses %}
+          {{subclass.name.split("::").last}} => {{subclass}},
+        {% end %}
+      })
+    end
+
+    macro inherited
+      # An internal instance variable used to determine which
+      # type of field accessor should a FieldAccessor be
+      # deserialized into.
+      @__access_type = {{@type.name.split("::").last}}
+    end
+
     macro takes(type)
       getter access : {{type}}
 

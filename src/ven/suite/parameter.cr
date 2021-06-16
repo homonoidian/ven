@@ -2,6 +2,8 @@ module Ven::Suite
   # Holds Ven function parameter information at read-time
   # & compile-time.
   struct Parameter
+    include JSON::Serializable
+
     # Returns the index of this parameter.
     getter index : Int32
     # Returns the name of this parameter.
@@ -14,9 +16,9 @@ module Ven::Suite
     getter contextual : Bool
 
     def initialize(@index, @name,
-      @given = nil,
-      @slurpy = false,
-      @contextual = false)
+                   @given = nil,
+                   @slurpy = false,
+                   @contextual = false)
     end
 
     def clone
@@ -28,15 +30,17 @@ module Ven::Suite
   #
   # It provides various methods to filter it.
   struct Parameters
+    include JSON::Serializable
+
     def initialize(@params : Array(Parameter))
     end
 
     delegate :each,
-            :reverse_each,
-            :size,
-            :empty?,
-            :join,
-            to: @params
+      :reverse_each,
+      :size,
+      :empty?,
+      :join,
+      to: @params
 
     # Returns the names of the parameters.
     def names : Array(String)
