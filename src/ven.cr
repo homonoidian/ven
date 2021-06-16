@@ -108,7 +108,7 @@ module Ven
             elsif (ms = duration.total_milliseconds) < 1000
               {ms.colorize.light_red, "ms"}
             else
-              {duration.total_seconds.colorize.red, "sec"}
+              {duration.total_seconds.colorize.cyan, "sec"}
             end
 
           puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration} #{unit}]"
