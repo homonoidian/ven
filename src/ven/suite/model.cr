@@ -25,7 +25,7 @@ module Ven::Suite
   # Used in, say, generics to determine the order in which
   # the subordinate concretes should be sorted.
   enum MWeight
-    ANON_ANY = 1
+    ANON_ANY   = 1
     ANY
     ANON_TYPE
     TYPE
@@ -421,7 +421,7 @@ module Ven::Suite
       # These will not overflow for there is RANGE_TO_VEC_CAP,
       # which is (at least, should be) much lower than max Int32.
       begin_ = @begin.to_i
-      end_   = @end.to_i
+      end_ = @end.to_i
 
       if begin_ > end_
         begin_.downto(end_) { |it| result << Num.new(it) }
@@ -457,7 +457,7 @@ module Ven::Suite
 
     def []?(index : Int)
       begin_ = @begin.value
-      end_   = @end.value
+      end_ = @end.value
 
       if index < 0
         # E.g., (1 to 10)(-1) is same as (10 to 1)(0);
@@ -1064,7 +1064,7 @@ module Ven::Suite
     def myself=(name : String)
       unless @myselfed
         @scope[name] = self
-        @myselfed    = true
+        @myselfed = true
       end
     end
 

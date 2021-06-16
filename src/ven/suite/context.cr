@@ -171,7 +171,7 @@ module Ven::Suite::Context
     #
     # Returns nil if *symbol* was not found.
     def []?(symbol : String, maybe = nil)
-      if value = @scopes[maybe || -1][symbol]?
+      if value = (@scopes[-1][symbol]? || maybe.try { @scopes[maybe][symbol]? })
         return value
       end
 
@@ -216,8 +216,8 @@ module Ven::Suite::Context
 
       if meta.is_a?(MBoxInstance) && meta.namespace[symbol]?
         return meta.namespace[symbol] = value
-      elsif prev.is_a?(MFunction) && !value.is_a?(MFunction)
-        raise VenAssignmentError.new("invalid assignment target: #{prev}")
+        # elsif prev.is_a?(MFunction) && !value.is_a?(MFunction)
+        #   raise VenAssignmentError.new("invalid assignment target: #{prev}")
       end
 
       return @scopes[nest][symbol] = value

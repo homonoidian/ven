@@ -7,10 +7,7 @@ module Ven
 
     alias Timetable = Hash(Int32, IStatistics)
     alias IStatistics = Hash(Int32, IStatistic)
-    alias IStatistic =
-      { amount: Int32,
-        duration: Time::Span,
-        instruction: Instruction }
+    alias IStatistic = {amount: Int32, duration: Time::Span, instruction: Instruction}
 
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
@@ -71,7 +68,7 @@ module Ven
     # *ip* is an instruction pointer to the *instruction*.
     def record!(instruction, duration, cp, ip)
       if !(stats = @timetable[cp]?)
-        @timetable[cp] = { ip => stat(1, duration, instruction) }
+        @timetable[cp] = {ip => stat(1, duration, instruction)}
       elsif !(stat = stats[ip]?)
         stats[ip] = stat(1, duration, instruction)
       else
@@ -450,7 +447,8 @@ module Ven
       case operator
       when "to"
         return left.to_num, right.to_num
-      when "x" then case {left, right}
+      when "x"
+        case {left, right}
         when {_, Vec}, {_, Str}
           return right, left.to_num
         when {Str, _}, {Vec, _}
@@ -458,7 +456,8 @@ module Ven
         else
           return left.to_vec, right.to_num
         end
-      when "in" then case {left, right}
+      when "in"
+        case {left, right}
         when {_, Str}, {Str, _}
           return left.to_str, right.to_str
         end
@@ -534,14 +533,14 @@ module Ven
     # Reduces range *operand* using a binary *operator*.
     def reduce(operator, operand : MFullRange)
       start = operand.begin.value
-      end_  = operand.end.value
+      end_ = operand.end.value
 
       case operator
       when "+"
         return num ((start + end_) * operand.length) / 2
       when "*"
         start = operand.begin.value
-        end_  = operand.end.value
+        end_ = operand.end.value
 
         # Uses GMP's factorial. If got |*| -A to -B, outputs
         # -(|*| A to B); I don't know whether it's the expected
@@ -549,7 +548,7 @@ module Ven
         # about this I also do not know.
         if neg = start < 0 && end_ < 0
           start = -start
-          end_  = -end_
+          end_ = -end_
         elsif start < 0 || end_ < 0
           return num 0
         end
@@ -671,14 +670,14 @@ module Ven
           end
         when /^(\.h(elp)?|\?)$/
           puts "?  : .h(elp) : display this",
-               ".  : display stack",
-               ".. : display chunk",
-               ".f : display frame",
-               ".s : display scopes",
-               ".c : display control",
-               "._ : display underscores",
-               "CTRL-C : step",
-               "CTRL-D : skip all"
+            ".  : display stack",
+            ".. : display chunk",
+            ".f : display frame",
+            ".s : display scopes",
+            ".c : display control",
+            "._ : display underscores",
+            "CTRL-C : step",
+            "CTRL-D : skip all"
         when nil # EOF (CTRL-D)
           return false
         else
@@ -724,147 +723,149 @@ module Ven
 
           begin
             case this.opcode
-            # Pops one value from the stack: (x --)
             in Opcode::POP
+              # Pops one value from the stack: (x --)
               pop
-            # Pops two values from the stack (x1 x2 --)
             in Opcode::POP2
+              # Pops two values from the stack (x1 x2 --)
               pop 2
-            # Swaps two last values on the stack: (x1 x2 -- x2 x1)
             in Opcode::SWAP
+              # Swaps two last values on the stack: (x1 x2 -- x2 x1)
               stack.swap(-2, -1)
-            # Same as POP, but does not raise on underflow.
             in Opcode::TRY_POP
+              # Same as POP, but does not raise on underflow.
               stack.pop?
-            # Makes a duplicate of the last value: (x1 -- x1 x1')
             in Opcode::DUP
+              # Makes a duplicate of the last value: (x1 -- x1 x1')
               put tap
-            # Clears the stack: (x1 x2 x3 ... --)
             in Opcode::CLEAR
+              # Clears the stack: (x1 x2 x3 ... --)
               stack.clear
-            # Puts the value of a symbol: (-- x)
             in Opcode::SYM
+              # Puts the value of a symbol: (-- x)
               put lookup(symbol)
-            # Puts a number: (-- x)
             in Opcode::NUM
+              # Puts a number: (-- x)
               put num static(BigDecimal)
-            # Puts a string: (-- x)
             in Opcode::STR
+              # Puts a string: (-- x)
               put str static
-            # Puts a regex: (-- x)
             in Opcode::PCRE
+              # Puts a regex: (-- x)
               put regex static
-            # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
             in Opcode::VEC
+              # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
               put vec pop static(Int32)
-            # Puts true: (-- true)
             in Opcode::TRUE
+              # Puts true: (-- true)
               put bool true
-            # Puts false: (-- false)
             in Opcode::FALSE
+              # Puts false: (-- false)
               put bool false
-            # Puts false if stack is empty:
-            #  - (-- false)
-            #  - (... -- ...)
             in Opcode::FALSE_IF_EMPTY
+              # Puts false if stack is empty:
+              #  - (-- false)
+              #  - (... -- ...)
               put bool false if stack.empty?
-            # Puts 'any' onto the stack: (-- any)
             in Opcode::ANY
+              # Puts 'any' onto the stack: (-- any)
               put MAny.new
-            # Negates a num: (x1 -- -x1)
             in Opcode::NEG
+              # Negates a num: (x1 -- -x1)
               put -pop.to_num
-            # Converts to num: (x1 -- x1' : num)
             in Opcode::TON
+              # Converts to num: (x1 -- x1' : num)
               put pop.to_num
-            # Converts to str: (x1 -- x1' : str)
             in Opcode::TOS
+              # Converts to str: (x1 -- x1' : str)
               put pop.to_str
-            # Converts to bool: (x1 -- x1' : bool)
             in Opcode::TOB
+              # Converts to bool: (x1 -- x1' : bool)
               put pop.to_bool
-            # Converts to inverse boolean (...#t, ...#f - true/false
-            # by meaning):
-            #   - (x1#t -- false)
-            #   - (x1#f -- true)
             in Opcode::TOIB
+              # Converts to inverse boolean (...#t, ...#f - true/false
+              # by meaning):
+              #   - (x1#t -- false)
+              #   - (x1#f -- true)
               put pop.to_bool(inverse: true)
-            # Converts to vec (unless vec):
-            #   - (x1 -- [x1])
-            #   - ([x1] -- [x1])
             in Opcode::TOV
+              # Converts to vec (unless vec):
+              #   - (x1 -- [x1])
+              #   - ([x1] -- [x1])
               put pop.to_vec
-            # Puts length of an entity: (x1 -- x2)
             in Opcode::LEN
+              # Puts length of an entity: (x1 -- x2)
               put num pop.length
-            # Make a beginless range: (x1 -- x2)
             in Opcode::TOR_BL
+              # Make a beginless range: (x1 -- x2)
               put MPartialRange.new(to: pop.to_num)
-            # Make an endless range: (x1 -- x2)
             in Opcode::TOR_EL
+              # Make an endless range: (x1 -- x2)
               put MPartialRange.new(from: pop.to_num)
-            # Evaluates a binary operation: (x1 x2 -- x3)
             in Opcode::BINARY
+              # Evaluates a binary operation: (x1 x2 -- x3)
               gather { |lhs, rhs| put binary(static, lhs, rhs) }
             in Opcode::BINARY_ASSIGN
+              # Almost the same as BINARY, but used specifically
+              # in binary assignment.
               put binary(static, pop, tap)
-            # Dies if tap is false: (x1 -- x1)
             in Opcode::ENS
+              # Dies if tap is false: (x1 -- x1)
               die("ensure: got false") if tap.false?
-            # Jumps at some instruction pointer.
             in Opcode::J
+              # Jumps at some instruction pointer.
               jump target
-            # Jumps at some instruction pointer if not popped
-            # bool false: (x1 --)
             in Opcode::JIT
+              # Jumps at some instruction pointer if not popped
+              # bool false: (x1 --)
               jump target unless pop.false?
-            # Jumps at some instruction pointer if popped bool
-            # false: (x1 --)
             in Opcode::JIF
+              # Jumps at some instruction pointer if popped bool
+              # false: (x1 --)
               jump target if pop.false?
-            # Jumps at some instruction pointer if not tapped
-            # bool false; pops otherwise:
-            #   - (true -- true)
-            #   - (false --)
             in Opcode::JIT_ELSE_POP
+              # Jumps at some instruction pointer if not tapped
+              # bool false; pops otherwise:
+              #   - (true -- true)
+              #   - (false --)
               tap.false? ? pop : jump target
-            # Jumps at some instruction pointer if tapped bool
-            # false; pops otherwise:
-            #   - (true --)
-            #   - (false -- false)
             in Opcode::JIF_ELSE_POP
+              # Jumps at some instruction pointer if tapped bool
+              # false; pops otherwise:
+              #   - (true --)
+              #   - (false -- false)
               tap.false? ? jump target : pop
-            # Pops and assigns it to a symbol: (x1 --)
             in Opcode::POP_ASSIGN
+              # Pops and assigns it to a symbol: (x1 --)
               assign symbol, pop
-            # Taps and assigns it to a symbol: (x1 -- x1)
             in Opcode::TAP_ASSIGN
+              # Taps and assigns it to a symbol: (x1 -- x1)
               assign symbol, tap
-            # Implements inplace-increment semantics: (-- x1)
             in Opcode::INC
+              # Implements inplace-increment semantics: (-- x1)
               this = symbol
               operand = lookup(this)
               @context[this] = num operand.to_num.value + 1
               put operand
-            # Implements inplace-decrement semantics: (-- x1)
             in Opcode::DEC
+              # Implements inplace-decrement semantics: (-- x1)
               this = symbol
               operand = lookup(this)
               @context[this] = num operand.to_num.value - 1
               put operand
-            # Defines the `*` variable. Pops stack.size - static
-            # values.
             in Opcode::REST
+              # Defines the `*` variable. Pops stack.size - static
+              # values.
               @context["*"] = vec pop(stack.size - static Int32)
-            # Defines a function. Requires the values of the
-            # given appendix (orelse the appropriate number of
-            # `any`s) to be on the stack; it pops them.
             in Opcode::FUN
+              # Defines a function. Requires the values of the
+              # given appendix (orelse the appropriate number of
+              # `any`s) to be on the stack; it pops them.
               defun(myself = function, pop myself.given)
-            # If *x1* is a fun/box, invokes it. If an indexable,
-            # indexes it: (x1 a1 a2 a3 ... -- R), where *aN* is
-            # an argument, and R is the returned value.
             in Opcode::CALL
+              # If *x1* is a fun/box, invokes it. If an indexable,
+              # indexes it: (x1 a1 a2 a3 ... -- R), where *aN* is
+              # an argument, and R is the returned value.
               args = pop static(Int32)
 
               case callee = pop
@@ -901,13 +902,11 @@ module Ven
                   # worth it to make this a special-case of
                   # invoke():
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
-                  # Lambdas are isolated from the other scopes,
-                  # although globals can still be accessed
-                  # (their nest is known, and lookup prefers
-                  # nest over isolation).
+                  # Lambdas are isolated from the other scopes.
+                  # The only scope they're not isolated from
+                  # is the prelude scope, which is `found.scope`
+                  # below. We dup it so the body cannot modify it.
                   @context.isolate = true
-                  # Worked without the 'dup', but it's required
-                  # by semantics (is it?)
                   @context.scopes << found.scope.dup
                   @context.traces << Trace.new(chunk.file, fetch.line, "lambda")
                   next
@@ -917,12 +916,12 @@ module Ven
               else
                 die("illegal callee: #{callee}")
               end
-            # Returns from a function. Puts onto the parent stack
-            # the return value defined by the function frame,
-            # unless it wasn't specified. In that case, exports
-            # the last value from the function frame's operand
-            # stack.
             in Opcode::RET
+              # Returns from a function. Puts onto the parent stack
+              # the return value defined by the function frame,
+              # unless it wasn't specified. In that case, exports
+              # the last value from the function frame's operand
+              # stack.
               if !(queue = frame.queue).empty?
                 revoke && put vec queue
               elsif returns = frame.returns
@@ -930,30 +929,30 @@ module Ven
               elsif !revoke(export: true)
                 die("void expression")
               end
-            # Moves a value onto the underscores stack:
-            #   oS: (x1 --) ==> _S: (-- x1)
             in Opcode::POP_UPUT
+              # Moves a value onto the underscores stack:
+              #   oS: (x1 --) ==> _S: (-- x1)
               underscores << pop
-            # Copies a value onto the underscores stack:
-            #   oS: (x1 -- x1) ==> _S: (-- x1)
             in Opcode::TAP_UPUT
+              # Copies a value onto the underscores stack:
+              #   oS: (x1 -- x1) ==> _S: (-- x1)
               underscores << tap
-            # Moves a value from the underscores stack:
             in Opcode::UPOP
+              # Moves a value from the underscores stack:
               put u_lookup || die("'_': no contextual")
-            # Moves a copy of a value from the underscores stack
-            # to the stack:
             in Opcode::UREF
+              # Moves a copy of a value from the underscores stack
+              # to the stack:
               put u_lookup(pop: false) || die("'&_': no contextual")
-            # Prepares for a series of `MAP_ITER`s on a vector.
             in Opcode::MAP_SETUP
+              # Prepares for a series of `MAP_ITER`s on a vector.
               control << tap.length << 0 << stack.size - 2
-            # Executes each map iteration. Assumes:
-            #   - that control[-2] is the current item index
-            #     in an operand vector;
-            #   - that control[-3] is the length of that
-            #     operand vector;
             in Opcode::MAP_ITER
+              # Executes each map iteration. Assumes:
+              #   - that control[-2] is the current item index
+              #     in an operand vector;
+              #   - that control[-3] is the length of that
+              #     operand vector;
               length, index, _ = control.last(3)
 
               if index >= length
@@ -963,35 +962,35 @@ module Ven
               end
 
               control[-2] += 1
-            # A variation of "&" for maps. Assumes that control[-1]
-            # is a stack pointer to a destination vector.
             in Opcode::MAP_APPEND
+              # A variation of "&" for maps. Assumes that control[-1]
+              # is a stack pointer to a destination vector.
               stack[control.last].as(Vec) << pop
-            # Reduces a vector using a binary operator: ([...] -- x1)
             in Opcode::REDUCE
+              # Reduces a vector using a binary operator: ([...] -- x1)
               put reduce(static, pop)
-            # Goes to the chunk it received as the argument.
             in Opcode::GOTO
+              # Goes to the chunk it received as the argument.
               next invoke("block", static Int32)
-            # Pops an operand and, if possible, gets the value
-            # of its field. Alternatively, builds a partial:
-            # (x1 -- x2)
             in Opcode::FIELD_IMMEDIATE
+              # Pops an operand and, if possible, gets the value
+              # of its field. Alternatively, builds a partial:
+              # (x1 -- x2)
               put field(pop, str static)
-            # Pops two values, first being the operand and second
-            # the field, and, if possible, gets the value of a
-            # field. Alternatively, builds a partial: (x1 x2 -- x3)
             in Opcode::FIELD_DYNAMIC
+              # Pops two values, first being the operand and second
+              # the field, and, if possible, gets the value of a
+              # field. Alternatively, builds a partial: (x1 x2 -- x3)
               gather do |head, field|
                 put field(head, field)
               end
-            # Implements the semantics of 'next fun', which is
-            # an explicit tail-call (elimination) request. Pops
-            # the callee and N arguments: (x1 ...N --)
-            #
-            # Queue is always preserved.
             in Opcode::NEXT_FUN
-              args   = pop static(Int32)
+              # Implements the semantics of 'next fun', which is
+              # an explicit tail-call (elimination) request. Pops
+              # the callee and N arguments: (x1 ...N --)
+              #
+              # Queue is always preserved.
+              args = pop static(Int32)
               callee = pop(as: MFunction)
 
               # Pop frames until we meet the nearest surrounding
@@ -1018,44 +1017,44 @@ module Ven
               end
 
               next
-            # Sets the 'dies' target of this frame. The 'dies'
-            # target is jumped to whenever a runtime error
-            # occurs.
             in Opcode::SETUP_DIES
+              # Sets the 'dies' target of this frame. The 'dies'
+              # target is jumped to whenever a runtime error
+              # occurs.
               frame.dies = target
-            # Resets the 'dies' target of this frame.
             in Opcode::RESET_DIES
+              # Resets the 'dies' target of this frame.
               frame.dies = nil
-            # Pops a return value and returns out of the nearest
-            # surrounding function. Revokes all frames up to &
-            # including the frame of that nearest surrounding
-            # function. Note that it vetoes `SETUP_RET`: (x1 --)
             in Opcode::FORCE_RET
+              # Pops a return value and returns out of the nearest
+              # surrounding function. Revokes all frames up to &
+              # including the frame of that nearest surrounding
+              # function. Note that it vetoes `SETUP_RET`: (x1 --)
               value = pop
 
               @frames.reverse_each do |it|
                 revoke; break put value if it.goal.function?
               end
-            # Force-returns the queue of the nearest surrounding
-            # function. Revokes all frames up to & including
-            # the frame of that nearest surrounding function.
             in Opcode::FORCE_RET_QUEUE
+              # Force-returns the queue of the nearest surrounding
+              # function. Revokes all frames up to & including
+              # the frame of that nearest surrounding function.
               @frames.reverse_each do |it|
                 revoke; break put vec it.queue if it.goal.function?
               end
-            # Finds the nearest surrounding function and sets
-            # its return value to whatever was tapped. Does
-            # not break the flow: (x1 -- x1)
             in Opcode::SETUP_RET
+              # Finds the nearest surrounding function and sets
+              # its return value to whatever was tapped. Does
+              # not break the flow: (x1 -- x1)
               @frames.reverse_each do |it|
                 if it.goal.function?
                   break it.returns = tap
                 end
               end
-            # Makes a box and puts in onto the stack: (...N) -- B,
-            # where N is the number of arguments a box receives
-            # and B is the resulting box.
             in Opcode::BOX
+              # Makes a box and puts in onto the stack: (...N) -- B,
+              # where N is the number of arguments a box receives
+              # and B is the resulting box.
               defee = function
               name = defee.symbol.name
               given = pop defee.given
@@ -1066,37 +1065,40 @@ module Ven
                 defee.arity,
                 defee.target
               )
-            # Instantiates a box and puts the instance onto the
-            # stack: (B -- I), where B is the box parent to this
-            # instance, and I is the instance.
             in Opcode::BOX_INSTANCE
+              # Instantiates a box and puts the instance onto the
+              # stack: (B -- I), where B is the box parent to this
+              # instance, and I is the instance.
               put MBoxInstance.new(pop(as: MFunction), @context.scopes[-1].dup)
-            # Makes a lambda from the function it receives
-            # as the argument. Assumes there is at least
-            # one scope in the scope hierarchy.
             in Opcode::LAMBDA
+              # Makes a lambda from the function it receives
+              # as the argument. Assumes there is at least
+              # one scope in the scope hierarchy.
               lambda = function
 
               put MLambda.new(
-                @context.scopes[-1].dup,
+                # Collect all superior variables into one big
+                # scope, and make that scope the prelude scope
+                # of this lambda.
+                @context.scopes.reduce { |memo, scope| memo.merge(scope) },
                 lambda.arity,
                 lambda.slurpy,
                 lambda.params,
                 lambda.target,
               )
-            # Pops and uses that to print ensure test title.
             in Opcode::TEST_TITLE
+              # Pops and uses that to print ensure test title.
               puts "[#{chunk.file}]: #{pop(as: Str).value}".colorize.bold
-            # Checks if tap is false, and, if it is, emits
-            # a failure.
             in Opcode::TEST_ASSERT
+              # Checks if tap is false, and, if it is, emits
+              # a failure.
               if tap.false?
                 frame.failures << "#{chunk.file}:#{this.line}: got #{tap}"
               end
-            # Checks if there are any failures in this frame's
-            # `failures` and, if there are, prints them under a
-            # test case section (provided by static).
             in Opcode::TEST_SHOULD
+              # Checks if there are any failures in this frame's
+              # `failures` and, if there are, prints them under a
+              # test case section (provided by static).
               if frame.failures.empty?
                 puts " #{"✓".colorize.bold.green} #{static}"
               else
@@ -1105,9 +1107,9 @@ module Ven
                   puts "\t◦ #{failure}"
                 end
               end
-            # Appends the tapped value to the queue of the
-            # frame of the closest surrounding function.
             in Opcode::QUEUE
+              # Appends the tapped value to the queue of the
+              # frame of the closest surrounding function.
               @frames.reverse_each do |it|
                 break it.queue << tap if it.goal.function?
               end
