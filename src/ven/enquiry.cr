@@ -1,27 +1,28 @@
 module Ven
-  # Enquiry convoys various configurations from the heights
-  # of abstraction (i.e., `Orchestra`) down to `Program`,
-  # `Machine`, or anyone else willing.
+  # Enquiry allows communication between Ven's different
+  # levels of abstraction.
   #
-  # It does the same in the opposite direction; i.e., one can
-  # also *send* data with `Enquiry` back to the top.
+  # It convoys properties from the very heights of machinery
+  # (i.e., `Orchestra`) down to `Program`, `Machine`, etc.
+  #
+  # The recipient can also send some data back to the top.
   class Enquiry
-    # `Machine`: whether to run the inspector.
+    # TO `Machine`: whether to run the inspector.
     property inspect = false
-    # `Machine`: whether to build the timetable.
+    # TO `Machine`: whether to build the timetable.
     property measure = false
-    # `Program`: the amount of optimize passes.
+    # TO `Program`: the amount of optimize passes.
     property optimize = 8
-    # `Machine`: if true, the system handles SIGINT interrupt
-    # (and your program runs faster); if false, Ven handles
-    # SIGINT interrupt.
+    # TO `Machine`: if true, there is no fiber-juggling in
+    # the main interpreter loop, and your program runs faster
+    # (~40% faster); if false, there is, but then Ven catches
+    # SIGINT interrupts (which is the preferred option, of course).
     property fast_interrupt = false
-    # `Compiler`: if true, enables test mode (i.e., disignores
+    # TO `Compiler`: if true, enables test mode (i.e., disignores
     # 'ensure' tests).
     property test_mode = false
 
-    # `Machine`: returns the resulting timetable (if had
-    # `measure` enabled).
+    # FROM `Machine`: the timetable (if had `measure` enabled).
     property timetable = Ven::Machine::Timetable.new
   end
 end

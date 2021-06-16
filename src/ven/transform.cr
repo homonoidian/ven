@@ -12,8 +12,8 @@ module Ven
 
     @@symno = 0
 
-    # Generates a symbol unique throughout a single run
-    # of Ven.
+    # Generates a symbol unique throughout a single instance
+    # of Ven machinery.
     def gensym
       QRuntimeSymbol.new(QTag.void, "__temp#{@@symno += 1}")
     end
@@ -129,12 +129,11 @@ module Ven
            q.value)] + target.args)
     end
 
-    # Makes an instance of this class, transforms *quotes*,
-    # uses it to transform *quotes* **in-place**, and disposes
-    # the instance immediately afterwards.
+    # Makes an instance of this class, uses it to transform
+    # *quotes* **in-place**, and disposes the instance.
     #
-    # Returns the transformed quotes (although they are mutated
-    # in-place anyways).
+    # Returns the transformed quotes (although they are
+    # mutated in-place anyways).
     def self.transform(quotes : Quotes)
       new.transform(quotes)
     end
