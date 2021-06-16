@@ -23,6 +23,7 @@ module Ven
     @final = "evaluate"
     @result = false
     @measure = false
+    @serialize = false
 
     # The orchestra and Enquiry cannot be initialized at this
     # point; they are never used before they've been initialized
@@ -198,7 +199,18 @@ module Ven
         display(@enquiry.timetable)
       end
 
-      display(result)
+      if @serialize
+        unless @final.in?("read", "transform")
+          die("the result of the final step is not serializable yet")
+          # Die does not break us out of the function!
+          return
+        end
+        # TODO: serialize all possible results: chunks,
+        # models, etc.
+        puts result.as(Quotes).to_pretty_json
+      else
+        display(result)
+      end
 
       if @measure
         puts "[took #{duration.total_microseconds}us]".colorize.bold
@@ -211,19 +223,34 @@ module Ven
     def command(head : String, tail : String)
       case {head, tail}
       when {"help", _}
-        puts "TODO"
+        puts <<-END
+        \\COMMAND [TAIL]
+
+        Available commands:
+          \\help: show this
+          \\serialize: serialize TAIL
+          \\deserialize: deserialize TAIL
+          \\deserialize_detree: deserialize & detree TAIL
+          \\lserq: deserialize quotes from file TAIL, and detree
+          \\run_serq: deserialize quotes from file TAIL, and run
+          \\context: serialize context (TAIL = reader, compiler, machine)
+        END
       when {"serialize", _}
         puts Program.new(tail).step(Program::Step::Read).quotes.to_json
       when {"deserialize", _}
         puts Quotes.from_json(tail)
       when {"deserialize_detree", _}
         puts Detree.detree(Quotes.from_json(tail))
+      when {"lserq", _}
+        puts Detree.detree(Quotes.from_json(File.read(tail)))
+      when {"run_lserq", _}
+        puts run(tail, Detree.detree(Quotes.from_json(File.read(tail))))
       when {"context", "reader"}
         puts @orchestra.hub.reader.to_pretty_json
       when {"context", "compiler"}
-        puts "compiler context"
+        puts "compiler context TODO"
       when {"context", "machine"}
-        puts "machine context"
+        puts "machine context TODO"
       else
         die("Invalid REPL command: '#{head}'.")
       end
@@ -413,6 +440,14 @@ module Ven
           flag.description = "Disignore ensure tests."
         end
 
+        cmd.flags.add do |flag|
+          flag.name = "serialize"
+          flag.short = "-s"
+          flag.long = "--serialize"
+          flag.default = false
+          flag.description = "Serialize final step."
+        end
+
         cmd.run do |options, arguments|
           port = options.int["port"].as Int32
 
@@ -422,6 +457,7 @@ module Ven
           @final = options.string["final"]
           @result = options.bool["result"]
           @measure = options.bool["measure"]
+          @serialize = options.bool["serialize"]
 
           @enquiry = Enquiry.new
           @enquiry.measure = options.bool["timetable"]
