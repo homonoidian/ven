@@ -88,7 +88,7 @@ module Ven
     # Returns the current word.
     getter word = {type: "START", lexeme: "<start>", line: 1}
     # Returns this reader's context.
-    getter context
+    getter context : Context::Reader
 
     # Whether this reader's state is dirty.
     @dirty = false
@@ -103,11 +103,17 @@ module Ven
     # required argument.
     #
     # *file* is the name by which this source code will be
-    # identified; normally it's filename, hence the name.
+    # identified; normally it's filename.
     #
     # *context* is the context for this Reader (see
     # `Context::Reader`).
-    def initialize(@source : String, @file = "untitled", @context = Context::Reader.new)
+    #
+    # *enquiry* is the Enquiry object used to send/read global
+    # signals, properties, configurations et al.
+    def initialize(@source : String,
+                   @file = "untitled",
+                   @context = Context::Reader.new,
+                   @enquiry = Enquiry.new)
       # Read the first word:
       word!
 
@@ -561,16 +567,22 @@ module Ven
 
     # A shorthand for `Reader#read`. **Ignores `expose` and
     # `distinct` statements.**
-    def self.read(source : String, file = "untitled", context = Context::Reader.new)
-      reader = new(source, file, context)
+    def self.read(source : String,
+                  file = "untitled",
+                  context = Context::Reader.new,
+                  enquiry = Enquiry.new)
+      reader = new(source, file, context, enquiry)
       reader.distinct?
       reader.exposes
       reader.read
     end
 
     # :ditto:
-    def self.read(source, file = "untitled", context = Context::Reader.new)
-      reader = new(source, file, context)
+    def self.read(source : String,
+                  file = "untitled",
+                  context = Context::Reader.new,
+                  enquiry = Enquiry.new)
+      reader = new(source, file, context, enquiry)
       reader.distinct?
       reader.exposes?
       reader.read do |quote|

@@ -56,7 +56,12 @@ module Ven
     # its filename (or unit name); *hub* is the context hub
     # that this program will use.
     def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new, @enquiry = Enquiry.new)
-      @reader = Reader.new(@source, @file, @hub.reader)
+      @reader = Reader.new(
+        @source,
+        @file,
+        @hub.reader,
+        @enquiry
+      )
       # WARNING: order is important!
       @distinct = @reader.distinct?
       @exposes = @reader.exposes
