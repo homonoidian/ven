@@ -2,6 +2,8 @@ module Ven::Suite
   # Represents an individual trace entry in an error's
   # traceback.
   struct Trace
+    include JSON::Serializable
+
     getter file : String
     getter line : Int32
     getter name : String

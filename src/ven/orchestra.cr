@@ -31,15 +31,17 @@ module Ven
   class Orchestra
     include Inquirer::Protocol
 
+    # Inquirer port number.
+    getter port : Int32
     # Returns the context hub of this orchestra.
-    getter hub  = Suite::Context::Hub.new
+    getter hub = Suite::Context::Hub.new
     # Returns the chunk pool of this orchestra.
     getter pool = Suite::Chunks.new
     # Returns whether this orchestra is running isolated from
     # an Inquirer server.
     getter isolated : Bool
 
-    @cache  = Set(String).new
+    @cache = Set(String).new
     @client : Inquirer::Client
 
     # Enquiry with all defaults; we don't want to create a new
@@ -51,7 +53,7 @@ module Ven
 
     # Makes an Orchestra for an Inquirer server running at
     # the given *port*.
-    def initialize(port = 12879)
+    def initialize(@port = 12879)
       @client = client_from(port)
       @isolated = !@client.running?
       # Load the built-in libraries.

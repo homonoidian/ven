@@ -125,7 +125,11 @@ module Ven
 
     # Given an explanation message, *message*, dies of `ReadError`.
     def die(message : String)
-      raise ReadError.new(@word, @file, message)
+      error = ReadError.new(@word, @file, message)
+      # Broadcast the error to the audience.
+      @enquiry.broadcast("Error", error)
+
+      raise error
     end
 
     # Makes a `QTag`.
@@ -189,6 +193,8 @@ module Ven
 
     # Returns the current word and consumes the next one.
     def word!
+      @enquiry.broadcast("Word", @word)
+
       fresh =
         loop do
           break case

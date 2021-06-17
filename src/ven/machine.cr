@@ -1118,6 +1118,8 @@ module Ven
             die(error.message.not_nil!)
           end
         rescue error : RuntimeError
+          @enquiry.broadcast("Error", error)
+
           dies = @frames.reverse_each do |it|
             break it.dies || next revoke
           end
@@ -1136,6 +1138,14 @@ module Ven
         ensure
           if @measure && began
             record!(this, Time.monotonic - began, cp, ip)
+          end
+
+          if @enquiry.broadcast
+            @enquiry.broadcast("Frames", @frames)
+            @enquiry.broadcast("Instruction", {
+              "Content" => this,
+              "Nanos"   => (Time.monotonic - began.not_nil!).total_nanoseconds,
+            })
           end
 
           # If there is anything left to inspect (there is

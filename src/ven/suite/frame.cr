@@ -2,6 +2,8 @@ module Ven::Suite
   # A frame is simply some packed state. It is there to make
   # statekeeping trivial for the `Machine`.
   class Frame
+    include JSON::Serializable
+
     # The reason this frame was created.
     enum Goal
       Unknown
@@ -20,10 +22,12 @@ module Ven::Suite
 
     # The instruction pointer to jump to if there was a death
     # in or under this frame.
+    @[JSON::Field(emit_null: true)]
     property dies : Int32?
 
     # The model that will be returned if everything goes
     # according to plan.
+    @[JSON::Field(emit_null: true)]
     property returns : Model?
 
     # An array of failure messages. Used inside ensure tests
@@ -45,8 +49,8 @@ module Ven::Suite
       io << "frame@" << @cp << " [goal: " << goal << "]\n"
       io << "  ip: " << @ip << "\n"
       io << "  oS: " << @stack.join(" ") << "\n"
-      io << "  cS: " << @control.join(" ")  << "\n"
-      io << "  _S: " << @underscores.join(" ")  << "\n"
+      io << "  cS: " << @control.join(" ") << "\n"
+      io << "  _S: " << @underscores.join(" ") << "\n"
       io << "   R: " << @returns << "\n"
       io << "   D: " << @dies << "\n"
     end

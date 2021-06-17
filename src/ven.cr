@@ -1,3 +1,4 @@
+require "http"
 require "fancyline"
 require "commander"
 
@@ -41,7 +42,7 @@ module Ven
     # with status 1 afterwards.
     private def err(embraced : String, message : String)
       puts "#{"[#{embraced}]".colorize(:red)} #{message}"
-      exit(1) if @quit
+      quit(1) if @quit
     end
 
     # Dies of an *error* (see `err`).
@@ -72,6 +73,13 @@ module Ven
     # :ditto:
     private def die(error)
       err("error", error.to_s)
+    end
+
+    # Wraps around exit() and notifies the dump server audience
+    # (if there is any) that connection will be closed.
+    def quit(status)
+      @enquiry.broadcast("Control", "Bye")
+      exit(status)
     end
 
     # Displays the *quotes*. Returns nothing.
@@ -219,6 +227,43 @@ module Ven
       die(e)
     end
 
+    # Starts the broadcast server on the given *port*.
+    #
+    # Relays the data that the machinery decided to broadcast
+    # to all connected sockets.
+    def broadcast_on!(port : Int32)
+      sockets = [] of HTTP::WebSocket
+
+      handle = HTTP::WebSocketHandler.new do |socket, ctx|
+        # If broadcast is false at this point, then we
+        # disabled it in `on_close` below. Re-enable.
+        @enquiry.broadcast = true
+
+        sockets << socket
+
+        socket.on_close do
+          sockets.delete(socket)
+
+          # If there are no sockets, temporarily disable
+          # broadcasting. It slows down evaluation, and
+          # is of no use when no one is listening.
+          if sockets.empty?
+            @enquiry.broadcast = false
+          end
+        end
+
+        @enquiry.receive do |data|
+          sockets.each do |socket|
+            socket.send(data)
+          end
+        end
+      end
+
+      server = HTTP::Server.new(handle)
+      server.not_nil!.bind_tcp(port)
+      server.not_nil!.listen
+    end
+
     # Processes a REPL command.
     def command(head : String, tail : String)
       case {head, tail}
@@ -228,6 +273,7 @@ module Ven
 
         Available commands:
           \\help: show this
+          \\broadcast: start dump server on TAIL
           \\serialize: serialize TAIL
           \\deserialize: deserialize TAIL
           \\deserialize_detree: deserialize & detree TAIL
@@ -245,6 +291,9 @@ module Ven
         puts Detree.detree(Quotes.from_json(File.read(tail)))
       when {"run_lserq", _}
         puts run(tail, Detree.detree(Quotes.from_json(File.read(tail))))
+      when {"broadcast", _}
+        @enquiry.broadcast = true
+        spawn broadcast_on!(tail.to_i? || @orchestra.port + 1)
       when {"context", "reader"}
         puts @orchestra.hub.reader.to_pretty_json
       when {"context", "compiler"}
@@ -294,6 +343,12 @@ module Ven
           # Interpret the rest of the input as a REPL command,
           # and not as Ven code.
           next command($0.lstrip("\\"), source[$0.size..].strip)
+        elsif @enquiry.broadcast
+          # Emit a Control Transaction to all the listening
+          # sockets so they know the data to come is not
+          # associated with the data they previously received
+          # — the previous transaction.
+          @enquiry.broadcast("Control", "Transaction")
         end
 
         loop do
@@ -322,7 +377,7 @@ module Ven
       end
 
       puts "Bye bye!"
-      exit 0
+      quit(0)
     end
 
     # Highlights a *snippet* of Ven code.
@@ -448,6 +503,14 @@ module Ven
           flag.description = "Serialize final step."
         end
 
+        cmd.flags.add do |flag|
+          flag.name = "broadcast"
+          flag.short = "-b"
+          flag.long = "--broadcast"
+          flag.default = false
+          flag.description = "Broadcast on port -p + 1"
+        end
+
         cmd.run do |options, arguments|
           port = options.int["port"].as Int32
 
@@ -465,6 +528,16 @@ module Ven
           @enquiry.optimize = options.int["optimize"].to_i * 8
           @enquiry.fast_interrupt = options.bool["fast-interrupt"]
           @enquiry.test_mode = options.bool["test-mode"]
+
+          if options.bool["broadcast"]
+            @enquiry.broadcast = true
+            spawn broadcast_on!(port + 1)
+            # We halt execution so the user can connect up
+            # to the broadcast.
+            puts "\n[Prepared to broadcast on port #{port + 1}]\n".colorize.bold
+            puts "Hit Enter to #{@final} read the program.".colorize.reverse
+            gets
+          end
 
           if arguments.empty?
             # Do not quit after errors:

@@ -185,6 +185,17 @@ module Ven::Suite
     # such referent.
     def []=(referent : Model, value : Model) : Model?
     end
+
+    # Returns a naive, one-way representation of this model.
+    #
+    # This representation includes the type of this model
+    # followed by the string representation of its value.
+    def to_json(json : JSON::Builder)
+      json.object do
+        json.field("type", \{{ @type.name.split("::").last.stringify }})
+        json.field("value", to_s)
+      end
+    end
   end
 
   # The parent of all Struct `Model`s.
