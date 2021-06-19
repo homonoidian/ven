@@ -959,7 +959,7 @@ module Ven::Suite
   # the entries of that scope through field access.
   class MBoxInstance < MClass
     getter parent : MFunction
-    getter namespace : Context::Machine::Scope
+    getter namespace : CxMachine::Scope
 
     def initialize(@parent, @namespace)
     end
@@ -1055,7 +1055,7 @@ module Ven::Suite
     getter name = "lambda"
     # Returns the **surrounding** scope (singular!) of this
     # lambda. I.e., won't contain globals etc.
-    getter scope : Context::Machine::Scope
+    getter scope : CxMachine::Scope
     getter arity : Int32
     getter slurpy : Bool
     getter target : Int32

@@ -32,7 +32,7 @@ module Ven
     # No arguments are required, but *file* (for a file name),
     # *context* (for a compiler context) and *origin* (for the
     # point of origin of chunk emission) can be provided.
-    def initialize(@file = "untitled", @context = Context::Compiler.new, @origin = 0, @enquiry = Enquiry.new)
+    def initialize(@file = "untitled", @context = CxCompiler.new, @origin = 0, @enquiry = Enquiry.new)
       @chunks = [Chunk.new(@file, "<unit>")]
     end
 

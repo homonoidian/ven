@@ -1,26 +1,17 @@
 require "json"
 require "./model"
 
-module Ven::Suite::Context
-  # This exception is raised when an assignment error occurs.
-  #
-  # Assignment errors exist mainly to protect some values
-  # from being re-defined by the user (e.g., `true`, `false`,
-  # builtin functions, etc.)
-  class VenAssignmentError < Exception
-  end
+module Ven::Suite
+  # Unites instances of `CxReader`, `CxCompiler`, and `CxMachine`.
+  class CxHub
+    # Returns the instance of reader context.
+    getter reader = CxReader.new
+    # Returns the instance of compiler context.
+    getter compiler = CxCompiler.new
+    # Returns the instance of machine context.
+    getter machine = CxMachine.new
 
-  # Unites instances of `Context::Reader`, `Context::Compiler`
-  # and `Context::Machine`.
-  class Hub
-    # Returns the reader context of this hub.
-    getter reader = Context::Reader.new
-    # Returns the compiler context of this hub.
-    getter compiler = Context::Compiler.new
-    # Returns the machine context of this hub.
-    getter machine = Context::Machine.new
-
-    # Extensions already present in this hub.
+    # Extensions already loaded into this hub.
     @extensions = [] of Extension.class
 
     delegate :[], :[]?, :[]=, to: @machine
@@ -34,44 +25,38 @@ module Ven::Suite::Context
     end
   end
 
-  # The context for a `Reader`
-  #
-  # The reader uses context to store and look up user-defined
-  # nuds, leds and words.
-  #
-  # Can be serialized (**but not yet deserialized**).
-  class Reader
-    # Returns a hash of word types mapped to nud macros
-    # they trigger.
-    getter nuds = {} of String => Ven::Parselet::PNudMacro
-    # Returns the keyword lexemes of this context.
+  # Reader context holds user-defined nuds, leds, and words.
+  class CxReader
+    # Returns the user-bound nud macros (with key being the
+    # word type, and value a nud macro).
+    getter nuds = {} of String => Parselet::PNudMacro
+    # Returns the user-bound keywords.
     getter keywords = [] of String
-    # Returns a hash of word types mapped to regex patterns
-    # used to match them.
+    # Returns the user-bound words mapped to regexes they're
+    # matched by.
     getter triggers = {} of String => Regex
 
     # Defines a new keyword.
     delegate :<<, to: @keywords
 
-    # Returns whether *lexeme* is a keyword under this context.
+    # Returns whether *lexeme* is a keyword.
     def keyword?(lexeme : String)
       lexeme.in?(@keywords)
     end
 
     # Defines a reader macro that will be triggered by *trigger*,
-    # a word type (keyword or not).
-    #
-    # Does not check whether *trigger* is a valid word type.
-    def []=(trigger : String, nud : Ven::Parselet::PNudMacro)
+    # a word type (does not check whether it's valid).
+    def []=(trigger : String, nud : Parselet::PNudMacro)
       @nuds[trigger] = nud
     end
 
-    # Defines a trigger given *type*, word type, and regex
+    # Defines a trigger given *type*, a word type, and regex
     # pattern *pattern*.
     def []=(type : String, pattern : Regex)
       @triggers[type] = pattern
     end
 
+    # Serializes this reader context into a JSON object.
     def to_json(json : JSON::Builder)
       json.object do
         json.field("nuds", @nuds)
@@ -81,12 +66,10 @@ module Ven::Suite::Context
     end
   end
 
-  # The context for a `Compiler`.
-  #
-  # It may use context to determine whether a symbol was defined
-  # and whether it is global or local, as well as to manage
-  # compile-time traceback.
-  class Compiler
+  # Compiler context is used to determine whether a symbol
+  # is defined, and whether it's global or local. It also
+  # supervises a compile-time traceback.
+  class CxCompiler
     alias Scope = Hash(String, Symbol)
 
     # The scope hierarchy. The rightmost scope is the localmost,
@@ -139,8 +122,9 @@ module Ven::Suite::Context
     end
   end
 
-  # The context for a `Machine`.
-  class Machine
+  # Machine context is used to assign and retrieve values of
+  # symbols at runtime. It also supervises a runtime traceback.
+  class CxMachine
     alias Scope = Hash(String, Model)
 
     # Maximum amount of entries in the traceback. Overflowing

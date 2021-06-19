@@ -34,7 +34,7 @@ module Ven
     # Inquirer port number.
     getter port : Int32
     # Returns the context hub of this orchestra.
-    getter hub = Suite::Context::Hub.new
+    getter hub = Suite::CxHub.new
     # Returns the chunk pool of this orchestra.
     getter pool = Suite::Chunks.new
     # Returns whether this orchestra is running isolated from

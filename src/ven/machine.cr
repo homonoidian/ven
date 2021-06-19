@@ -12,7 +12,7 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
-    getter context : Context::Machine
+    getter context : CxMachine
 
     @timetable : Timetable
 
@@ -1105,7 +1105,7 @@ module Ven
                 break it.queue << tap if it.goal.function?
               end
             end
-          rescue error : ModelCastException | Context::VenAssignmentError
+          rescue error : ModelCastException
             die(error.message.not_nil!)
           end
         rescue error : RuntimeError

@@ -30,7 +30,7 @@ module Ven
     end
 
     # Returns the context hub of this program.
-    getter hub : Context::Hub
+    getter hub : CxHub
     # Returns the filename (or unit name) of this program.
     getter file : String
     # Returns the source code of this program.
@@ -55,7 +55,7 @@ module Ven
     # *source* is the source code of this program; *file* is
     # its filename (or unit name); *hub* is the context hub
     # that this program will use.
-    def initialize(@source : String, @file = "untitled", @hub = Context::Hub.new, @enquiry = Enquiry.new)
+    def initialize(@source : String, @file = "untitled", @hub = CxHub.new, @enquiry = Enquiry.new)
       @reader = Reader.new(
         @source,
         @file,

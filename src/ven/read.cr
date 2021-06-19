@@ -88,7 +88,7 @@ module Ven
     # Returns the current word.
     getter word = {type: "START", lexeme: "<start>", line: 1}
     # Returns this reader's context.
-    getter context : Context::Reader
+    getter context : CxReader
 
     # Whether this reader's state is dirty.
     @dirty = false
