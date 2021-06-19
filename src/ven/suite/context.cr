@@ -143,112 +143,132 @@ module Ven::Suite::Context
   class Machine
     alias Scope = Hash(String, Model)
 
-    # Maximum amount of traceback entries. Clears the traces
-    # if exceeds.
+    # Maximum amount of entries in the traceback. Overflowing
+    # traces are cleared (forgotten).
     MAX_TRACES = 64
 
-    # The scopes of this context.
-    getter scopes : Array(Scope)
-    # The traceback of this context.
+    # The scope hierarchy of this context. To introduce a new,
+    # deeper scope, an empty `Scope` should be appended to
+    # this array.
+    getter scopes = [Scope.new]
+
+    # The list of traceback entries. It is valid until this
+    # context's destruction.
     getter traces = [] of Trace
 
-    # Whether to forbid lookups farther than the localmost
-    # scope.
-    property isolate = false
+    # Whether ascending lookup is enabled.
+    #
+    # There are two modes of lookup: ascending (aka deep),
+    # and shallow.
+    #
+    # Shallow lookup allows to look up and define symbols in
+    # the local scope.
+    #
+    # Ascending lookup allows to look up and define symbols
+    # not only in the local scope,  but also in the higher,
+    # nonlocal scopes.
+    #
+    # Shallow lookups are always faster than ascending lookups.
+    property ascend = true
 
-    @scopes = [Scope.new]
-
-    # Returns the amount of scopes (aka scope depth, nesting)
-    # in this context.
+    # Returns the amount of scopes (aka scope depth, aka nesting).
     delegate :size, to: @scopes
 
-    # Deletes all scopes except the globalmost.
+    # Deletes all scopes except the global.
     def clear
       @scopes.delete_at(1...)
     end
 
-    # Returns the value of a *symbol*.
-    #
-    # Raises if *symbol* was not found.
+    # Returns the local scope.
+    private macro local
+      @scopes[-1]
+    end
+
+    # Looks up the value of *symbol*. Raises if not found.
     def [](symbol : String | VSymbol)
       self[symbol]? || raise "symbol not found"
     end
 
-    # Returns the value of *symbol*.
-    #
-    # Respects the metacontext (`$`).
-    #
-    # Nests *maybe* and -1 will be searched in first.
-    #
-    # Returns nil if *symbol* was not found.
-    def []?(symbol : String, maybe = nil)
-      if value = (@scopes[-1][symbol]? || maybe.try { @scopes[maybe][symbol]? })
-        return value
+    # Returns the local scope's metacontext, if any.
+    def meta : MBoxInstance?
+      local["$"]?.as?(MBoxInstance)
+    end
+
+    # If the local scope has a metacontext, yields its *namespace*
+    # (see `MBoxInstance#namespace`). Otherwise, returns nil.
+    def with_meta_ns : Model?
+      if namespace = meta.try(&.namespace)
+        yield namespace
       end
+    end
 
-      # Prefer *maybe*/localmost over *isolate*. Although bounds
-      # seem to pass through to here. The whole thing is a bit
-      # shaky, to say the least.
-      return if @isolate
-
+    # Ascends the scopes, trying to look up the value of
+    # *symbol* in each one of them.
+    def ascend?(symbol : String) : Model?
       @scopes.reverse_each do |scope|
         if value = scope[symbol]?
           return value
         end
+      end
+    end
 
-        meta = scope["$"]?
+    # Looks up the value of *symbol*.
+    #
+    # 1. If *symbol* is found to be one of the fields of the
+    # local scope's metacontext (`$`), returns the value of
+    # that field.
+    #
+    # 2. If *symbol* is assigned a value in the local scope,
+    # returns that value.
+    #
+    # 3. Otherwise, given ascending lookup (see `ascend`) is
+    # enabled, ascends the scopes in search of *symbol*. If
+    # found, returns the corresponding value. Else, returns nil.
+    def []?(symbol : String)
+      with_meta_ns(&.[symbol]?) || local[symbol]? || ascend?(symbol)
+    end
 
-        if meta.is_a?(MBoxInstance) && (value = meta.namespace[symbol]?)
-          return value
+    # Same as `[]?(symbol : String)`, but slightly optimized
+    # for *symbol*s with guaranteed nest (aka nesting).
+    def []?(symbol : VSymbol)
+      name = symbol.name
+      nest = symbol.nest
+      with_meta_ns(&.[name]?) || @scopes[nest][name]? || ascend?(name)
+    end
+
+    # Assigns the *value* to *symbol*.
+    #
+    # 1. If *symbol* is found in the scope at *nest*, replaces
+    # its old value with *value*.
+    #
+    # 2. If *symbol* is a field in the local scope's metacontext,
+    # replaces that field's old value with *value*.
+    #
+    # In any other case, assigns in the scope at *nest*.
+    def []=(symbol : String, value : Model, nest = -1)
+      if @scopes[nest].has_key?(symbol)
+        return @scopes[nest][symbol] = value
+      end
+
+      with_meta_ns do |namespace|
+        if namespace.has_key?(symbol)
+          return namespace[symbol] = value
         end
       end
+
+      @scopes[nest][symbol] = value
     end
 
-    # Returns the value of *symbol*.
-    #
-    # Respects the metacontext (`$`).
-    #
-    # Returns nil if *symbol* was not found.
-    def []?(symbol : VSymbol)
-      self[symbol.name, maybe: symbol.nest]?
-    end
-
-    # Makes *symbol* be *value* in the localmost scope.
-    #
-    # If the localmost scope includes a metacontext (`$`),
-    # and that metacontext has a field named *symbol*, this
-    # field will be set to *value* instead.
-    #
-    # Will raise `VenAssignmentError` if *symbol* already
-    # exists and is an `MFunction`, whilst *value* is not.
-    def []=(symbol : String, value : Model, nest = -1)
-      meta = @scopes[-1]["$"]?
-      prev = @scopes[nest][symbol]?
-
-      if meta.is_a?(MBoxInstance) && meta.namespace[symbol]?
-        return meta.namespace[symbol] = value
-        # elsif prev.is_a?(MFunction) && !value.is_a?(MFunction)
-        #   raise VenAssignmentError.new("invalid assignment target: #{prev}")
-      end
-
-      return @scopes[nest][symbol] = value
-    end
-
-    # Makes *symbol* be *value* in its nest, or, if no nest
-    # specified, in the localmost scope.
-    def []=(symbol : VSymbol, value : Model)
+    # :ditto:
+    def []=(symbol : VSymbol, value)
       self[symbol.name, nest: symbol.nest] = value
     end
 
-    # Introduces a child scope **and** a child trace.
+    # Introduces a deeper scope **and** a trace.
     #
-    # Deletes all existing traces if the amount of them
-    # exceeds `MAX_TRACES`.
+    # Clears (forgets) traces if they exceed `MAX_TRACES`.
     def push(file, line, name)
-      if @traces.size > MAX_TRACES
-        @traces.clear
-      end
-
+      @traces.clear if @traces.size > MAX_TRACES
       @scopes << Scope.new
       @traces << Trace.new(file, line, name)
     end

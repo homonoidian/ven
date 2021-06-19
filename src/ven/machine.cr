@@ -16,12 +16,8 @@ module Ven
 
     @timetable : Timetable
 
-    # Makes a `Machine` that will run *chunks*, an array of
-    # stitched chunks.
-    #
-    # *context* is the context that the Machine will run in.
-    # *origin* is the first chunk that will be evaluated (the
-    # main chunk).
+    # Makes a new `Machine` that will run *chunks*, starting
+    # with the chunk at *origin* (the origin chunk).
     def initialize(@chunks : Chunks, @context = Context::Machine.new,
                    origin = 0, @enquiry = Enquiry.new)
       @inspect = @enquiry.inspect.as Bool
@@ -284,8 +280,7 @@ module Ven
     private macro revoke(export = false)
       %frame = @frames.pop
 
-      # Disable scope isolation (if it was enabled).
-      @context.isolate = false
+      @context.ascend = true
 
       unless @context.size == 1
         @context.pop
@@ -902,11 +897,7 @@ module Ven
                   # worth it to make this a special-case of
                   # invoke():
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
-                  # Lambdas are isolated from the other scopes.
-                  # The only scope they're not isolated from
-                  # is the prelude scope, which is `found.scope`
-                  # below. We dup it so the body cannot modify it.
-                  @context.isolate = true
+                  @context.ascend = false
                   @context.scopes << found.scope.dup
                   @context.traces << Trace.new(chunk.file, fetch.line, "lambda")
                   next
