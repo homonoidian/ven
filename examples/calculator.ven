@@ -30,7 +30,7 @@ fun read(source) given str {
 
   # Matches *pattern* against offset source.
   fun match(pattern) given regex =
-    if source.offset(cursor) is pattern
+    if source(from cursor) is pattern
       cursor += #(return _);
 
   # Consumes exactly one token and returns the previous
