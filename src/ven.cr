@@ -279,7 +279,7 @@ module Ven
           \\deserialize_detree: deserialize & detree TAIL
           \\lserq: deserialize quotes from file TAIL, and detree
           \\run_serq: deserialize quotes from file TAIL, and run
-          \\context: serialize context (TAIL = reader, compiler, machine)
+          \\context: show context (TAIL = reader, compiler, machine)
         END
       when {"serialize", _}
         puts Program.new(tail).step(Program::Step::Read).quotes.to_json
@@ -316,6 +316,38 @@ module Ven
           yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
         else
           yielder.call ctx, highlight(line)
+        end
+      end
+
+      # Moves to the beginning of a word.
+      fancy.actions.set Fancyline::Key::Control::CtrlLeft do |ctx|
+        bounds = word_boundaries(ctx.editor.line)
+        if bound = bounds.index &.covers?(ctx.editor.cursor)
+          underneath = bounds[bound]
+          if ctx.editor.cursor == underneath.begin
+            # If at the beginning of the word underneath, move
+            # to the beginning of the previous one. Note how
+            # this automatically cycles.
+            ctx.editor.cursor = bounds[bound - 1].begin
+          else
+            ctx.editor.cursor = underneath.begin
+          end
+        end
+      end
+
+      # Moves to the end of a word.
+      fancy.actions.set Fancyline::Key::Control::CtrlRight do |ctx|
+        bounds = word_boundaries(ctx.editor.line)
+        if bound = bounds.index &.covers?(ctx.editor.cursor)
+          underneath = bounds[bound]
+          if ctx.editor.cursor == underneath.end
+            # If at the end of the word underneath, move to
+            # the end of the next one. If there is no next
+            # one, cycle to the start of the line.
+            ctx.editor.cursor = bounds[bound + 1]?.try(&.end) || 0
+          else
+            ctx.editor.cursor = underneath.end
+          end
         end
       end
 
@@ -382,30 +414,66 @@ module Ven
 
     # Highlights a *snippet* of Ven code.
     private def highlight(snippet)
+      words_in(snippet).map do |word|
+        type, lexeme, _ = word
+        case type
+        when :STRING
+          lexeme.colorize.yellow.to_s
+        when :SYMBOL
+          lexeme.colorize.bold.toggle(@orchestra.hub[lexeme]?).to_s
+        when :KEYWORD
+          lexeme.colorize.blue.to_s
+        when :REGEX
+          lexeme.colorize.yellow.to_s
+        when :NUMBER
+          lexeme.colorize.magenta.to_s
+        when :IGNORE
+          lexeme.colorize.dark_gray.to_s
+        else
+          lexeme
+        end
+      end.join
+    end
+
+    # Returns the word boundaries in *snippet*, excluding
+    # the boundaries of the words of IGNORE type.
+    private def word_boundaries(snippet : String)
+      operant = words_in(snippet).reject(&.[0].== :IGNORE)
+      operant.map do |word|
+        lexeme = word[1]
+        offset = word[2]
+        offset..(offset + lexeme.size)
+      end
+    end
+
+    # Returns the words of *snippet* in form of an array of
+    # `{Symbol, String}`. First is the word type and second
+    # is the word lexeme.
+    private def words_in(snippet : String)
+      words = [] of {Symbol, String, Int32}
       offset = 0
-      result = ""
 
       loop do
         case pad = snippet[offset..]
         when .starts_with? Ven.regex_for(:STRING)
-          result += $0.colorize.yellow.to_s
+          words << {:STRING, $0, offset}
         when .starts_with? Ven.regex_for(:SYMBOL)
           if Reader::KEYWORDS.any?($0)
-            result += $0.colorize.blue.to_s
+            words << {:KEYWORD, $0, offset}
           else
-            result += $0.colorize.bold.toggle(@orchestra.hub[$0]?).to_s
+            words << {:SYMBOL, $0, offset}
           end
         when .starts_with? Ven.regex_for(:REGEX)
-          result += $0.colorize.yellow.to_s
+          words << {:REGEX, $0, offset}
         when .starts_with? Ven.regex_for(:NUMBER)
-          result += $0.colorize.magenta.to_s
+          words << {:NUMBER, $0, offset}
         when .starts_with? Ven.regex_for(:IGNORE)
-          result += $0.colorize.dark_gray.to_s
+          words << {:IGNORE, $0, offset}
         when .empty?
           break
         else
           # Pass over unknown characters.
-          result += snippet[offset]
+          words << {:UNKNOWN, snippet[offset].to_s, offset}
           offset += 1
           next
         end
@@ -413,7 +481,7 @@ module Ven
         offset += $0.size
       end
 
-      result
+      words
     end
 
     # Returns the Commander command line interface for Ven.

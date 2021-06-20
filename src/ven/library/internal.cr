@@ -25,7 +25,7 @@ module Ven::Library
         machine.die(message.value)
       end
 
-      # Invokes the set-referent policy for *referent*.
+      # Invokes the set-referent policy for *reference*.
       defbuiltin "set-referent", reference : Model, referent : Model, value : Model do
         unless reference[referent] = value
           machine.die("#{reference} has no set-referent policy for #{referent}")

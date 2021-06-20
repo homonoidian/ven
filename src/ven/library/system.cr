@@ -8,7 +8,7 @@ module Ven::Library
       end
 
       # Prints *model* to the screen, and then waits for (and
-      # consequently returns) user input. Unless given one,
+      # consequently returns) user input. If not given one,
       # returns false.
       defbuiltin "ask", model : Model do
         print "#{model.to_str.value} "
