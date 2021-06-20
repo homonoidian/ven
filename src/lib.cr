@@ -1,5 +1,5 @@
 require "./ven/**"
 
 module Ven
-  VERSION = "0.1.1-rev14"
+  VERSION = "0.1.1-rev15"
 end
