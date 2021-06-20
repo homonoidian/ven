@@ -11,7 +11,7 @@ distinct std;
 fun<any> true? =
   $ is not false;
 
-# Alias to `set_referent`.
+# Alias to `set-referent`.
 #
 # ```
 # values = [1, 2, 3];
@@ -19,7 +19,7 @@ fun<any> true? =
 # ensure values is [1, "foo", 3];
 # ```
 fun<any> __call_assign(value, referent) =
-  set_referent($, referent, value);
+  set-referent($, referent, value);
 
 # Sets the values of the given referents ('*') to *value*.
 #

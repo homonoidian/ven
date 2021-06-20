@@ -57,7 +57,9 @@ module Ven
       @client = client_from(port)
       @isolated = !@client.running?
       # Load the built-in libraries.
-      @hub.extend(Library::Internal.new)
+      {% for library in Suite::Extension.all_subclasses %}
+        @hub.extend({{library}}.new)
+      {% end %}
     end
 
     # Makes a client given the *port* of an Inquirer server

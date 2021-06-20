@@ -224,7 +224,7 @@ module Ven::Suite
     def initialize(@value)
     end
 
-    def initialize(input : Int | BigInt | Float | String)
+    def initialize(input : Number | String)
       @value = input.to_big_d
     end
 
@@ -542,7 +542,7 @@ module Ven::Suite
     end
 
     # :nodoc:
-    def initialize(raw_items : Array(MClass) | Array(MStruct))
+    def initialize(raw_items : Array)
       @items = raw_items.map &.as(Model)
     end
 
@@ -1085,6 +1085,42 @@ module Ven::Suite
 
     def to_s(io)
       io << "lambda " << "(" << params.join(", ") << ")"
+    end
+  end
+
+  # A kind of model that wraps around a Crystal value of type
+  # *T*. Provides an in-Ven way to pass around native Crystal
+  # values.
+  class MNative(T) < MClass
+    getter value : T
+
+    def initialize(@value)
+    end
+
+    def to_s(io)
+      io << "native " << "(" << @value << ")"
+    end
+
+    forward_missing_to @value
+  end
+
+  # MInternal is like an `MBoxInstance`, but it doesn't require
+  # a parent (actually, it doesn't have one), and can be created
+  # from Crystal only. For Ven, MInternal is read-only.
+  class MInternal < MClass
+    # Yields an empty hash of `String`s to `Model`s. Makes
+    # it possible to access the values of that hash using Ven
+    # field access.
+    def initialize
+      yield @fields = {} of String => Model
+    end
+
+    def field(name)
+      @fields[name]?
+    end
+
+    def to_s(io)
+      io << "internal"
     end
   end
 end
