@@ -597,14 +597,13 @@ module Ven
           @enquiry.fast_interrupt = options.bool["fast-interrupt"]
           @enquiry.test_mode = options.bool["test-mode"]
 
+          # This ensures that behavior is as the user expects:
+          # if `-b` is called without a file, it works as an
+          # alternative to `\broadcast`. Otherwise, it also
+          # shows the broadcast splashscreen.
           if options.bool["broadcast"]
             @enquiry.broadcast = true
             spawn broadcast_on!(port + 1)
-            # We halt execution so the user can connect up
-            # to the broadcast.
-            puts "\n[Prepared to broadcast on port #{port + 1}]\n".colorize.bold
-            puts "Hit Enter to #{@final} read the program.".colorize.reverse
-            gets
           end
 
           if arguments.empty?
@@ -616,6 +615,14 @@ module Ven
             repl()
           elsif arguments.size >= 1
             file = arguments.first
+
+            if options.bool["broadcast"]
+              # We halt execution so the user can connect up
+              # to the broadcast.
+              puts "\n[Prepared to broadcast on port #{port + 1}]\n".colorize.bold
+              puts "Hit Enter to #{@final} read the program.".colorize.reverse
+              gets
+            end
 
             # Provide the unmapped flags/remaining arguments
             # to the orchestra. It's a bit risky, as some user-
