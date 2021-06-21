@@ -35,13 +35,6 @@ module Ven::Suite
     def initialize(@params : Array(Parameter))
     end
 
-    delegate :each,
-      :reverse_each,
-      :size,
-      :empty?,
-      :join,
-      to: @params
-
     # Returns the names of the parameters.
     def names : Array(String)
       @params.map(&.name)
@@ -66,5 +59,7 @@ module Ven::Suite
     def clone
       self
     end
+
+    forward_missing_to @params
   end
 end

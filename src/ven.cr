@@ -146,9 +146,9 @@ module Ven
 
       {% begin %}
         case @final
-        # Evaluate is an edge-case because it needs coop
-        # not only with Program, but with runtime Orchestra
-        # too. Nothing else does.
+        # Evaluate is an edge-case because it needs COOP not
+        # only with Program, but with runtime Orchestra too.
+        # Nothing else does.
         when "evaluate"
           program.run(@orchestra.pool)
         {% for step, order in Program::Step.constants %}
