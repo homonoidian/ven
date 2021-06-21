@@ -262,5 +262,7 @@ module Ven::Suite
       @scopes.pop
       @traces.pop?
     end
+
+    def_clone
   end
 end

@@ -9,26 +9,41 @@ module Ven
     alias IStatistics = Hash(Int32, IStatistic)
     alias IStatistic = {amount: Int32, duration: Time::Span, instruction: Instruction}
 
+    # A funlet is a Ven lambda (hence a self-sufficient piece
+    # of Ven code) that (a) can be called from Crystal, and
+    # (b) is thread-safe (supposedly). It evaluates using
+    # its own instance of Machine, and so can be pretty slow
+    # at times.
+    alias Funlet = Proc(Models, Model)
+
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
     getter context : CxMachine
 
+    # Whether to do `Fiber.yield` each cycle of the
+    # interpreter loop.
+    property fast_interrupt : Bool
+
     @timetable : Timetable
 
     # Makes a new `Machine` that will run *chunks*, starting
     # with the chunk at *origin* (the origin chunk).
-    def initialize(@chunks : Chunks, @context = Context::Machine.new,
-                   origin = 0, @enquiry = Enquiry.new)
+    def initialize(@chunks : Chunks,
+                   @context = Context::Machine.new,
+                   @origin = 0,
+                   @enquiry = Enquiry.new,
+                   frames : Array(Frame)? = nil)
       @inspect = @enquiry.inspect.as Bool
       @measure = @enquiry.measure.as Bool
       @fast_interrupt = @enquiry.fast_interrupt.as Bool
 
-      # Remember: per each frame there should always be a scope;
-      # if you push a frame, that is, you have to push a scope
-      # too. This has to be done so that the frames and the
-      # context scopes are in sync.
-      @frames = [Frame.new(cp: origin)]
+      # Per each frame there should always be a scope; if you
+      # push a frame, that is, you have to push a scope too.
+      # This has to be done so that the frames and the context
+      # scopes are in sync.
+      @frames = frames.nil? ? [Frame.new(cp: @origin)] : frames.not_nil!
+
       @timetable = @enquiry.timetable = Timetable.new
     end
 
@@ -282,7 +297,7 @@ module Ven
 
       @context.ascend = true
 
-      unless @context.size == 1
+      if @context.size > 1
         @context.pop
       end
 
@@ -569,8 +584,11 @@ module Ven
 
     # Resolves field access.
     #
-    # Provides a Ven field named 'callable?' to any *head*;
-    # this field calls `Model.callable?`.
+    # For any *head*, provides several fields itself:
+    #   * `callable?` returns whether this model is callable;
+    #   * `indexable?` returns whether this model is indexable;
+    #   * `crystal` returns the Crystal string representation
+    #   for this model.
     #
     # If *head* has a field named *field*, returns the value
     # of that field.
@@ -580,11 +598,16 @@ module Ven
     #
     # Returns nil if found no valid field resolution.
     def field?(head : Model, field : Str)
-      if field.value == "callable?"
-        return bool head.callable?
+      case field.value
+      when "callable?"
+        bool head.callable?
+      when "indexable?"
+        bool head.indexable?
+      when "crystal"
+        str head.inspect
+      else
+        head.field(field.value) || field?(head, @context[field.value]?)
       end
-
-      head.field(field.value) || field?(head, @context[field.value]?)
     end
 
     # :ditto:
@@ -622,7 +645,7 @@ module Ven
     # Same as `field?`, but dies if found no working field
     # resolution.
     def field(head : Model, field : Model)
-      field?(head, field) || die("#{head}: no such field or function: #{field}")
+      field?(head, field) || die("#{head.to_s}: no such field or function: #{field}")
     end
 
     # Starts a primitive state inspector prompt.
@@ -679,6 +702,48 @@ module Ven
           puts @context[got]? || "variable not found: #{got}"
         end
       end
+    end
+
+    # Returns a funlet for *callee*. See `Funlet`.
+    def funlet(callee : MLambda)
+      Proc(MLambda, Funlet).new do |callee|
+        copy = Machine.new(
+          # The copy has access to all compiled chunks.
+          @chunks,
+          # The copy will have access only to the `.clone`d
+          # *callee* scope.
+          CxMachine.new,
+          # The copy will execute *callee*.
+          callee.target,
+          # The copy uses the same enquiry parameters as
+          # the original.
+          @enquiry,
+          # There should be no frames at this point.
+          [] of Frame,
+        )
+
+        # Do not handle interrupts in the copy.
+        copy.fast_interrupt = true
+
+        # Let this be closured into the Proc below.
+        scope = callee.scope.clone
+
+        Proc(Models, Model).new do |args|
+          # We clone for safety here. This way, inplace
+          # mutations won't change the sandbox scope.
+          copy.context.scopes << scope.clone
+          copy.@frames.concat([
+            # Have a purposefully bad frame. It acts as a
+            # wall here. It is used to forcefully halt the
+            # interpreter loop.
+            Frame.new(ip: Int32::MAX - 1),
+            Frame.new(Frame::Goal::Function, args, callee.target),
+          ])
+          # Invoke. Machine will encounter the bad frame and
+          # halt. Then we `return!` the resulting model.
+          copy.start.return!.not_nil!
+        end
+      end.call(callee)
     end
 
     # Starts the evaluation loop, which begins to fetch the
@@ -867,7 +932,7 @@ module Ven
               when .indexable?
                 if args.size != 0
                   values = args.map do |arg|
-                    callee[arg]? || die("#{callee}: item(s) not found: #{arg}")
+                    callee[arg]? || die("[]: item(s) not found: #{arg}")
                   end
 
                   values.size == 1 ? put values.first : put vec values
@@ -898,14 +963,17 @@ module Ven
                   # invoke():
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
                   @context.ascend = false
-                  @context.scopes << found.scope.dup
+                  # 'clone' worsens the performance here (~+50%),
+                  # but it's more correct, as it prevents lambda
+                  # body from mutating the sandbox scope.
+                  @context.scopes << found.scope.clone
                   @context.traces << Trace.new(chunk.file, fetch.line, "lambda")
                   next
                 else
-                  die("improper arguments for #{callee}: #{args.join(", ")}")
+                  die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
                 end
               else
-                die("illegal callee: #{callee}")
+                die("illegal callee: #{callee.to_s}")
               end
             in Opcode::RET
               # Returns from a function. Puts onto the parent stack
@@ -993,7 +1061,7 @@ module Ven
                 variant = callee.variant?(args)
 
                 unless variant.is_a?(MConcreteFunction)
-                  die("improper 'next fun': #{callee}: #{args.join(", ")}")
+                  die("improper 'next fun': #{callee.to_s}: #{args.join(", ")}")
                 end
 
                 # Revoke that surrounding function & invoke
@@ -1084,7 +1152,7 @@ module Ven
               # Checks if tap is false, and, if it is, emits
               # a failure.
               if tap.false?
-                frame.failures << "#{chunk.file}:#{this.line}: got #{tap}"
+                frame.failures << "#{chunk.file}:#{this.line}: got #{tap.to_s}"
               end
             in Opcode::TEST_SHOULD
               # Checks if there are any failures in this frame's

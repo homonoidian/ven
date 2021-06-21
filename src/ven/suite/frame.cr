@@ -40,7 +40,7 @@ module Ven::Suite
     # on the situation.
     property queue = Models.new
 
-    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0)
+    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0, @ip = 0)
     end
 
     delegate :last, :last?, to: @stack
@@ -54,5 +54,7 @@ module Ven::Suite
       io << "   R: " << @returns << "\n"
       io << "   D: " << @dies << "\n"
     end
+
+    def_clone
   end
 end

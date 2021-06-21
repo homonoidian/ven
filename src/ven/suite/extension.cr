@@ -82,6 +82,13 @@ module Ven::Suite
       defglobal({{name}}, MInternal.new {{block}})
     end
 
+    # Yields inside a consensus `load` method.
+    macro on_load
+      def load(c_context : CxCompiler, m_context : CxMachine)
+        {{yield}}
+      end
+    end
+
     # Exports the definitions into *m_context*. Declares them
     # in *c_context*.
     protected abstract def load(

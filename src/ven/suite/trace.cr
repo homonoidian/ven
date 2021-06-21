@@ -35,6 +35,8 @@ module Ven::Suite
         io << "\n    #{@line}| #{excerpt.lstrip}"
       end
     end
+
+    def_clone
   end
 
   alias Traces = Array(Trace)

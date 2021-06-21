@@ -196,6 +196,12 @@ module Ven::Suite
         json.field("value", to_s)
       end
     end
+
+    macro inherited
+      \{% if !@type.abstract? %}
+        def_clone
+      \{% end %}
+    end
   end
 
   # The parent of all Struct `Model`s.
@@ -1101,7 +1107,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "native " << "(" << @value << ")"
+      io << "<native object>"
     end
 
     forward_missing_to @value

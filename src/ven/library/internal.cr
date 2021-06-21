@@ -2,7 +2,7 @@ module Ven::Library
   include Suite
 
   class Internal < Extension
-    def load(c_context, m_context)
+    on_load do
       # Globals for types & built-in values.
       defglobal("true", MBool.new true)
       defglobal("false", MBool.new false)

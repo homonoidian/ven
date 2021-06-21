@@ -153,7 +153,7 @@ module Ven
       if @result.nil?
         io << "#{@file} of (#{@distinct.try &.join(".") || "self"})"
       else
-        io << @result
+        io << @result.not_nil!.to_s
       end
     end
   end

@@ -1,0 +1,21 @@
+# `http` is very low-level internal API for serving HTTP. It
+# will soon be hidden by the work-in-progress transaction-
+# based I/O stdlib.
+#
+# Now, the question of whether it should be powered by Crystal's
+# primitive TCPSocket or by HTTP::Server instead, remains open;
+# I do want to have fine-grain control, so that a lot comes of
+# little, but then I don't want to rely on my (very limited)
+# knowledge of HTTP, nor do I want to code all that stuff up.
+
+listen = http.listen;
+
+fun router(verb, route) given "GET", "/" = "<h1>Home</h1>";
+fun router(verb, route) given "GET", "/about" = "<h1>About page</h1>";
+fun router(verb, route) = "<h1>You shouldn't have found this!</h1>";
+
+say("Listening on 3030 (hit CTRL+C to quit)");
+
+http
+  .new((path, verb, body) [200, router(verb, path), "text/html"])
+  .listen(3030);

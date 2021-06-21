@@ -1,6 +1,6 @@
 module Ven::Library
   class System < Extension
-    def load(c_context, m_context)
+    on_load do
       # Prints *model* to the screen.
       defbuiltin "say", model : Model do
         puts model.to_str.value

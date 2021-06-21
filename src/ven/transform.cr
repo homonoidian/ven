@@ -88,9 +88,8 @@ module Ven
     end
 
     # Transforms an immediate box statement into a box
-    # statement followed by an immediate instantiation of
-    # it, after which the box's name is bound to the box
-    # instance:
+    # statement followed by an instantiation of it, after
+    # which the box's name is bound to the box instance:
     #
     # ```ven
     # immediate box Foo;
