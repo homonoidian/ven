@@ -87,6 +87,33 @@ module Ven
       to_pattern_lambda(q.pattern)
     end
 
+    # Transforms an immediate box statement into a box
+    # statement followed by an immediate instantiation of
+    # it, after which the box's name is bound to the box
+    # instance:
+    #
+    # ```ven
+    # immediate box Foo;
+    #
+    # # Becomes:
+    #
+    # box Foo;
+    # Foo := Foo();
+    # ```
+    def transform(q : QImmediateBox)
+      unless q.box.params.empty?
+        raise ReadError.new(q.tag,
+          "impossible to immediately instantiate a parametric box")
+      end
+
+      QGroup.new(q.tag,
+        [q.box,
+         QAssign.new(q.tag, q.box.name,
+           QCall.new(q.tag,
+             q.box.name,
+             Quotes.new), true)])
+    end
+
     # Dies of readtime symbol leak.
     #
     # I know this is not the place where we should catch

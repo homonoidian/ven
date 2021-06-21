@@ -83,7 +83,7 @@ module Ven
       _ &_ nud not is in if else fun
       given loop next queue ensure expose
       distinct box and or return dies to
-      should from)
+      should from immediate)
 
     # Returns the current word.
     getter word = {type: "START", lexeme: "<start>", line: 1}
@@ -561,6 +561,7 @@ module Ven
       defstmt("NUD", Parselet::PDefineNud)
       defstmt("FUN", Parselet::PFun)
       defstmt("BOX", Parselet::PBox)
+      defstmt("IMMEDIATE", Parselet::PImmediateBox)
       defstmt("LOOP", Parselet::PLoop)
       defstmt("RETURN", Parselet::PReturnStatement)
 

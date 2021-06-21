@@ -625,4 +625,18 @@ module Ven::Parselet
       QPatternShell.new(@tag, led Precedence::FIELD)
     end
   end
+
+  # Reads an immediate box statement. Immediate box statements
+  # allow to define and immediately instantiate a box.
+  class PImmediateBox < Nud
+    def parse
+      @parser.expect("BOX")
+      box = PBox.new
+      quotes = box.parse!(@parser, @tag, @token)
+      # Forward the semicolon decision made by the box
+      # parselet upwards.
+      @semicolon = box.semicolon
+      QImmediateBox.new(@tag, quotes)
+    end
+  end
 end

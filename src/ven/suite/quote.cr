@@ -219,4 +219,6 @@ module Ven::Suite
   defquote(QEnsureShould, section : String, pad : Quotes)
 
   defquote(QPatternShell, pattern : Quote)
+
+  defquote(QImmediateBox, box : QBox)
 end

@@ -1004,15 +1004,18 @@ module Ven::Suite
     # Returns one of the fields in the namespace of this box
     # instance.
     #
-    # Additionally, provides two other fields: `.name`, which
-    # returns the name of this box, and `.parent`, which returns
-    # the parent of this box.
+    # Additionally, provides: `.name`, which returns the name
+    # of this box, `.parent`, which returns the parent of this
+    # box, and `.fields`, which returns an unordered vector of
+    # fields in this box.
     def field(name)
       case name
       when "name"
         Str.new(@parent.name)
       when "parent"
         @parent
+      when "fields"
+        Vec.from(@namespace.keys, Str)
       else
         @namespace[name]?
       end
