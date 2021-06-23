@@ -260,8 +260,8 @@ module Ven
       end
 
       server = HTTP::Server.new(handle)
-      server.not_nil!.bind_tcp(port)
-      server.not_nil!.listen
+      server.bind_tcp(port)
+      server.listen
     end
 
     # Processes a REPL command.
