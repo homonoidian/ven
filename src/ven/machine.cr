@@ -639,7 +639,19 @@ module Ven
     # Otherwise, spreads the field access on the items of
     # *head*. E.g., `[1, 2, 3].a is [1.a, 2.a, 3.a]`
     def field(head : Vec, field)
-      field?(head, field) || vec (head.map { |item| field(item, field) })
+      field?(head, field) || vec (head.map do |item|
+        if item.is_a?(Vec)
+          # Enable recursion.
+          # ~> [[1, 2, 3], [4, 5], 6].a
+          # == [[1.a, 2.a, 3.a], [4.a, 5.a], 6.a]
+          field(item, field)
+        else
+          # If there is no such field, ignore:
+          # ~> [1, 2, has-a].a
+          # == [1, 2, val-of-a]
+          field?(item, field) || item
+        end
+      end)
     end
 
     # Same as `field?`, but dies if found no working field
