@@ -268,18 +268,31 @@ module Ven
     def command(head : String, tail : String)
       case {head, tail}
       when {"help", _}
-        puts <<-END
-        \\COMMAND [TAIL]
+        puts <<-END.gsub(/\\\w+/) { |cmd| cmd.colorize.yellow }
 
-        Available commands:
-          \\help: show this
-          \\broadcast: start dump server on TAIL
-          \\serialize: serialize TAIL
-          \\deserialize: deserialize TAIL
-          \\deserialize_detree: deserialize & detree TAIL
-          \\lserq: deserialize quotes from file TAIL, and detree
-          \\run_serq: deserialize quotes from file TAIL, and run
-          \\context: show context (TAIL = reader, compiler, machine)
+        Usage: COMMAND [TAIL]
+
+        COMMAND:
+          \\help                show this
+          \\keys                show available key combos
+          \\context             show context (TAIL = reader, compiler, machine)
+          \\broadcast           broadcast on localhost:TAIL
+          \\serialize           serialize TAIL
+          \\deserialize         deserialize TAIL
+          \\deserialize_detree  deserialize & detree TAIL
+          \\lserq               deserialize & detree file TAIL
+          \\run_serq            deserialize & run file TAIL
+          \n
+        END
+      when {"keys", _}
+        puts <<-END.gsub /\w+\-\w+/ { |combo| combo.colorize.bold }
+
+          Ctrl-Left     move to the beginning of the word under the cursor
+          Ctrl-Right    move to the end of the word under the cursor
+          Shift-Down    remove the word under the cursor
+          Shift-Left    remove the word before the cursor
+          Shift-Right   remove the word after the cursor
+          \n
         END
       when {"serialize", _}
         puts Program.new(tail).step(Program::Step::Read).quotes.to_json
@@ -351,14 +364,59 @@ module Ven
         end
       end
 
+      # Deletes the word under the cursor.
+      fancy.actions.set Fancyline::Key::Control::ShiftDown do |ctx|
+        bounds = word_boundaries(ctx.editor.line)
+        if bound = bounds.index &.covers?(ctx.editor.cursor)
+          underneath = bounds[bound]
+          # Clean up the line, and make sure position matches.
+          ctx.editor.line = ctx.editor.line.delete_at(underneath)
+          ctx.editor.cursor = underneath.begin
+        end
+      end
+
+      # Deletes the word before cursor.
+      fancy.actions.set Fancyline::Key::Control::ShiftLeft do |ctx|
+        bounds = word_boundaries(ctx.editor.line)
+        if bound = bounds.index &.covers?(ctx.editor.cursor)
+          if before = bounds[bound - 1]?
+            # Clean up the line, and make sure position matches.
+            ctx.editor.line = ctx.editor.line.delete_at(before)
+            ctx.editor.cursor = before.end - 1
+          end
+        end
+      end
+
+      # Deletes the word after cursor.
+      fancy.actions.set Fancyline::Key::Control::ShiftRight do |ctx|
+        bounds = word_boundaries(ctx.editor.line)
+        if bound = bounds.index &.covers?(ctx.editor.cursor)
+          if after = bounds[bound + 1]?
+            ctx.editor.line = ctx.editor.line.delete_at(after)
+            # XXX: should we do something with the
+            # cursor here?
+          end
+        end
+      end
+
+      # Load the REPL history.
       if File.exists?(HISTORY) && File.file?(HISTORY) && File.readable?(HISTORY)
         File.open(HISTORY, "r") do |io|
           fancy.history.load(io)
         end
       end
 
-      puts "[Ven #{VERSION}]",
-        "Hit CTRL+D to exit."
+      hint = "Hint:".colorize.blue
+      puts <<-END.gsub(/\\\w+/) { |cmd| cmd.colorize.yellow }
+
+        [Ven #{VERSION}]
+
+        #{"Hit CTRL+D to exit.".colorize.bold}
+
+        #{hint} Type \\help to see what REPL commands are available.
+        #{hint} Type \\keys to see what key combos are available.
+        \n
+      END
 
       loop do
         begin
