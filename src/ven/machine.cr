@@ -1030,7 +1030,13 @@ module Ven
               put reduce(static, pop)
             in Opcode::GOTO
               # Goes to the chunk it received as the argument.
-              next invoke("block", static Int32)
+
+              # Blocks do not need traces, so we're doing a
+              # special-case invoke() here.
+              @frames << Frame.new(Frame::Goal::Unknown, Models.new, static Int32)
+              @context.scopes << CxMachine::Scope.new
+
+              next
             in Opcode::FIELD_IMMEDIATE
               # Pops an operand and, if possible, gets the value
               # of its field. Alternatively, builds a partial:
