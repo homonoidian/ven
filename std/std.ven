@@ -1,6 +1,6 @@
 distinct std;
 
-# Returns whether this value is not false.
+# Returns whether this value is true.
 #
 # ```
 # ensure true?(0) is true;
@@ -11,7 +11,7 @@ distinct std;
 fun<any> true? =
   $ is not false;
 
-# Alias to `set-referent`.
+# Hook: alias to `set-referent`.
 #
 # ```
 # values = [1, 2, 3];
@@ -21,7 +21,7 @@ fun<any> true? =
 fun<any> __call_assign(value, referent) =
   set-referent($, referent, value);
 
-# Sets the values of the given referents ('*') to *value*.
+# Hook: sets the values of the given referents ('*') to *value*.
 #
 # ```
 # values = [0, 1, 2];
