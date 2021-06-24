@@ -382,7 +382,7 @@ module Ven
           if before = bounds[bound - 1]?
             # Clean up the line, and make sure position matches.
             ctx.editor.line = ctx.editor.line.delete_at(before)
-            ctx.editor.cursor = before.end - 1
+            ctx.editor.cursor = before.begin
           end
         end
       end
@@ -393,8 +393,6 @@ module Ven
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           if after = bounds[bound + 1]?
             ctx.editor.line = ctx.editor.line.delete_at(after)
-            # XXX: should we do something with the
-            # cursor here?
           end
         end
       end
