@@ -169,7 +169,22 @@ module Ven::Parselet
   # Reads a vector into QVector.
   class PVector < Nud
     def parse
-      QVector.new(@tag, @parser.repeat("]", ","))
+      QVector.new(@tag, *items!)
+    end
+
+    # Reads the items of this vector. Returns a tuple of
+    # items followed by the filter (or nil).
+    def items!
+      return {Quotes.new, nil} if @parser.word!("]")
+
+      {
+        @parser.repeat(sep: ","),
+        @parser.before("]") { @parser.word!("|") ? filter! : nil },
+      }
+    end
+
+    def filter!
+      led
     end
   end
 
@@ -587,7 +602,7 @@ module Ven::Parselet
     # arguments. Tail slurpie (`*`) is stored under `$-tail`.
     private def args!
       @params.to_h do |name|
-        name == "*" ? {"-tail", QVector.new(@tag, tail!)} : {name, led}
+        name == "*" ? {"-tail", QVector.new(@tag, tail!, nil)} : {name, led}
       end
     end
 

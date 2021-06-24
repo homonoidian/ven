@@ -155,7 +155,7 @@ module Ven::Suite
   defquote(QNumber, value : BigDecimal)
 
   defquote(QQuote, quote : Quote)
-  defquote(QVector, items : Quotes)
+  defquote(QVector, items : Quotes, filter : Quote?)
 
   defquote(QURef)
   defquote(QUPop)

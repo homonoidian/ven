@@ -10,6 +10,10 @@ module Ven
   class Transform < Ven::Suite::Transformer
     include Suite
 
+    # The name of the filter hook (`[1, 2, 3 | _ > 5]` is
+    # actually `__filter([1, 2, 3], () _ > 5)`.
+    FILTER_HOOK = "__filter"
+
     @@symno = 0
 
     # Generates a symbol unique throughout a single instance
@@ -85,6 +89,36 @@ module Ven
     # pattern shell.
     def transform(q : QPatternShell)
       to_pattern_lambda(q.pattern)
+    end
+
+    # Transforms a vector filter, or, if there is none, passes.
+    #
+    # ```ven
+    # [1, 2, 3 | _ > 5];
+    #
+    # # Becomes:
+    #
+    # __filter([1, 2, 3], () _ > 5);
+    # ```
+    def transform(q : QVector)
+      q.items = transform(q.items)
+      unless filter = transform(q.filter)
+        return q
+      end
+
+      # Unless the filter is a lambda already, or if it's a
+      # symbol (which implies it stands for a lambda), make
+      # a lambda that wraps around it.
+      lambda =
+        case filter
+        when QSymbol, QLambda
+          filter
+        else
+          QLambda.new(filter.tag, [] of String, filter, false)
+        end
+
+      # And construct a call to the filter hook.
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK), [q, lambda])
     end
 
     # Transforms an immediate box statement into a box
