@@ -36,4 +36,46 @@ fun<vec> empty? =
 # ensure [1, 2, 3].same?() is false;
 # ```
 fun<vec> same? =
-  true?(|is| $)
+  true?(|is| $);
+
+# Hook: filters the values of this vector according to *fn*:
+# all items it returns true for are kept, and all other ones
+# are dropped.
+#
+# 1. If *fn* takes no arguments, the current item is injected
+# into its context (`_` and `&_`): `[1, 2, 3 | _ is 1] is [1]`
+# (wipes out all other contextuals).
+#
+# 2. If *fn* takes one argument, that argument is assigned
+# to be the current item: `[1, 2, 3 | (a) a is 1] is [1]`.
+#
+# 3. If *fn* takes more than one argument, it dies (TODO).
+fun<vec> __filter(fn) given lambda =
+  if (#fn is 0)
+    $.__filter_inject(fn)
+  else if (#fn is 1)
+    $.__filter_call(fn)
+  else
+    die("unsupported __filter lambda shape");
+
+fun<vec> __filter(fn) given function =
+  if (#fn is 1)
+    $.__filter_call(fn)
+  else
+    die("unsupported __filter function shape");
+
+# :nodoc:
+fun<vec> __filter_inject(fn) given lambda {
+  |(fn("contextuals") = [&_]) and fn() and queue _|: $;
+  # Empty queues are not returned. Force an empty vector
+  # as the result, unless a queue is there.
+  []
+}
+
+# :nodoc:
+fun<vec> __filter_call(fn) given function {
+  |fn(&_) and queue _|: $;
+  # Empty queues are not returned. Force an empty vector
+  # as the result, unless a queue is there.
+  []
+}
