@@ -11,7 +11,7 @@ dependencies:
     github: homonoidian/inquirer
   fancyline:
     github: papierkorb/fancyline
-    version: ~> 0.4.0
+    version: ~> 0.4.1
   commander:
     github: mrrooijen/commander
     version: ~> 0.4.0
