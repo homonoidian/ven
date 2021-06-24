@@ -32,7 +32,7 @@ module Ven::Suite
   # change the given quote in-place.
   abstract class Transformer
     # Maps `transform(quote)` on *quotes*.
-    def transform(quotes : Quotes)
+    def transform(quotes : Quotes | FieldAccessors)
       quotes.map { |quote| transform(quote) }
     end
 
@@ -51,8 +51,13 @@ module Ven::Suite
             {% for instance_var in subclass.instance_vars %}
               # To cause a recursive transform, instance_var
               # should be either of Quote+, or of Quotes.
-              {% if instance_var.type <= Quote || instance_var.type == Quotes %}
-                quote.{{instance_var}} = transform(quote.{{instance_var}}).as({{instance_var.type}})
+              {% if instance_var.type <= Quote ||
+                      instance_var.type <= FieldAccessor ||
+                      instance_var.type == Quotes ||
+                      instance_var.type == FieldAccessors %}
+                quote.{{instance_var}} =
+                  transform(quote.{{instance_var}})
+                    .as({{instance_var.type}})
               {% end %}
             {% end %}
         {% end %}
@@ -61,6 +66,14 @@ module Ven::Suite
 
       # We always-always want to return a quote.
       quote
+    end
+
+    def transform(accessor : FADynamic)
+      accessor.class.new transform(accessor.access)
+    end
+
+    def transform(accessor : FABranches)
+      accessor.class.new transform(accessor.access).as(QVector)
     end
 
     # Fallback case for `transform`. Called when a field
