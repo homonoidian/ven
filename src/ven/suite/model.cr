@@ -1069,6 +1069,14 @@ module Ven::Suite
     getter slurpy : Bool
     getter target : Int32
     getter params : Array(String)
+    # Returns the injected contextuals.
+    #
+    # ```ven
+    # div = () _ / _;
+    # div.inject(0, 1);
+    # ensure add() is 0;
+    # ```
+    getter contextuals = Models.new
 
     def initialize(@scope, @arity, @slurpy, @params, @target)
       @myselfed = false
@@ -1086,6 +1094,27 @@ module Ven::Suite
         @scope[name] = self
         @myselfed = true
       end
+    end
+
+    def field(name)
+      case name
+      when "contextuals"
+        Vec.new(@contextuals)
+      when "params"
+        Vec.from(@params, Str)
+      when "slurpy?"
+        MBool.new(@slurpy)
+      end
+    end
+
+    def length
+      @arity
+    end
+
+    def []=(target : Str, value : Vec)
+      return unless target.value == "contextuals"
+
+      @contextuals = value.items.reverse
     end
 
     def variant?(args)

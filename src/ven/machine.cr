@@ -134,7 +134,7 @@ module Ven
       frame.ip += 1
     end
 
-    # Jumps to the instruction at some instruction pointer *ip*.
+    # Immediately Jumps to the instruction at *ip*.
     private macro jump(ip)
       next frame.ip = ({{ip}}.not_nil!)
     end
@@ -974,6 +974,8 @@ module Ven
                   # worth it to make this a special-case of
                   # invoke():
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
+                  # Make use of the lambda's contextuals.
+                  underscores.concat(found.contextuals)
                   @context.ascend = false
                   # 'clone' worsens the performance here (~+50%),
                   # but it's more correct, as it prevents lambda
