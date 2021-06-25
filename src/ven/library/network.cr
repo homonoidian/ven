@@ -44,11 +44,11 @@ module Ven
       definternal "http" do |this|
         # Creates a new HTTP server. The server will rely on
         # *callback* to process the requests.
-        defbuiltin "new", callback : MLambda, in: this do
+        defbuiltin "new", callback : MLambda do
           {funlet = machine.funlet(callback), create_server(funlet)}
         end
 
-        defbuiltin "listen", handle : MNative(Server), port : Num, in: this do
+        defbuiltin "listen", handle : MNative(Server), port : Num do
           funlet, server = handle.value
           # Automatically recreate the server if this is not
           # the first `listen` for *server*.

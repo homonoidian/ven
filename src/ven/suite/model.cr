@@ -1191,7 +1191,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "<native object>"
+      io << "native object"
     end
 
     forward_missing_to @value
@@ -1213,7 +1213,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "internal"
+      io << "native code"
     end
   end
 end

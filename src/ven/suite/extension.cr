@@ -76,10 +76,23 @@ module Ven::Suite
 
     # Defines a global `MInternal` under *name*.
     macro definternal(name, &block)
+      {% if block.body.is_a?(Expressions) %}
+        {% body = block.body.expressions %}
+      {% else %}
+        {% body = [block.body] %}
+      {% end %}
+
       {% if !name.is_a?(StringLiteral) %}
         {% name = name.stringify %}
       {% end %}
-      defglobal({{name}}, MInternal.new {{block}})
+
+      defglobal({{name}}, MInternal.new do |this|
+        {% for expression in body %}
+          {% if expression.is_a?(Call) && expression.name == :defbuiltin %}
+            {{expression.name}}({{*expression.args}}, in: this) {{expression.block}}
+          {% end %}
+        {% end %}
+      end)
     end
 
     # Yields inside a consensus `load` method.
