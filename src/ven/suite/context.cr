@@ -174,23 +174,28 @@ module Ven::Suite
     end
 
     # Returns the local scope's metacontext, if any.
-    def meta : MBoxInstance?
-      local["$"]?.as?(MBoxInstance)
+    def meta(scope = local) : MBoxInstance?
+      scope["$"]?.as?(MBoxInstance)
     end
 
     # If the local scope has a metacontext, yields its *namespace*
     # (see `MBoxInstance#namespace`). Otherwise, returns nil.
-    def with_meta_ns : Model?
-      if namespace = meta.try(&.namespace)
+    def with_meta_ns(scope = local) : Model?
+      if namespace = meta(scope).try(&.namespace)
         yield namespace
       end
     end
 
     # Ascends the scopes, trying to look up the value of
-    # *symbol* in each one of them.
+    # *symbol* in each and every one of them, as well as
+    # in their `$`s.
+    #
+    # Note that choosing to `ascend?` makes execution extremely
+    # slow in case, say, of deep recursion. `ascend?` should be
+    # used as a last resort when doing symbol lookup.
     def ascend?(symbol : String) : Model?
       @scopes.reverse_each do |scope|
-        if value = scope[symbol]?
+        if value = scope[symbol]? || with_meta_ns(scope, &.[symbol]?)
           return value
         end
       end

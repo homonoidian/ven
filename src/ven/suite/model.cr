@@ -90,6 +90,12 @@ module Ven::Suite
         : self.class <= other.type.as(MStruct.class)
     end
 
+    # Returns whether this model is of the compound type *other*.
+    # Delegates the implementation to `MCompoundType`.
+    def is?(other : MCompoundType)
+      other.is?(self)
+    end
+
     # Returns whether this model is semantically equal to
     # the *other* model.
     #
@@ -643,6 +649,52 @@ module Ven::Suite
     end
   end
 
+  # A compound type is a type paired with an array of alternative
+  # content types/models. `is?`-matching is used to check whether
+  # one of these alternatives match. `is?`-matching is also used
+  # to match against compound types.
+  #
+  # ```ven
+  # ensure [1, 2, 3] is vec(num);
+  # ensure 1 x 1000 is vec(1);
+  # ```
+  class MCompoundType < MClass
+    def initialize(@type : Model, @contents : Models)
+    end
+
+    # Checks whether *other* is of the head type, and its
+    # contents (whatever this means) match the tail types
+    # (content types).
+    def is?(other : Model)
+      return false unless other.is?(@type)
+
+      # Compound root 'any' exists to represent general
+      # alternative: `1 is any(1, str, vec)`.
+      if @type.is_a?(MAny)
+        return @contents.any? do |content|
+          other.is?(content)
+        end
+      end
+
+      # All container (`indexable?`) types should be
+      # present here. For `str`, however, it doesn't
+      # make much sense.
+      case other
+      when Vec
+        return other.all? do |item|
+          @contents.any? { |content| item.is?(content) }
+        end
+      end
+
+      false
+    end
+
+    def to_s(io)
+      io << "compound " unless @type.is_a?(MAny)
+      io << @type << " of " << @contents.join(", or ")
+    end
+  end
+
   # The value that represents anything (in other words, the
   # value that matches on anything.)
   class MAny < MClass
@@ -1015,6 +1067,11 @@ module Ven::Suite
     # box, and `.fields`, which returns an unordered vector of
     # fields in this box.
     def field(name)
+      # Prefer the user's fields over internal fields.
+      if value = @namespace[name]?
+        return value
+      end
+
       case name
       when "name"
         Str.new(@parent.name)
@@ -1022,8 +1079,6 @@ module Ven::Suite
         @parent
       when "fields"
         Vec.from(@namespace.keys, Str)
-      else
-        @namespace[name]?
       end
     end
 

@@ -472,7 +472,12 @@ module Ven
           return left.to_str, right.to_str
         end
       when "<", ">", "<=", ">="
-        return left.to_num, right.to_num
+        case {left, right}
+        when {Str, Str}
+          return left.to_num(parse: false), right.to_num(parse: false)
+        else
+          return left.to_num, right.to_num
+        end
       when "+", "-", "*", "/"
         return left.to_num, right.to_num
       when "~"
@@ -953,6 +958,8 @@ module Ven
                   #   `[1, 2, 3].say() # ==> 1\n2\n3\n`
                   next hook("__iter", [callee.as(Model)])
                 end
+              when MType, MAny
+                put MCompoundType.new(callee, args)
               when MFunction
                 if callee.is_a?(MPartial)
                   # Append the arguments of the call to the
