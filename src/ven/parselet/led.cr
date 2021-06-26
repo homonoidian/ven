@@ -62,7 +62,7 @@ module Ven::Parselet
     # unwanted behavior (especially the latter).
     def validate? : Bool
       @left.as?(QSymbol).try { |it| !it.value.in?("$", "*") } ||
-        @left.is_a?(QCall)
+        @left.is_a?(QAccess)
     end
 
     # Returns *@left* if it is a valid assignment target, orelse

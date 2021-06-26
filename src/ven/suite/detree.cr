@@ -160,6 +160,10 @@ module Ven::Suite
       accessors.map { |a| field(a) }.join(".")
     end
 
+    def visit!(q : QAccess)
+      "#{visit(q.head)}[#{commaed(q.args)}]"
+    end
+
     def visit!(q : QAccessField)
       "#{visit(q.head)}.#{field(q.tail)}"
     end

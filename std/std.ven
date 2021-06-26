@@ -15,18 +15,18 @@ fun<any> true? =
 #
 # ```
 # values = [1, 2, 3];
-# values(1) = "foo";
+# values[1] = "foo";
 # ensure values is [1, "foo", 3];
 # ```
-fun<any> __call_assign(value, referent) =
+fun<any> __access_assign(value, referent) =
   set-referent($, referent, value);
 
 # Hook: sets the values of the given referents ('*') to *value*.
 #
 # ```
 # values = [0, 1, 2];
-# values(0, 1) = "foo";
+# values[0, 1] = "foo";
 # ensure values is ["foo", "foo", 2];
 # ```
-fun<any> __call_assign(value, *) =
-  |$(_) = value| *;
+fun<any> __access_assign(value, *) =
+  |$[_] = value| *;

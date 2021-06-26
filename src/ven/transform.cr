@@ -159,35 +159,35 @@ module Ven
       raise ReadError.new(q.tag, "readtime symbol leaked")
     end
 
-    # Implements the call-assign protocol hook.
+    # Implements the access-assign protocol hook.
     #
     # ```
-    # x(0) = 1 is __call_assign(x, 1, 0);
-    # x("foo")(0) = 1 is __call_assign(x("foo"), 1, 0);
+    # x[0] = 1 is __access_assign(x, 1, 0);
+    # x["foo"][0] = 1 is __access_assign(x["foo"], 1, 0);
     # ```
     def transform(q : QAssign)
       q.target = transform(q.target)
       q.value = transform(q.value)
-      return q unless target = q.target.as?(QCall)
+      return q unless target = q.target.as?(QAccess)
 
-      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, "__call_assign"),
-        [target.callee, q.value] + target.args)
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, "__access_assign"),
+        [target.head, q.value] + target.args)
     end
 
-    # Implements the call-assign protocol hook.
+    # Implements the access-assign protocol hook.
     #
     # ```
-    # x(0) += 1 is __call_assign(x, x(0) + 1, 0)
-    # x("foo")(0) += 1 is __call_assign(x("foo"), x("foo")(0) + 1, 0)
+    # x[0] += 1 is __access_assign(x, x[0] + 1, 0)
+    # x["foo"][0] += 1 is __access_assign(x["foo"], x["foo"][0] + 1, 0)
     # ```
     def transform(q : QBinaryAssign)
       q.target = transform(q.target)
       q.value = transform(q.value)
-      return q unless target = q.target.as?(QCall)
+      return q unless target = q.target.as?(QAccess)
 
       QCall.new(q.tag,
-        QRuntimeSymbol.new(q.tag, "__call_assign"),
-        [target.callee,
+        QRuntimeSymbol.new(q.tag, "__access_assign"),
+        [target.head,
          QBinary.new(q.tag, q.operator,
            target,
            q.value)] + target.args)

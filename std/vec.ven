@@ -69,7 +69,7 @@ fun<vec> __filter(fn) given function =
 
 # :nodoc:
 fun<vec> __filter_inject(fn) given lambda {
-  |(fn("contextuals") = [&_]) and fn() and queue _|: $;
+  |(fn["contextuals"] = [&_]) and fn() and queue _|: $;
   # Empty queues are not returned. Force an empty vector
   # as the result, unless a queue is there.
   []

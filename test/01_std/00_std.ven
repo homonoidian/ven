@@ -13,14 +13,14 @@ ensure true?(false) is false;
 # ()=:
 {
   values = [1, 2, 3];
-  values(1) = "foo";
+  values[1] = "foo";
   ensure values is [1, "foo", 3];
 };
 
 # (_, *)=
 {
   values = [0, 1, 2];
-  values(0, 1) = "foo";
+  values[0, 1] = "foo";
   ensure values is ["foo", "foo", 2];
 };
 
