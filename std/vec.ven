@@ -5,14 +5,17 @@ expose std;
 # Invokes all callable items in this vector.
 #
 # ```
-# ensure [foo, 2, 3]() is [1, 2, 3]
+# ensure [foo, 2, 3]() is [foo(), 2, 3];
+# ensure [bar, 2, 3](1, 2) is [bar(1, 2), 2, 3];
+# ensure [baz, 2, bar](4, 5) is [baz(4, 5), 2, bar(4, 5)];
 # ```
-fun<vec> __iter =
+fun<vec> __iter(*) given any =
   |
     {
       item = _;
 
-      if item.callable?
+      if (item.callable?)
+        # TODO: splat *
         item()
       else
         item

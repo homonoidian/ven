@@ -399,8 +399,8 @@ module Ven
         # whole match result.
         may_be str($0), if: right.regex === left.value
       when {"is", MBool, _}
-        # `bool is any`  is also a special case, as, because
-        # `is` returns *left* value, `false is false` will
+        # `bool is <any>` is also a special case, as, because
+        # `is` returns the *left* value, `false is false` will
         # return false (i.e., the left false); this is, of
         # course, wrong.
         bool left.is?(right)
@@ -941,23 +941,13 @@ module Ven
               defun(myself = function, pop myself.given)
             in Opcode::CALL
               # If *x1* is a fun/box, invokes it. If an indexable,
-              # indexes it: (x1 a1 a2 a3 ... -- R), where *aN* is
-              # an argument, and R is the returned value.
+              # calls __iter on it: (x1 a1 a2 a3 ... -- R), where
+              # *aN* is an argument, and R is the returned value.
               args = pop static(Int32)
 
               case callee = pop
               when .indexable?
-                if args.size != 0
-                  values = args.map do |arg|
-                    callee[arg]? || die("[]: item(s) not found: #{arg}")
-                  end
-
-                  values.size == 1 ? put values.first : put vec values
-                else
-                  # Argumentless indexable call is a call spread:
-                  #   `[1, 2, 3].say() # ==> 1\n2\n3\n`
-                  next hook("__iter", [callee.as(Model)])
-                end
+                next hook("__iter", [callee.as(Model)] + args)
               when MType, MAny
                 put MCompoundType.new(callee, args)
               when MFunction
@@ -1051,13 +1041,32 @@ module Ven
               put reduce(static, pop)
             in Opcode::GOTO
               # Goes to the chunk it received as the argument.
-
+              #
               # Blocks do not need traces, so we're doing a
               # special-case invoke() here.
               @frames << Frame.new(Frame::Goal::Unknown, Models.new, static Int32)
               @context.scopes << CxMachine::Scope.new
-
               next
+            in Opcode::ACCESS
+              # Provides a conventional interface to .indexable?
+              # Model's items. May collect (`[1, 2, 3][0, 1]`)
+              # items or return a specific one (`[1, 2, 3][0]`).
+              args = pop static(Int32)
+              head = pop
+
+              unless head.indexable?
+                die("[]: head not indexable")
+              end
+
+              # Collect nth items in *head*.
+              nths = args.map do |arg|
+                head[arg]? || die("[]: item(s) not found: #{arg}")
+              end
+
+              # If there was one value collected, we put it
+              # bare. If there were more, we wrap them in
+              # a vec.
+              nths.size == 1 ? put nths.first : put vec nths
             in Opcode::FIELD_IMMEDIATE
               # Pops an operand and, if possible, gets the value
               # of its field. Alternatively, builds a partial:

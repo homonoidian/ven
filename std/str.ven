@@ -16,7 +16,7 @@ fun<str> starts-with?(prefix) {
   };
 
   loop (i = 0; i < size; i++)
-    if $(i) is not prefix(i) {
+    if $[i] is not prefix[i] {
       return false
     };
 
@@ -53,10 +53,10 @@ fun<str> same? {
     return true;
   };
 
-  first = $(0);
+  first = $[0];
 
   loop (i = 1; i < #$; i++)
-    if $(i) is not first {
+    if $[i] is not first {
       return false
     };
 

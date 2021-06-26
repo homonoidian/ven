@@ -6,7 +6,7 @@ module Ven::Suite
   enum Opcode
     # Opcodes that take no payload.
 
-    POP = 16
+    POP             = 16
     POP2
     SWAP
     TRY_POP
@@ -45,7 +45,7 @@ module Ven::Suite
 
     # Opcodes that take a static payload.
 
-    NUM = 128
+    NUM             = 128
     STR
     VEC
     PCRE
@@ -58,10 +58,11 @@ module Ven::Suite
     NEXT_FUN
     REST
     TEST_SHOULD
+    ACCESS
 
     # Opcodes that take a jump payload.
 
-    J = 512
+    J            = 512
     JIT
     JIF
     MAP_ITER
@@ -71,7 +72,7 @@ module Ven::Suite
 
     # Opcodes that take a symbol payload.
 
-    SYM = 1024
+    SYM        = 1024
     POP_ASSIGN
     TAP_ASSIGN
     INC
@@ -79,7 +80,7 @@ module Ven::Suite
 
     # Opcodes that take a function payload.
 
-    FUN = 2048
+    FUN    = 2048
     BOX
     LAMBDA
 

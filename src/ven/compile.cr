@@ -288,6 +288,12 @@ module Ven
       issue(Opcode::DEC, sym q.target.value)
     end
 
+    def visit!(q : QAccess)
+      visit(q.head)
+      visit(q.args)
+      issue(Opcode::ACCESS, q.args.size)
+    end
+
     def visit!(q : QAccessField)
       visit(q.head)
       field!(q.tail)

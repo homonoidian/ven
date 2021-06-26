@@ -21,55 +21,55 @@ fun read(source) given str {
   # Returns the precedence of the current token, or 0
   # if it has no precedence.
   fun precedence? =
-    if token(0) in ["+", "-"]
+    if token[0] in ["+", "-"]
       1
-    else if token(0) in ["*", "/"]
+    else if token[0] in ["*", "/"]
       2
     else
       0;
 
   # Matches *pattern* against offset source.
   fun match(pattern) given regex =
-    if source(from cursor) is pattern
+    if source[from cursor] is pattern
       cursor += #(return _);
 
   # Consumes exactly one token and returns the previous
   # token.
   fun consume =
     token = return token and
-      if match(`[1-9]\d*|0`)
+      if (match(`[1-9]\d*|0`))
         ["NUMBER", _]
-      else if match(`[-+*/()]`)
+      else if (match(`[-+*/()]`))
         [&_, _]
       else if match(`[ ]+`)
         next
-      else if match(`$`)
+      else if (match(`$`))
         ["EOF", "end-of-input"]
       else
         die("invalid lexeme");
 
   # `consume`s only if current token type is *type*.
-  fun consume(type) given str = if token(0) is type consume();
+  fun consume(type) given str = if token[0] is type consume();
 
   # Parses a prefix expression.
   fun prefix =
     if consume("NUMBER")
-      Num(_(1))
+      Num(_[1])
     else if consume("+")
       Pos(prefix())
     else if consume("-")
       Neg(prefix())
     else if consume("(")
-      return infix(0) and consume(")")
+      return infix[0] and consume(")")
     else
-      die("invalid syntax in prefix position: " ~ token(0));
+      die("invalid syntax in prefix position: " ~ token[0]);
 
   # Parses an infix expression.
   fun infix(depth) given num {
     left := prefix();
 
     loop (depth < (level = precedence?())) {
-      token-type = consume()(0);
+      token-type = consume()[0];
 
       kind =
         if token-type is "+"

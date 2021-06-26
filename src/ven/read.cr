@@ -549,6 +549,7 @@ module Ven
       defled("++", Parselet::PReturnIncrement, precedence: POSTFIX)
       defled("--", Parselet::PReturnDecrement, precedence: POSTFIX)
       defled("(", Parselet::PCall, precedence: CALL)
+      defled("[", Parselet::PAccess, precedence: FIELD)
       defled(".", Parselet::PAccessField, precedence: FIELD)
 
       # Statements:

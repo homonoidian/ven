@@ -47,7 +47,7 @@ module Ven
         # and item access expressions.
         p.items.each_with_index do |item, index|
           matchers << mk_pattern(item)
-          accesses << QCall.new(item.tag, arg, [QNumber.new(item.tag, index.to_big_d).as(Quote)])
+          accesses << QAccess.new(item.tag, arg, [QNumber.new(item.tag, index.to_big_d).as(Quote)])
         end
 
         clauses = [

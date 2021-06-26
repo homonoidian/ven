@@ -172,6 +172,7 @@ module Ven::Suite
   defquote(QReturnDecrement, target : QSymbol)
   defquote(QReturnIncrement, target : QSymbol)
 
+  defquote(QAccess, head : Quote, args : Quotes)
   defquote(QAccessField, head : Quote, tail : FieldAccessors)
 
   defquote(QMapSpread, operator : Quote, operand : Quote, iterative : Bool)

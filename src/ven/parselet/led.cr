@@ -101,6 +101,13 @@ module Ven::Parselet
     end
   end
 
+  # Reads access (index access in particular): `foo[1]`, etc.
+  class PAccess < PCall
+    def parse
+      QAccess.new(@tag, @left, @parser.repeat("]", ","))
+    end
+  end
+
   # Reads a field access expression into QAccessField.
   class PAccessField < Led
     def parse
