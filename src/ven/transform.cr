@@ -10,6 +10,13 @@ module Ven
   class Transform < Ven::Suite::Transformer
     include Suite
 
+    # The Proc returned by `mk_pattern`.
+    #
+    # You can call this Proc with the matchee of a pattern
+    # match, and expect a quote that will do the match as
+    # the result.
+    alias PatternMaker = Proc(Quote, Quote)
+
     # The name of the filter hook (`[1, 2, 3 | _ > 5]` is
     # actually `__filter([1, 2, 3], () _ > 5)`.
     FILTER_HOOK = "__filter"
@@ -22,73 +29,70 @@ module Ven
       QRuntimeSymbol.new(QTag.void, "__temp#{@@symno += 1}")
     end
 
-    # Constructs a pattern lambda for primitive patterns
-    # (those where just 'is' will suffice)
-    def to_pattern_lambda(p : QNumber | QString | QRegex)
-      arg = gensym
-
-      QLambda.new(p.tag, [arg.value],
-        QBinary.new(p.tag, "is", arg, p), false)
+    # Pattern matches primitives (those where just an 'is'
+    # will suffice)
+    def mk_pattern(p : QNumber | QString | QRegex) : PatternMaker
+      PatternMaker.new do |arg|
+        QBinary.new(p.tag, "is", arg, p)
+      end
     end
 
-    # Constructs a pattern lambda for matching over vectors.
-    #
-    # Do note that the 'algorithm' used here produces very
-    # long, nested and heavyweight lambdas, meaning it has
-    # extremely poor performance in almost all cases.
-    def to_pattern_lambda(p : QVector)
-      arg = gensym
+    # Pattern matches vectors (recursively).
+    def mk_pattern(p : QVector) : PatternMaker
+      PatternMaker.new do |arg|
+        accesses = Quotes.new
+        matchers = Array(PatternMaker).new
 
-      matchers = Quotes.new
-      accesses = Quotes.new
+        # Go over the vector. Collect PatternMakers for items,
+        # and item access expressions.
+        p.items.each_with_index do |item, index|
+          matchers << mk_pattern(item)
+          accesses << QCall.new(item.tag, arg, [QNumber.new(item.tag, index.to_big_d).as(Quote)])
+        end
 
-      # Go over the vector. Collect matchers (match lambdas)
-      # and [item] accesses.
-      p.items.each_with_index do |item, index|
-        matchers << to_pattern_lambda(item)
-        accesses << QCall.new(item.tag, arg.as(Quote), [QNumber.new(item.tag, index.to_big_d).as(Quote)])
+        clauses = [
+          # Make sure `arg is vec`:
+          QBinary.new(p.tag, "is", arg, QRuntimeSymbol.new(p.tag, "vec")),
+          # Make sure `#arg is #accesses`:
+          QBinary.new(p.tag, "is",
+            QUnary.new(p.tag, "#", arg),
+            QNumber.new(p.tag, accesses.size.to_big_d)),
+        ]
+
+        # Make patterns for each of the item accesses. Concat
+        # them with the clauses.
+        clauses += matchers.zip(accesses).map do |matcher, access|
+          matcher.call(access)
+        end
+
+        # Compute the initial memo: take the first two clauses
+        # and QBinary-and them.
+        memo = QBinary.new(clauses[0].tag, "and",
+          clauses[0],
+          clauses[1])
+
+        # Reduce the remaining clauses, and return them.
+        clauses[2..].reduce(memo) do |memo, clause|
+          QBinary.new(clause.tag, "and", memo, clause)
+        end
       end
-
-      clauses = [
-        # Make sure `arg is vec`:
-        QBinary.new(p.tag, "is", arg, QRuntimeSymbol.new(p.tag, "vec")),
-        # Make sure `#arg is #accesses`:
-        QBinary.new(p.tag, "is",
-          QUnary.new(p.tag, "#", arg),
-          QNumber.new(p.tag, accesses.size.to_big_d)),
-      ]
-
-      clauses += matchers.zip(accesses).map do |matcher, access|
-        QCall.new(access.tag, matcher, [access])
-      end
-
-      # Compute the memo: take the first two clauses and
-      # QBinary/and them.
-      memo = QBinary.new(clauses[0].tag, "and",
-        clauses[0],
-        clauses[1])
-
-      # Reduce the remaining clauses.
-      joint = clauses[2..].reduce(memo) do |memo, clause|
-        QBinary.new(clause.tag, "and", memo, clause)
-      end
-
-      # Wrap the joint clauses in '<joint> and <arg>', so that
-      # if the match was successful, 'and' returns <arg>.
-      joint = QBinary.new(p.tag, "and", joint, arg)
-
-      QLambda.new(p.tag, [arg.value], joint, false)
     end
 
-    # Death fallback for pattern lambda construction.
-    def to_pattern_lambda(p : Quote)
+    # Death fallback for unsupported quotes.
+    def mk_pattern(p : Quote)
       raise ReadError.new(p.tag, "#{p.class} is not supported in patterns")
     end
 
     # Returns the corresponding pattern lambda for a
     # pattern shell.
     def transform(q : QPatternShell)
-      to_pattern_lambda(q.pattern)
+      arg = gensym
+      # 'and' the resulting clauses with `arg`, so that if
+      # matched successfully, this lambda returns <arg> -
+      # and otherwise, false.
+      QLambda.new(q.tag, [arg.value],
+        QBinary.new(q.tag, "and",
+          mk_pattern(q.pattern).call(arg), arg), false)
     end
 
     # Transforms a vector filter, or, if there is none, passes.

@@ -30,10 +30,10 @@ ensure "Patterns produce working pattern lambdas" {
     '[1, 2, 3]([1, 2, 3]) is [1, 2, 3];
     '[1, "hey"]([1, "hey"]) is [1, "hey"];
     '[1, "bye"]([1, "hey"]) is false;
-    '[["symbol", "macro"], ["name", "arg"], "body",](
+    '[["symbol", "macro"], ["name", "arg"], "body"](
       [["symbol", "macro"], ["name", "arg"], "body"]
     ) is not false;
-    '[["symbol", "macro"], ["name", "arg"], "body",](
+    '[["symbol", "macro"], ["name", "arg"], "body"](
       [["symbol", "macro"], ["name", "bad"], "body"]
     ) is false;
     '[`a+b`, `b+a`](["aab", "bbba"]) is ["aab", "bbba"];
