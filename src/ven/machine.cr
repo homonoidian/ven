@@ -531,6 +531,17 @@ module Ven
     # - If *operand* is empty, returns it back.
     # - If *operand* has one item, returns that one item.
     def reduce(operator : String, operand : Vec)
+      case operator
+      when "and"
+        # On a false in the vector, 'and' returns false
+        # immediately.
+        return bool !operand.find(&.false?)
+      when "or"
+        # On a non-false in the vector, 'or' returns true
+        # immediately.
+        return bool !!operand.find { |item| !item.false? }
+      end
+
       case operand.length
       when 0
         operand
@@ -538,7 +549,6 @@ module Ven
         operand[0]
       else
         memo = binary(operator, operand[0], operand[1])
-
         operand[2..].reduce(memo) do |total, current|
           binary(operator, total, current)
         end

@@ -568,8 +568,6 @@ module Ven::Suite
       new(items.map { |item| type.new(item) })
     end
 
-    delegate :[], :<<, :all?, :any?, :map, :each, :size, to: @items
-
     # Returns the length of this vector.
     def to_num
       Num.new(size)
@@ -619,6 +617,8 @@ module Ven::Suite
     def to_s(io)
       io << "[" << @items.join(", ") << "]"
     end
+
+    forward_missing_to @items
   end
 
   # Ven's type for representing other data types + itself.
