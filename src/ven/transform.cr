@@ -85,6 +85,10 @@ module Ven
 
     # Returns the corresponding pattern lambda for a
     # pattern shell.
+    #
+    # NOTE: this transform is not a tail transform (`transform!`),
+    # because patterns have their own semantics, while tail
+    # transformation enforces the standard one.
     def transform(q : QPatternShell)
       arg = gensym
       # 'and' the resulting clauses with `arg`, so that if
@@ -95,7 +99,7 @@ module Ven
           mk_pattern(q.pattern).call(arg), arg), false)
     end
 
-    # Transforms a vector filter, or, if there is none, passes.
+    # Transforms a vector filter in this vector, if it has one.
     #
     # ```ven
     # [1, 2, 3 | _ > 5];
@@ -104,11 +108,8 @@ module Ven
     #
     # __filter([1, 2, 3], () _ > 5);
     # ```
-    def transform(q : QVector)
-      q.items = transform(q.items)
-      unless filter = transform(q.filter)
-        return q
-      end
+    def transform!(q : QVector)
+      return q unless filter = q.filter
 
       # Unless the filter is a lambda already, or if it's a
       # symbol (which implies it stands for a lambda), make
@@ -137,7 +138,7 @@ module Ven
     # box Foo;
     # Foo := Foo();
     # ```
-    def transform(q : QImmediateBox)
+    def transform!(q : QImmediateBox)
       unless q.box.params.empty?
         raise ReadError.new(q.tag,
           "impossible to immediately instantiate a parametric box")
@@ -155,7 +156,7 @@ module Ven
     #
     # I know this is not the place where we should catch
     # these, but where else?
-    def transform(q : QReadtimeSymbol)
+    def transform!(q : QReadtimeSymbol)
       raise ReadError.new(q.tag, "readtime symbol leaked")
     end
 
@@ -165,9 +166,7 @@ module Ven
     # x[0] = 1 is __access_assign(x, 1, 0);
     # x["foo"][0] = 1 is __access_assign(x["foo"], 1, 0);
     # ```
-    def transform(q : QAssign)
-      q.target = transform(q.target)
-      q.value = transform(q.value)
+    def transform!(q : QAssign)
       return q unless target = q.target.as?(QAccess)
 
       QCall.new(q.tag, QRuntimeSymbol.new(q.tag, "__access_assign"),
@@ -180,9 +179,7 @@ module Ven
     # x[0] += 1 is __access_assign(x, x[0] + 1, 0)
     # x["foo"][0] += 1 is __access_assign(x["foo"], x["foo"][0] + 1, 0)
     # ```
-    def transform(q : QBinaryAssign)
-      q.target = transform(q.target)
-      q.value = transform(q.value)
+    def transform!(q : QBinaryAssign)
       return q unless target = q.target.as?(QAccess)
 
       QCall.new(q.tag,

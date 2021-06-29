@@ -37,20 +37,22 @@ module Ven::Suite
     end
 
     # If one or multiple of *quote*'s fields are of type `Quote`,
-    # applies itself recursively on these fields. If not, leaves
-    # the fields untouched.
+    # applies itself recursively on those fields. If not, leaves
+    # them untouched.
     #
-    # Can be concretized to transform a particular kind of
-    # quote, located no matter how deep in the quote tree,
-    # while ignoring all others.
+    # Can be concretized to transform a particular kind of quote
+    # with **high degree of control**. Note that in this case,
+    # you will have to transform all subsequent fields yourself.
+    #
+    # However, **you almost certainly want a tail transform**
+    # concretization instead (see `transform!`). A tail transform
+    # runs after all fields of the given quote were transformed.
     def transform(quote : Quote)
       {% begin %}
         case quote
         {% for subclass in Quote.subclasses %}
           when {{subclass}}
             {% for instance_var in subclass.instance_vars %}
-              # To cause a recursive transform, instance_var
-              # should be either of Quote+, or of Quotes.
               {% if instance_var.type <= Quote ||
                       instance_var.type <= FieldAccessor ||
                       instance_var.type == Quotes ||
@@ -64,8 +66,9 @@ module Ven::Suite
         end
       {% end %}
 
-      # We always-always want to return a quote.
-      quote
+      # Apply tail transform (if there is one; otherwise,
+      # *quote* will be returned untouched).
+      transform!(quote)
     end
 
     def transform(accessor : FADynamic)
@@ -74,6 +77,11 @@ module Ven::Suite
 
     def transform(accessor : FABranches)
       accessor.class.new transform(accessor.access).as(QVector)
+    end
+
+    # Fallback case for tail transform. Returns *other*.
+    def transform!(other)
+      other
     end
 
     # Fallback case for `transform`. Called when a field
