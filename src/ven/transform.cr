@@ -1,12 +1,10 @@
 module Ven
-  # > There are things in this world which are easier worked
-  # > with when you transform them, than when you try to deal
-  # > with them virgin.
+  # Transformation is the second stage of Ven interpretation.
   #
-  # This is the to-do second stage of Ven interpretation. It
-  # will transform QPatterns into QLambdas, expand protocol
-  # macros (e.g., `|a| b` into `spread((_) a, b)`), etc. Maybe
-  # something else, too. Or nothing at all.
+  # Say, it transforms `QPatternShell`s into the corresponding
+  # `QLambda`s, expands protocol macros (ones like the filter protocol
+  # macro: `[1, 2, 3 | _ > 2]` into `__filter([1, 2, 3], (() _ > 2))`,
+  # catches readtime symbols that got outside of the reader, etc.
   class Transform < Ven::Suite::Transformer
     include Suite
 
@@ -17,9 +15,8 @@ module Ven
     # the result.
     alias PatternMaker = Proc(Quote, Quote)
 
-    # The name of the filter hook (`[1, 2, 3 | _ > 5]` is
-    # actually `__filter([1, 2, 3], () _ > 5)`.
-    FILTER_HOOK = "__filter"
+    FILTER_HOOK_NAME        = "__filter"
+    ACCESS_ASSIGN_HOOK_NAME = "__access_assign"
 
     @@symno = 0
 
@@ -123,7 +120,7 @@ module Ven
         end
 
       # And construct a call to the filter hook.
-      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK), [q, lambda])
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK_NAME), [q, lambda])
     end
 
     # Transforms an immediate box statement into a box
@@ -169,7 +166,7 @@ module Ven
     def transform!(q : QAssign)
       return q unless target = q.target.as?(QAccess)
 
-      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, "__access_assign"),
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, ACCESS_ASSIGN_HOOK_NAME),
         [target.head, q.value] + target.args)
     end
 
@@ -183,7 +180,7 @@ module Ven
       return q unless target = q.target.as?(QAccess)
 
       QCall.new(q.tag,
-        QRuntimeSymbol.new(q.tag, "__access_assign"),
+        QRuntimeSymbol.new(q.tag, ACCESS_ASSIGN_HOOK_NAME),
         [target.head,
          QBinary.new(q.tag, q.operator,
            target,
