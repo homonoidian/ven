@@ -676,7 +676,7 @@ module Ven
               # We halt execution so the user can connect up
               # to the broadcast.
               puts "\n[Prepared to broadcast on port #{port + 1}]\n".colorize.bold
-              puts "Hit Enter to #{@final} read the program.".colorize.reverse
+              puts "Hit Enter to #{@final} the program.".colorize.reverse
               gets
             end
 
