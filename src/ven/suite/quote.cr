@@ -219,7 +219,7 @@ module Ven::Suite
   defquote(QEnsureTest, comment : Quote, shoulds : Quotes)
   defquote(QEnsureShould, section : String, pad : Quotes)
 
-  defquote(QPatternShell, pattern : Quote)
+  defquote(QPatternEnvelope, pattern : Quote)
 
   defquote(QImmediateBox, box : QBox)
 end

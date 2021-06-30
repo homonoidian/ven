@@ -634,10 +634,10 @@ module Ven::Parselet
   end
 
   # Reads a pattern (pattern lambda) expression and wraps
-  # it in `QPatternShell`.
+  # it in `QPatternEnvelope`.
   class PPattern < Nud
     def parse
-      QPatternShell.new(@tag, led Precedence::FIELD)
+      QPatternEnvelope.new(@tag, led Precedence::FIELD)
     end
   end
 

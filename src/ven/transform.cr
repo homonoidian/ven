@@ -1,7 +1,7 @@
 module Ven
   # Transformation is the second stage of Ven interpretation.
   #
-  # Say, it transforms `QPatternShell`s into the corresponding
+  # Say, it transforms `QPatternEnvelope`s into the corresponding
   # `QLambda`s, expands protocol macros (ones like the filter protocol
   # macro: `[1, 2, 3 | _ > 2]` into `__filter([1, 2, 3], (() _ > 2))`,
   # catches readtime symbols that got outside of the reader, etc.
@@ -10,9 +10,9 @@ module Ven
 
     # The Proc returned by `mk_pattern`.
     #
-    # You can call this Proc with the matchee of a pattern
-    # match, and expect a quote that will do the match as
-    # the result.
+    # You can call this Proc with the quote subject to a pattern
+    # match, and expect back a quote that will perform the match
+    # at run-time.
     alias PatternMaker = Proc(Quote, Quote)
 
     FILTER_HOOK_NAME        = "__filter"
@@ -81,12 +81,12 @@ module Ven
     end
 
     # Returns the corresponding pattern lambda for a
-    # pattern shell.
+    # pattern envelope.
     #
     # NOTE: this transform is not a tail transform (`transform!`),
     # because patterns have their own semantics, while tail
     # transformation enforces the standard one.
-    def transform(q : QPatternShell)
+    def transform(q : QPatternEnvelope)
       arg = gensym
       # 'and' the resulting clauses with `arg`, so that if
       # matched successfully, this lambda returns <arg> -
