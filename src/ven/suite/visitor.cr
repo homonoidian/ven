@@ -68,7 +68,7 @@ module Ven::Suite
 
       # Apply tail transform (if there is one; otherwise,
       # *quote* will be returned untouched).
-      transform!(quote)
+      transform!(quote).as?(Quote) || quote
     end
 
     def transform(accessor : FADynamic)
@@ -77,6 +77,17 @@ module Ven::Suite
 
     def transform(accessor : FABranches)
       accessor.class.new transform(accessor.access).as(QVector)
+    end
+
+    # As `Transformer` finds it hard to see box namespace
+    # as a valid transform target, we have to manually
+    # transform it.
+    def transform!(q : QBox)
+      q.namespace = q.namespace.to_h do |n, v|
+        # Transform names and values of this box's
+        # namespace recursively.
+        {transform(n).as(QSymbol), transform(v)}.as({QSymbol, Quote})
+      end
     end
 
     # Fallback case for tail transform. Returns *other*.

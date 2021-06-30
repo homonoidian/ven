@@ -14,22 +14,9 @@ module Ven::Suite
     end
 
     # Substitutes itself with the quote it was assigned.
-    def transform(q : QReadtimeSymbol)
+    def transform!(q : QReadtimeSymbol)
       @definitions[q.value]? ||
         die(q.tag, "there is no readtime symbol named '$#{q.value}'")
-    end
-
-    # A special-case of transparent transform, for box.
-    #
-    # `Transformer` finds it hard to see box namespaces as
-    # valid transform targets.
-    def transform(q : QBox)
-      q.name = transform(q.name).as(QSymbol)
-      q.namespace = q.namespace.to_h do |name, value|
-        {transform(name).as(QSymbol),
-         transform(value)}
-      end
-      q # How disgusting this lonely q is!
     end
   end
 end
