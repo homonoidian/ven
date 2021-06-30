@@ -264,7 +264,7 @@ module Ven::Suite
     end
 
     def visit!(q : QGroup)
-      visit(q.body).join(";\n")
+      visit(q.body).reject("").join(";\n")
     end
 
     def visit!(q : QEnsure)
@@ -371,7 +371,7 @@ module Ven::Suite
 
     # Returns the detreed *quotes*.
     def self.detree(quotes : Quotes)
-      new.visit(quotes).join(";\n")
+      new.visit(quotes).reject("").join(";\n")
     end
   end
 end

@@ -536,6 +536,12 @@ module Ven::Parselet
       # And define the macro.
       @parser.context[defee] = PNudMacro.new(params, expand)
 
+      # Force semicolon, as there is some bad design pre-
+      # reading a word. For correctness, we need at least
+      # one word between the nud definition and the word
+      # defined by it.
+      @semicolon = true
+
       QVoid.new
     end
 
@@ -549,7 +555,7 @@ module Ven::Parselet
     def lead! : {String, Regex | String}
       case @parser.word[:type]
       when "REGEX"
-        {fresh, /^#{@parser.word![:lexeme]}/}
+        {fresh, Regex.new(@parser.word![:lexeme])}
       when "SYMBOL", .in?(@@subsidiary)
         {@parser.word[:lexeme].upcase, @parser.word![:lexeme]}
       else

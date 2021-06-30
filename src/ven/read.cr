@@ -200,6 +200,8 @@ module Ven
           break case
           when match(RX_IGNORE)
             next @lineno += $0.count("\n")
+          when pair = @context.triggers.find { |_, lead| match(lead) }
+            word(pair[0], $0)
           when match(RX_SYMBOL)
             if keyword?($0)
               word($0.upcase, $0)
@@ -214,8 +216,6 @@ module Ven
             word("STRING", $1)
           when match(RX_REGEX)
             word("REGEX", $1)
-          when pair = @context.triggers.find { |_, lead| match(lead) }
-            word(pair[0], $0)
           when match(RX_SPECIAL)
             word($0.upcase, $0)
           when @offset == @source.size
