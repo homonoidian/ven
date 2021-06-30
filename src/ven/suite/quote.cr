@@ -87,15 +87,14 @@ module Ven::Suite
   alias Quotes = Array(Quote)
 
   # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
-  private macro defquote(quote, *fields, under parent = Quote)
+  private macro defquote(quote, *fields, desc = "something", under parent = Quote)
     class {{quote}} < {{parent}}
       defquote!({{*fields}})
-    end
-  end
 
-  # Passes `defquote` a *quote* and a field `value : String`.
-  private macro defvalue(quote)
-    defquote({{quote}}, value : String)
+      def self.to_s(io)
+        io << "quote of " << {{desc}}
+      end
+    end
   end
 
   # A dummy Quote that can be used to experiment with the
@@ -109,6 +108,10 @@ module Ven::Suite
 
     def to_s(io)
       io << "<void quote>"
+    end
+
+    def self.to_s(io)
+      io << "quote of nothing"
     end
   end
 
@@ -145,81 +148,145 @@ module Ven::Suite
     def self.from_json_object_key?(key)
       QRuntimeSymbol.new(QTag.void, key)
     end
+
+    def self.to_s(io)
+      io << "quote of generic symbol"
+    end
   end
 
-  defquote(QRuntimeSymbol, value : _, under: QSymbol)
-  defquote(QReadtimeSymbol, value : _, under: QSymbol)
+  defquote(QRuntimeSymbol,
+    value : _,
+    under: QSymbol,
+    desc: "runtime symbol")
 
-  defvalue(QString)
-  defvalue(QRegex)
-  defquote(QNumber, value : BigDecimal)
+  defquote(QReadtimeSymbol,
+    value : _,
+    under: QSymbol,
+    desc: "readtime symbol")
+
+  defquote(QString, value : String, desc: "string")
+  defquote(QRegex, value : String, desc: "regex")
+  defquote(QNumber, value : BigDecimal, desc: "number")
 
   defquote(QQuote, quote : Quote)
-  defquote(QVector, items : Quotes, filter : Quote?)
+  defquote(QVector, items : Quotes, filter : Quote?, desc: "vector")
 
-  defquote(QURef)
-  defquote(QUPop)
+  defquote(QURef, desc: "'_'")
+  defquote(QUPop, desc: "'&_'")
 
-  defquote(QUnary, operator : String, operand : Quote)
-  defquote(QBinary, operator : String, left : Quote, right : Quote)
-  defquote(QCall, callee : Quote, args : Quotes)
+  defquote(QUnary,
+    operator : String,
+    operand : Quote,
+    desc: "unary operation")
 
-  defquote(QAssign, target : Quote, value : Quote, global : Bool)
-  defquote(QBinaryAssign, operator : String, target : Quote, value : Quote)
+  defquote(QBinary,
+    operator : String,
+    left : Quote,
+    right : Quote,
+    desc: "binary operation")
 
-  defquote(QDies, operand : Quote)
-  defquote(QIntoBool, operand : Quote)
-  defquote(QReturnDecrement, target : QSymbol)
-  defquote(QReturnIncrement, target : QSymbol)
+  defquote(QCall, callee : Quote, args : Quotes, desc: "call")
 
-  defquote(QAccess, head : Quote, args : Quotes)
-  defquote(QAccessField, head : Quote, tail : FieldAccessors)
+  defquote(QAssign,
+    target : Quote,
+    value : Quote,
+    global : Bool,
+    desc: "assignment")
 
-  defquote(QMapSpread, operator : Quote, operand : Quote, iterative : Bool)
-  defquote(QReduceSpread, operator : String, operand : Quote)
+  defquote(QBinaryAssign,
+    operator : String,
+    target : Quote,
+    value : Quote,
+    desc: "binary assignment")
 
-  defquote(QBlock, body : Quotes)
-  defquote(QGroup, body : Quotes)
+  defquote(QDies, operand : Quote, desc: "postifx dies")
+  defquote(QIntoBool, operand : Quote, desc: "postfix into-bool")
+  defquote(QReturnDecrement, target : QSymbol, desc: "return-decrement")
+  defquote(QReturnIncrement, target : QSymbol, desc: "return-increment")
 
-  defquote(QIf, cond : Quote, suc : Quote, alt : Quote?)
+  defquote(QAccess, head : Quote, args : Quotes, desc: "access")
+  defquote(QAccessField, head : Quote, tail : FieldAccessors, desc: "field access")
+
+  defquote(QMapSpread,
+    operator : Quote,
+    operand : Quote,
+    iterative : Bool,
+    desc: "map spread")
+
+  defquote(QReduceSpread,
+    operator : String,
+    operand : Quote,
+    desc: "reduce spread")
+
+  defquote(QBlock, body : Quotes, desc: "block")
+  defquote(QGroup, body : Quotes, desc: "group")
+
+  defquote(QIf, cond : Quote, suc : Quote, alt : Quote?, desc: "if-else")
 
   defquote(QFun,
     name : QSymbol,
     params : Parameters,
     body : Quotes,
-    blocky : Bool)
+    blocky : Bool,
+    desc: "fun definition")
 
-  defquote(QQueue, value : Quote)
+  defquote(QQueue, value : Quote, desc: "queue")
 
-  defquote(QInfiniteLoop, repeatee : Quote)
-  defquote(QBaseLoop, base : Quote, repeatee : Quote)
-  defquote(QStepLoop, base : Quote, step : Quote, repeatee : Quote)
+  defquote(QInfiniteLoop,
+    repeatee : Quote,
+    desc: "infinite loop")
+
+  defquote(QBaseLoop,
+    base : Quote,
+    repeatee : Quote,
+    desc: "base loop")
+
+  defquote(QStepLoop,
+    base : Quote,
+    step : Quote,
+    repeatee : Quote,
+    desc: "step loop")
+
   defquote(QComplexLoop,
     start : Quote,
     base : Quote,
     step : Quote,
-    repeatee : Quote)
+    repeatee : Quote,
+    desc: "complex (full) loop")
 
-  defquote(QNext, scope : String?, args : Quotes)
-  defquote(QReturnQueue)
-  defquote(QReturnStatement, value : Quote)
-  defquote(QReturnExpression, value : Quote)
+  defquote(QNext, scope : String?, args : Quotes, desc: "next")
+
+  defquote(QReturnQueue, desc: "return queue statement")
+  defquote(QReturnStatement, value : Quote, desc: "return statement")
+  defquote(QReturnExpression, value : Quote, desc: "return expression")
 
   defquote(QBox,
     name : QSymbol,
     params : Parameters,
-    namespace : Hash(QSymbol, Quote))
+    namespace : Hash(QSymbol, Quote),
+    desc: "box definition")
 
   defquote(QLambda,
     params : Array(String),
     body : Quote,
-    slurpy : Bool)
+    slurpy : Bool,
+    desc: "lambda definition")
 
-  defquote(QEnsure, expression : Quote)
-  defquote(QEnsureTest, comment : Quote, shoulds : Quotes)
-  defquote(QEnsureShould, section : String, pad : Quotes)
+  defquote(QEnsure,
+    expression : Quote,
+    desc: "ensure expression")
 
-  defquote(QPatternEnvelope, pattern : Quote)
+  defquote(QEnsureTest,
+    comment : Quote,
+    shoulds : Quotes,
+    desc: "ensure test")
 
-  defquote(QImmediateBox, box : QBox)
+  defquote(QEnsureShould,
+    section : String,
+    pad : Quotes,
+    desc: "enshure 'should' case")
+
+  defquote(QPatternEnvelope, pattern : Quote, desc: "pattern")
+
+  defquote(QImmediateBox, box : QBox, desc: "immediate box")
 end

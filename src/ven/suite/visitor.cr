@@ -31,6 +31,36 @@ module Ven::Suite
   # Note that quote transformers are mutative, that is, they
   # change the given quote in-place.
   abstract class Transformer
+    private class TransformDeathException < Exception
+    end
+
+    # Dies of transform error given *message*, which should
+    # explain why the error happened.
+    def die(message : String)
+      raise TransformDeathException.new(message)
+    end
+
+    # Casts *value* to *type* safely: dies if cannot cast
+    # instead of raising a TypeCastError.
+    macro cast(value, to type)
+      %result = {{value}}
+      %result.as?({{type}}) || die("expected #{{{type}}}, got #{%result.class}")
+    end
+
+    # Defines a toplevel transform over the given *type*. See
+    # `transform` to learn more.
+    #
+    # Yields for the body of the transform. Exposes `quote`
+    # in the body of the transform, which stands for the
+    # quote being transformed.
+    macro deftransform(over type = Quote)
+      def transform(quote : {{type}})
+        {{yield}}
+      rescue e : TransformDeathException
+        raise ReadError.new(quote.tag, e.message)
+      end
+    end
+
     # Maps `transform(quote)` on *quotes*.
     def transform(quotes : Quotes | FieldAccessors)
       quotes.map { |quote| transform(quote) }
@@ -47,7 +77,7 @@ module Ven::Suite
     # However, **you almost certainly want a tail transform**
     # concretization instead (see `transform!`). A tail transform
     # runs after all fields of the given quote were transformed.
-    def transform(quote : Quote)
+    deftransform do
       {% begin %}
         case quote
         {% for subclass in Quote.subclasses %}
@@ -58,8 +88,8 @@ module Ven::Suite
                       instance_var.type == Quotes ||
                       instance_var.type == FieldAccessors %}
                 quote.{{instance_var}} =
-                  transform(quote.{{instance_var}})
-                    .as({{instance_var.type}})
+                  cast(transform(quote.{{instance_var}}),
+                       to: {{instance_var.type}})
               {% end %}
             {% end %}
         {% end %}
@@ -76,7 +106,7 @@ module Ven::Suite
     end
 
     def transform(accessor : FABranches)
-      accessor.class.new transform(accessor.access).as(QVector)
+      accessor.class.new cast(transform(accessor.access), QVector)
     end
 
     # As `Transformer` finds it hard to see box namespace
@@ -86,7 +116,7 @@ module Ven::Suite
       q.namespace = q.namespace.to_h do |n, v|
         # Transform names and values of this box's
         # namespace recursively.
-        {transform(n).as(QSymbol), transform(v)}.as({QSymbol, Quote})
+        {cast(transform(n), QSymbol), transform(v)}.as({QSymbol, Quote})
       end
     end
 

@@ -77,7 +77,7 @@ module Ven
 
     # Death fallback for unsupported quotes.
     def mk_pattern(p : Quote)
-      raise ReadError.new(p.tag, "#{p.class} is not supported in patterns")
+      die("#{p.class} is not supported in patterns")
     end
 
     # Returns the corresponding pattern lambda for a
@@ -86,14 +86,14 @@ module Ven
     # NOTE: this transform is not a tail transform (`transform!`),
     # because patterns have their own semantics, while tail
     # transformation enforces the standard one.
-    def transform(q : QPatternEnvelope)
+    deftransform over: QPatternEnvelope do
       arg = gensym
       # 'and' the resulting clauses with `arg`, so that if
       # matched successfully, this lambda returns <arg> -
       # and otherwise, false.
-      QLambda.new(q.tag, [arg.value],
-        QBinary.new(q.tag, "and",
-          mk_pattern(q.pattern).call(arg), arg), false)
+      QLambda.new(quote.tag, [arg.value],
+        QBinary.new(quote.tag, "and",
+          mk_pattern(quote.pattern).call(arg), arg), false)
     end
 
     # Transforms a vector filter in this vector, if it has one.
@@ -137,8 +137,7 @@ module Ven
     # ```
     def transform!(q : QImmediateBox)
       unless q.box.params.empty?
-        raise ReadError.new(q.tag,
-          "impossible to immediately instantiate a parametric box")
+        die("impossible to immediately instantiate a parametric box")
       end
 
       QGroup.new(q.tag,
@@ -154,7 +153,7 @@ module Ven
     # I know this is not the place where we should catch
     # these, but where else?
     def transform!(q : QReadtimeSymbol)
-      raise ReadError.new(q.tag, "readtime symbol leaked")
+      die("readtime symbol leaked")
     end
 
     # Implements the access-assign protocol hook.
