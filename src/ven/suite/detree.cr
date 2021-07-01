@@ -369,6 +369,10 @@ module Ven::Suite
       "((#{q.params.join(", ")}) #{visit(q.body)})"
     end
 
+    def self.detree(quote : Quote)
+      new.visit(quote)
+    end
+
     # Returns the detreed *quotes*.
     def self.detree(quotes : Quotes)
       new.visit(quotes).reject("").join(";\n")
