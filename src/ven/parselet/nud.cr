@@ -598,30 +598,37 @@ module Ven::Parselet
 
     def parse
       # Clone: we do not want to modify the original body.
-      ReadExpansion.new(args!).transform(@body.clone)
+      ReadExpansion.new(rest!).transform(@body.clone)
     end
 
-    # Reads the arguments of this nud macro by interpreting
-    # its parameters (*@params*).
+    # Reads the rest of this nud macro by interpreting its
+    # parameters, if any.
     #
-    # Returns a hash of parameter names mapped to the corresponding
-    # arguments. Tail slurpie (`*`) is stored under `$-tail`.
-    private def args!
-      @params.to_h do |name|
-        name == "*" ? {"-tail", QVector.new(@tag, tail!, nil)} : {name, led}
+    # If this nud takes no parameters, it is free to parse
+    # them itself.
+    #
+    # Returns a hash of parameter names mapped to arguments,
+    # or an empty hash if there weren't any parameters.
+    private def rest!
+      args = @parser.after("(") { @parser.repeat(")", ",") }
+      names = {} of String => Quote
+
+      # Do an arity check. As nuds allow the slurpie, we
+      # need to check for that too.
+      unless @params.size == args.size || "*".in?(@params) && @params.size >= args.size
+        die("malformed parametric nud: expected " \
+            "#{@params.size} arguments, got #{args.size}")
       end
-    end
 
-    # Reads the tail slurpie. Yields each expression to
-    # the block.
-    private def tail!
-      leds = Quotes.new
-
-      while @parser.is_nud?
-        leds << led
+      @params.each_with_index do |param, index|
+        if param == "*"
+          names[param] = QVector.new(@tag, args[index..], nil)
+        else
+          names[param] = args[index]
+        end
       end
 
-      leds
+      names
     end
 
     # Serializes this nud macro into a JSON object.
@@ -658,6 +665,22 @@ module Ven::Parselet
       # parselet upwards.
       @semicolon = box.semicolon
       QImmediateBox.new(@tag, quotes)
+    end
+  end
+
+  # Reads a readtime envelope. Readtime envelopes bring
+  # a subset of Ven to readtime.
+  #
+  # ```ven
+  # nud foo(a, b) {
+  #   <a + b> # QReadtimeEnvelope
+  # };
+  #
+  # foo(1, 2) # expands to 3
+  # ```
+  class PReadtimeEnvelope < Nud
+    def parse
+      QReadtimeEnvelope.new(@tag, @parser.before(">") { led(Precedence::IDENTITY) })
     end
   end
 end

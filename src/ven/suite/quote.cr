@@ -168,7 +168,6 @@ module Ven::Suite
   defquote(QRegex, value : String, desc: "regex")
   defquote(QNumber, value : BigDecimal, desc: "number")
 
-  defquote(QQuote, quote : Quote)
   defquote(QVector, items : Quotes, filter : Quote?, desc: "vector")
 
   defquote(QURef, desc: "'_'")
@@ -287,6 +286,7 @@ module Ven::Suite
     desc: "enshure 'should' case")
 
   defquote(QPatternEnvelope, pattern : Quote, desc: "pattern")
+  defquote(QReadtimeEnvelope, expression : Quote, desc: "readtime envelope")
 
   defquote(QImmediateBox, box : QBox, desc: "immediate box")
 end

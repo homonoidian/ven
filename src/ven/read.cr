@@ -244,6 +244,12 @@ module Ven
       die("expected #{types.map(&.dump).join(", ")}")
     end
 
+    # Same as `expect(type) && <...block...>`, but ensures
+    # the result of the expression is a Quote.
+    def after(type : String, & : -> R) forall R
+      (expect(type) && yield).as(R)
+    end
+
     # Yields and expects *type* to follow. If expectation
     # fulfilled, returns whatever the block returned.
     def before(type : String)
@@ -528,6 +534,7 @@ module Ven
       defnud("_", Parselet::PUPop)
       defnud("&_", Parselet::PURef)
       defnud("'", Parselet::PPattern)
+      defnud("<", Parselet::PReadtimeEnvelope)
 
       # Infixes (LEDs):
 
