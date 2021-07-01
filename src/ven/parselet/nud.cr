@@ -536,7 +536,9 @@ module Ven::Parselet
     def parse
       defee, trigger = lead!
       params = if? "(", params!, [] of String
-      expand = block
+      # The block is executed in a readtime context. Take a
+      # look at the `Parselet#in_readtime_context` macro.
+      expand = in_readtime_context { block }
 
       if params.includes?("$")
         die("'$' has special meaning in read-time blocks")
@@ -694,7 +696,20 @@ module Ven::Parselet
   # ```
   class PReadtimeEnvelope < Nud
     def parse
-      QReadtimeEnvelope.new(@tag, @parser.before(">") { led(Precedence::IDENTITY) })
+      unless Ven::Parselet.in_readtime_context
+        die("readtime envelope used outside of readtime evaluation context")
+      end
+
+      # For convenience, do not require a semicolon.
+      @semicolon = false
+
+      QReadtimeEnvelope.new(@tag, @parser.before(">") {
+        # Precedence more than IDENTITY here, as IDENTITY
+        # includes the '>' (greater than) operator, which
+        # conflicts with the closing bracket '>'. Same with
+        # 'fun's diamond.
+        led(Precedence::IDENTITY)
+      })
     end
   end
 end

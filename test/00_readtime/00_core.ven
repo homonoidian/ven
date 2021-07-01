@@ -1,0 +1,33 @@
+nud pad(symbol) {
+  <{
+    # These ensures are run at read-time.
+
+    # Make sure homoiconics evaluate.
+    ensure 12;
+    ensure "12";
+    ensure `12`;
+    ensure true;
+    ensure not false;
+
+    # Make sure vectors evaluate.
+    ensure [1, 2, 3];
+    ensure [1, "2", 3];
+    ensure [[1, 2, 3], 4, 5];
+
+    # Make sure we can access symbols.
+    # value check todo
+    ensure symbol;
+
+    # unaries todo
+
+    # Make sure we can assign to symbols.
+    a = 2;
+    b = 3;
+    ensure a;
+    ensure b;
+  }>
+
+  say("All tests passed!");
+};
+
+pad(12)

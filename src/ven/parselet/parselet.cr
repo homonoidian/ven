@@ -1,4 +1,10 @@
 module Ven::Parselet
+  # Whether the parsing currently happens in a readtime
+  # context (nud, led, etc.)
+  #
+  # This is considered a global, so use carefully!
+  class_property in_readtime_context = false
+
   abstract class Parselet
     # The QTag of this parselet.
     @tag = uninitialized QTag
@@ -41,6 +47,21 @@ module Ven::Parselet
       @token[:lexeme]
     end
 
+    # Enables readtime context mode for the time the block
+    # reads. Disables it afterwards. Forwards block's
+    # return value.
+    macro in_readtime_context
+      Ven::Parselet.in_readtime_context = true
+
+      begin
+        %result = {{yield}}
+      ensure
+        Ven::Parselet.in_readtime_context = false
+      end
+
+      %result
+    end
+
     # Returns the proper symbol quote for *token*, unless it
     # is nil; if it is, reads a symbol and makes a symbol quote
     # for it.
@@ -49,6 +70,11 @@ module Ven::Parselet
 
       case token[:type]
       when "$SYMBOL"
+        unless Ven::Parselet.in_readtime_context
+          die("readtime symbol (namely '#{token[:lexeme]}') used " \
+              "outside of readtime evaluation context")
+        end
+
         QReadtimeSymbol.new(@tag, token[:lexeme])
       when "SYMBOL", "*"
         QRuntimeSymbol.new(@tag, token[:lexeme])

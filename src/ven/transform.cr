@@ -148,16 +148,6 @@ module Ven
              Quotes.new), true)])
     end
 
-    # Dies of readtime symbol leak.
-    def transform!(q : QReadtimeSymbol)
-      die("usage of readtime symbol outside of the reader")
-    end
-
-    # Dies of readtime envelope leak.
-    def transform!(q : QReadtimeEnvelope)
-      die("usage of readtime envelope (<...>) outside of the reader")
-    end
-
     # Implements the access-assign protocol hook.
     #
     # ```
