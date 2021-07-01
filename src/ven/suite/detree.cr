@@ -4,6 +4,10 @@ module Ven::Suite
   # A visitor that provides **detreeing**, which means converting
   # a `Quote` back into source code.
   class Detree < Visitor(String)
+    # These unary operators require a space between them
+    # and their operand.
+    KEYWORD_UNARIES = {"to", "not", "from"}
+
     # Current indentation level.
     @indent = 0
 
@@ -87,7 +91,7 @@ module Ven::Suite
     def visit!(q : QUnary)
       String.build do |io|
         io << "("
-        if q.operator == "not"
+        if q.operator.in?(KEYWORD_UNARIES)
           io << q.operator << " " << "(" << visit(q.operand) << ")"
         else
           io << q.operator << visit(q.operand)
