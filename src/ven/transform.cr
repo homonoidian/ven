@@ -149,11 +149,13 @@ module Ven
     end
 
     # Dies of readtime symbol leak.
-    #
-    # I know this is not the place where we should catch
-    # these, but where else?
     def transform!(q : QReadtimeSymbol)
-      die("readtime symbol leaked")
+      die("usage of readtime symbol outside of the reader")
+    end
+
+    # Dies of readtime envelope leak.
+    def transform!(q : QReadtimeEnvelope)
+      die("usage of readtime envelope (<...>) outside of the reader")
     end
 
     # Implements the access-assign protocol hook.
