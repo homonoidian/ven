@@ -68,6 +68,14 @@ module Ven::Suite
       "[#{commaed(q.items)}]"
     end
 
+    def visit!(q : QTrue)
+      "true"
+    end
+
+    def visit!(q : QFalse)
+      "false"
+    end
+
     def visit!(q : QUPop)
       "_"
     end

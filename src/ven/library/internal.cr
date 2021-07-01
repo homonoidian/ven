@@ -4,8 +4,6 @@ module Ven::Library
   class Internal < Extension
     on_load do
       # Globals for types & built-in values.
-      defglobal("true", MBool.new true)
-      defglobal("false", MBool.new false)
       defglobal("any", MAny.new)
       defglobal("num", MType.new "num", Num)
       defglobal("str", MType.new "str", Str)

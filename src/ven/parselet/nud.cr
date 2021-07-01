@@ -188,6 +188,20 @@ module Ven::Parselet
     end
   end
 
+  # Reads a 'true'.
+  class PTrue < Nud
+    def parse
+      QTrue.new(@tag)
+    end
+  end
+
+  # Reads a 'false'.
+  class PFalse < Nud
+    def parse
+      QFalse.new(@tag)
+    end
+  end
+
   # Reads a block into QBlock.
   class PBlock < Nud
     def parse

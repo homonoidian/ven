@@ -191,6 +191,14 @@ module Ven
       issue(Opcode::VEC, q.items.size)
     end
 
+    def visit!(q : QTrue)
+      issue(Opcode::TRUE)
+    end
+
+    def visit!(q : QFalse)
+      issue(Opcode::FALSE)
+    end
+
     def visit!(q : QUPop)
       issue(Opcode::UPOP)
     end

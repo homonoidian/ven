@@ -170,6 +170,9 @@ module Ven::Suite
 
   defquote(QVector, items : Quotes, filter : Quote?, desc: "vector")
 
+  defquote(QTrue, desc: "bool true")
+  defquote(QFalse, desc: "bool false")
+
   defquote(QURef, desc: "'_'")
   defquote(QUPop, desc: "'&_'")
 
