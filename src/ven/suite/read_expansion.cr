@@ -230,8 +230,10 @@ module Ven::Suite
         die("there is no readtime symbol named '$#{q.value}'")
     end
 
-    # Adds the hole to the holes of this ReadExpansion, or,
-    # if it has a value, expands to that value.
+    # Adds the hole to the holes of this ReadExpansion.
+    #
+    # Alternatively, if the hole has a value, expands to
+    # that value.
     def transform!(q : QHole)
       # We have to manually transform() here, as Transformer
       # does not recognize Quote? as valid transformable
@@ -248,7 +250,7 @@ module Ven::Suite
       begin
         body = eval(env, quote.expression)
       rescue e : ReturnException
-        body = e.quote
+        return transform(e.quote)
       ensure
         if @holes.size == 1
           die("there is 1 unfilled queue hole")
