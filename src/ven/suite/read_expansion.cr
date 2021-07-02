@@ -2,9 +2,34 @@ require "./*"
 
 module Ven::Suite
   class ReadExpansion < Transformer
-    @definitions : Hash(String, Quote)
+    private alias Definitions = Hash(String, Quote)
 
-    def initialize(@definitions)
+    # The exception that, if raised inside an envelope, will
+    # cause immediate return with the given *quote*. This means
+    # that the envelope will only expand into *quote*.
+    private class ReturnException < Exception
+      getter quote : Quote
+
+      def initialize(@quote)
+      end
+    end
+
+    # The environment of a single readtime envelope.
+    private class Env
+      # The queue of quotes. Queue overrides expression-return
+      # & implicit last quote return, and makes the envelope
+      # expand into a QGroup of the Quotes.
+      property queue = Quotes.new
+      # The expression-return value.
+      property return : Quote? = nil
+      # A hash of readtime symbol definitions.
+      property definitions : Definitions
+
+      def initialize(@definitions)
+      end
+    end
+
+    def initialize(@definitions : Definitions)
     end
 
     # Makes a `QNumber`.
@@ -74,7 +99,7 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QRuntimeSymbol)
-      env[q.value]? || die("readtime symbol not found: #{q.value}")
+      env.definitions[q.value]? || die("readtime symbol not found: #{q.value}")
     end
 
     # :ditto:
@@ -143,7 +168,7 @@ module Ven::Suite
       # account. Well, there is no point in doing that: `:=`
       # works on scope stack, and there's no scope stack at
       # read-time.
-      env[target.value] = eval(env, q.value)
+      env.definitions[target.value] = eval(env, q.value)
     end
 
     # :ditto:
@@ -162,6 +187,31 @@ module Ven::Suite
       QVoid.new
     end
 
+    # :ditto:
+    def eval(env, q : QQueue)
+      # Think of queue values as being **outside** of readtime
+      # envelope, but still inside the readtime context.
+      env.queue << transform(q.value)
+
+      q.value
+    end
+
+    # :ditto:
+    def eval(env, q : QReturnExpression)
+      # QReturnExpression, as with runtime Ven, just sets
+      # the return value without interrupting control flow.
+      env.return = transform(q.value)
+
+      q.value
+    end
+
+    # :ditto:
+    def eval(env, q : QReturnStatement)
+      # QReturnStatement, as with runtime Ven, interrupts control
+      # flow and returns out of this envelope immediately.
+      raise ReturnException.new(transform(q.value))
+    end
+
     # Expands to the quote the symbol was assigned.
     def transform!(q : QReadtimeSymbol)
       @definitions[q.value]? ||
@@ -171,7 +221,24 @@ module Ven::Suite
     # Expands to the quote produced by the expression of the
     # readtime envelope.
     def transform!(q : QReadtimeEnvelope)
-      eval(@definitions, q.expression)
+      env = Env.new(@definitions)
+      body = eval(env, q.expression)
+
+      # Implicit return policy is the same as in runtime Ven:
+      # queue overrides expression-return quote, expression-
+      # return quote overrides implicit last quote return.
+      #
+      # Statement return causes an immediate return via the
+      # ReturnException, and so is not handled here.
+      if !env.queue.empty?
+        return QGroup.new(q.tag, env.queue)
+      elsif quote = env.return.as?(Quote)
+        return quote
+      end
+
+      body
+    rescue e : ReturnException
+      e.quote
     end
   end
 end
