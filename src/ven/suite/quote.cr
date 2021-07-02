@@ -291,5 +291,7 @@ module Ven::Suite
   defquote(QPatternEnvelope, pattern : Quote, desc: "pattern")
   defquote(QReadtimeEnvelope, expression : Quote, desc: "readtime envelope")
 
+  defquote(QHole, value : Quote? = nil, desc: "readtime hole")
+
   defquote(QImmediateBox, box : QBox, desc: "immediate box")
 end

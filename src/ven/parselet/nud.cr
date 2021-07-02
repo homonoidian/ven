@@ -709,6 +709,10 @@ module Ven::Parselet
       # For convenience, do not require a semicolon.
       @semicolon = false
 
+      # If the envelope is immediately closed (`<>`), it's
+      # a hole.
+      return QHole.new(@tag) if @parser.word!(">")
+
       QReadtimeEnvelope.new(@tag, @parser.before(">") {
         # Precedence more than IDENTITY here, as IDENTITY
         # includes the '>' (greater than) operator, which

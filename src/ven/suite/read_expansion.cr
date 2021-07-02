@@ -30,6 +30,7 @@ module Ven::Suite
     end
 
     def initialize(@definitions : Definitions)
+      @holes = [] of QHole
     end
 
     # Makes a `QNumber`.
@@ -76,7 +77,7 @@ module Ven::Suite
     # Returns the resulting quote.
     def eval(env, quote : Quote)
       case quote
-      when QNumber, QString, QRegex, QTrue, QFalse
+      when QNumber, QString, QRegex, QTrue, QFalse, QHole
         # Homoiconic quotes are the bread-and-butter of readtime
         # Ven. They are the values of readtime Ven.
         quote
@@ -189,9 +190,20 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QQueue)
-      # Think of queue values as being **outside** of readtime
-      # envelope, but still inside the readtime context.
-      env.queue << transform(q.value)
+      # You can think of queue values as being **outside**
+      # of readtime envelope, but still inside the readtime
+      # context.
+      #
+      # If there are holes, we shift-fill them with the
+      # value of this queue.
+      #
+      # If there are no holes, we append the value to
+      # the queue.
+      if !@holes.empty?
+        @holes.shift.value = transform(q.value)
+      else
+        env.queue << transform(q.value)
+      end
 
       q.value
     end
@@ -218,11 +230,32 @@ module Ven::Suite
         die("there is no readtime symbol named '$#{q.value}'")
     end
 
+    # Adds the hole to the holes of this ReadExpansion, or,
+    # if it has a value, expands to that value.
+    def transform!(q : QHole)
+      # We have to manually transform() here, as Transformer
+      # does not recognize Quote? as valid transformable
+      # property, and it's quite hard to convince it that
+      # it is.
+      transform(q.value) || @holes << q
+    end
+
     # Expands to the quote produced by the expression of the
     # readtime envelope.
-    def transform!(q : QReadtimeEnvelope)
+    deftransform QReadtimeEnvelope do
       env = Env.new(@definitions)
-      body = eval(env, q.expression)
+
+      begin
+        body = eval(env, quote.expression)
+      rescue e : ReturnException
+        body = e.quote
+      ensure
+        if @holes.size == 1
+          die("there is 1 unfilled queue hole")
+        elsif @holes.size > 1
+          die("there are #{@holes.size} unfilled queue holes")
+        end
+      end
 
       # Implicit return policy is the same as in runtime Ven:
       # queue overrides expression-return quote, expression-
@@ -231,14 +264,12 @@ module Ven::Suite
       # Statement return causes an immediate return via the
       # ReturnException, and so is not handled here.
       if !env.queue.empty?
-        return QGroup.new(q.tag, env.queue)
-      elsif quote = env.return.as?(Quote)
-        return quote
+        return QGroup.new(quote.tag, transform(env.queue))
+      elsif returned = env.return.as?(Quote)
+        return transform(returned)
       end
 
-      body
-    rescue e : ReturnException
-      e.quote
+      transform(body)
     end
   end
 end
