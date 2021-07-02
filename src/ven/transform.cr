@@ -20,8 +20,8 @@ module Ven
 
     @@symno = 0
 
-    # Generates a symbol unique throughout a single instance
-    # of Ven machinery.
+    # Generates a symbol unique throughout an instance of
+    # Ven machinery.
     def gensym
       QRuntimeSymbol.new(QTag.void, "__temp#{@@symno += 1}")
     end
@@ -41,25 +41,27 @@ module Ven
         matchers = Array(PatternMaker).new
 
         # Go over the vector. Collect PatternMakers for items,
-        # and item access expressions.
+        # and expressions to access these items.
         p.items.each_with_index do |item, index|
           matchers << mk_pattern(item)
-          accesses << QAccess.new(item.tag, arg, [QNumber.new(item.tag, index.to_big_d).as(Quote)])
+          accesses << QAccess.new(item.tag, arg,
+            [QNumber.new(item.tag, index.to_big_d).as(Quote)])
         end
 
         clauses = [
           # Make sure `arg is vec`:
-          QBinary.new(p.tag, "is", arg, QRuntimeSymbol.new(p.tag, "vec")),
+          QBinary.new(p.tag, "is", arg,
+            QRuntimeSymbol.new(p.tag, "vec")).as(Quote),
           # Make sure `#arg is #accesses`:
           QBinary.new(p.tag, "is",
             QUnary.new(p.tag, "#", arg),
-            QNumber.new(p.tag, accesses.size.to_big_d)),
+            QNumber.new(p.tag, accesses.size.to_big_d)).as(Quote),
         ]
 
-        # Make patterns for each of the item accesses. Concat
-        # them with the clauses.
-        clauses += matchers.zip(accesses).map do |matcher, access|
-          matcher.call(access)
+        # Invoke each PatternMaker with the corresponding item
+        # access. Append the resulting clause to clauses.
+        matchers.zip(accesses) do |matcher, access|
+          clauses << matcher.call(access)
         end
 
         # Compute the initial memo: take the first two clauses
