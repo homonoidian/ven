@@ -527,30 +527,36 @@ module Ven::Parselet
   # greet! "John Doe!"
   # ```
   class PDefineNud < PFun
-    # A counter for unique names.
+    # A counter for unique symbol names.
     @@fresh = 0
     # The keywords that were defined via 'nud', and therefore
-    # the keywords that we are able to redefine.
+    # the keywords that we should be able to redefine.
     @@subsidiary = Set(String).new
 
     def parse
-      defee, trigger = lead!
+      # Word trigger is either a Regex or a String (and
+      # therefore keyword).
+      word_type, word_trigger = lead!
+
+      # To define a parametric nud (the one that looks like
+      # a function call), you need to provide at least one
+      # parameter.
       params = if? "(", params!, [] of String
-      # The block is executed in a readtime context. Take a
-      # look at the `Parselet#in_readtime_context` macro.
-      expand = in_readtime_context { block }
+
+      # The body ('=' or blocky) is read in a readtime context.
+      # Take a look at `Parselet#in_readtime_context` to learn
+      # more.
+      body = in_readtime_context { if? "=", [led], block }
 
       if params.includes?("$")
-        die("'$' has special meaning in read-time blocks")
+        die("cannot use '$' as the name of a nud parameter")
       elsif params.includes?("_")
-        die("nameless parses are illegal")
+        die("nameless parses illegal")
       end
 
-      # Create the word.
-      mkword defee, trigger
+      defword word_type, word_trigger
 
-      # And define the macro.
-      @parser.context[defee] = PNudMacro.new(params, expand)
+      @parser.context[word_type] = PNudMacro.new(params, body)
 
       # Force semicolon, as there is some bad design pre-
       # reading a word. For correctness, we need at least
@@ -586,7 +592,7 @@ module Ven::Parselet
 
     # Defines a new word. Its type will be *type*, and it will
     # be triggered by *pattern*.
-    private def mkword(type : String, pattern : Regex)
+    private def defword(type : String, pattern : Regex)
       @parser.context[type] = pattern
     end
 
@@ -594,7 +600,7 @@ module Ven::Parselet
     # be triggered by keyword *keyword*.
     #
     # Adds *keyword* to the list of subsidiary keywords.
-    private def mkword(type : String, keyword : String)
+    private def defword(type : String, keyword : String)
       @@subsidiary << type
       @parser.context << keyword
     end
@@ -696,7 +702,7 @@ module Ven::Parselet
   # ```
   class PReadtimeEnvelope < Nud
     def parse
-      unless Ven::Parselet.in_readtime_context
+      unless in_readtime_context?
         die("readtime envelope used outside of readtime evaluation context")
       end
 

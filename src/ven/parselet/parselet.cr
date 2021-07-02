@@ -1,9 +1,8 @@
 module Ven::Parselet
-  # Whether the parsing currently happens in a readtime
-  # context (nud, led, etc.)
-  #
-  # This is considered a global, so use carefully!
-  class_property in_readtime_context = false
+  # If the value > 0, then we're reading in a readtime context
+  # (nud, led, etc.) If it's 0, we're reading outside of a
+  # readtime context.
+  class_property in_readtime_context = 0
 
   abstract class Parselet
     # The QTag of this parselet.
@@ -47,19 +46,23 @@ module Ven::Parselet
       @token[:lexeme]
     end
 
-    # Enables readtime context mode for the time the block
-    # reads. Disables it afterwards. Forwards block's
-    # return value.
+    # Enables readtime context while the block reads. Disables
+    # it afterwards. Forwards block's return value.
     macro in_readtime_context
-      Ven::Parselet.in_readtime_context = true
-
+      Ven::Parselet.in_readtime_context += 1
       begin
         %result = {{yield}}
       ensure
-        Ven::Parselet.in_readtime_context = false
+        Ven::Parselet.in_readtime_context -= 1
       end
-
       %result
+    end
+
+    # Returns whether we're currently reading in a readtime
+    # context. Please use this macro instead of checking
+    # `in_readtime_context` yourself.
+    macro in_readtime_context?
+      Ven::Parselet.in_readtime_context > 0
     end
 
     # Returns the proper symbol quote for *token*, unless it
@@ -70,7 +73,7 @@ module Ven::Parselet
 
       case token[:type]
       when "$SYMBOL"
-        unless Ven::Parselet.in_readtime_context
+        unless in_readtime_context?
           die("readtime symbol (namely '#{token[:lexeme]}') used " \
               "outside of readtime evaluation context")
         end
