@@ -86,6 +86,9 @@ module Ven::Suite
   # :nodoc:
   alias Quotes = Array(Quote)
 
+  # :nodoc:
+  alias MaybeQuote = Quote?
+
   # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
   private macro defquote(quote, *fields, desc = "something", under parent = Quote)
     class {{quote}} < {{parent}}
@@ -168,7 +171,7 @@ module Ven::Suite
   defquote(QRegex, value : String, desc: "regex")
   defquote(QNumber, value : BigDecimal, desc: "number")
 
-  defquote(QVector, items : Quotes, filter : Quote?, desc: "vector")
+  defquote(QVector, items : Quotes, filter : MaybeQuote, desc: "vector")
 
   defquote(QTrue, desc: "bool true")
   defquote(QFalse, desc: "bool false")
@@ -223,7 +226,7 @@ module Ven::Suite
   defquote(QBlock, body : Quotes, desc: "block")
   defquote(QGroup, body : Quotes, desc: "group")
 
-  defquote(QIf, cond : Quote, suc : Quote, alt : Quote?, desc: "if-else")
+  defquote(QIf, cond : Quote, suc : Quote, alt : MaybeQuote, desc: "if-else")
 
   defquote(QFun,
     name : QSymbol,
@@ -291,7 +294,7 @@ module Ven::Suite
   defquote(QPatternEnvelope, pattern : Quote, desc: "pattern")
   defquote(QReadtimeEnvelope, expression : Quote, desc: "readtime envelope")
 
-  defquote(QHole, value : Quote? = nil, desc: "readtime hole")
+  defquote(QHole, value : MaybeQuote = nil, desc: "readtime hole")
 
   defquote(QImmediateBox, box : QBox, desc: "immediate box")
 end
