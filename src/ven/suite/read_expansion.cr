@@ -33,13 +33,6 @@ module Ven::Suite
       @holes = [] of QHole
     end
 
-    # Assigns to a conventional lead quote name. Lead quote
-    # name is used in, say, `num`, `str`, `vec`, to get hold
-    # of the current quote.
-    private macro lead(name)
-      q = {{name}}
-    end
-
     # Makes a `QNumber`.
     #
     # Assumes it's run inside `eval`, with *q* in scope and
@@ -72,7 +65,7 @@ module Ven::Suite
 
     # Implements Ven unary operator semantics.
     def unary(operator : String, operand : Quote)
-      lead operand
+      q = operand
 
       case operator
       when "+"
@@ -114,7 +107,7 @@ module Ven::Suite
 
     # Implements Ven binary operator semantics.
     def binary(operator : String, left : Quote, right : Quote)
-      lead left
+      q = left
 
       # The o_ prefix in o_left, o_right means **operant**,
       # i.e., that on which something (the operator in our
@@ -207,7 +200,7 @@ module Ven::Suite
     # the source code). In this case, it recursively compares
     # the fields of the two quotes.
     def is?(left : Quote, right : Quote)
-      lead left
+      q = left
 
       # If the classes aren't equal, the content doesn't even
       # matter. Return false right away.
