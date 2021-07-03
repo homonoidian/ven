@@ -127,4 +127,46 @@ ensure "Sanity of binary operators" {
     10 x "a" is "aaaaaaaaaa";
     10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
     0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+  should "check for types/type inheritance correctly"
+    1 is num;
+    1 is not str;
+    "hello" is str;
+    [2, 4, 6] is vec;
+    from 10 is range;
+    to 10 is range;
+    1 to 10 is range;
+    typeof is builtin;
+    typeof is function;
+    num is type;
+    str is type;
+    vec is type;
+    type is type;
+    function is type;
+    type is not function;
+    builtin is function;
+    concrete is function;
+    lambda is function;
+    function is not builtin;
+    function is not lambda;
+    compound is type;
+    type is not compound;
+    vec(num) is compound;
+    vec(num) is vec(num);
+    vec(num, 1, 2) is vec(num, 1, 2)
+
+  should "assign correct types to everything in typeof()"
+    typeof(1) is num;
+    typeof("hello") is str;
+    typeof([2, 4, 6]) is vec;
+    typeof(from 10) is range;
+    typeof(to 10) is range;
+    typeof(1 to 10) is range;
+    typeof(typeof) is builtin;
+    typeof(typeof) is function; # builtin is function
+    typeof(type) is type;
+    typeof(num) is type;
+    typeof(vec(num)) is type; # compound is type
+    typeof(vec(num)) is compound;
+    typeof(vec(num, type)) is compound
 }

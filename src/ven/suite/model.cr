@@ -12,6 +12,9 @@ module Ven::Suite
   # `MClass` or `MStruct`, which `Model` is a union of.
   alias Model = MClass | MStruct
 
+  # ModelClass is, in essence, `Model.class`.
+  alias ModelClass = MClass.class | MStruct.class
+
   # :nodoc:
   alias Models = Array(Model)
 
@@ -35,6 +38,52 @@ module Ven::Suite
 
   # :nodoc:
   macro model_template?
+    # Yields with Union TypeDeclaration *joint* cast to its
+    # subtypes. E.g., when *joint* is of `foo : Model`, the
+    # block will have *foo* cast to `MClass`, and then to
+    # `MStruct`, available in its scope.
+    #
+    # if *joint* is `@foo : Model`, a block argument that will
+    # specify the alternative name for `@foo` is required, as
+    # instance variables are not redefinable.
+    macro disunion(joint, &block)
+      {% verbatim do %}
+        {% if !joint.is_a?(TypeDeclaration) %}
+          {% raise "disunion: joint must be TypeDeclaration" %}
+        {% end %}
+
+        {% joint_name = joint.var %}
+        {% joint_type = joint.type.resolve %}
+        {% joint_types = joint_type.union_types %}
+
+        {% if !joint_type.union? || joint_types.size < 2 %}
+          {% raise "disunion: joint must be a Union" %}
+        {% end %}
+
+        if {{joint_name}}.is_a?({{joint_types[0]}})
+          {% if joint_name.is_a?(InstanceVar) %}
+            {{*block.args}} = {{joint_name}}.as({{joint_types[0]}})
+          {% else %}
+            {{joint_name}} = {{joint_name}}.as({{joint_types[0]}})
+          {% end %}
+
+          {{yield}}
+        {% for type in joint_types[1..-1] %}
+          elsif {{joint_name}}.is_a?({{type}})
+            {% if joint_name.is_a?(InstanceVar) %}
+              {{*block.args}} = {{joint_name}}.as({{type}})
+            {% else %}
+              {{joint_name}} = {{joint_name}}.as({{type}})
+            {% end %}
+
+            {{yield}}
+        {% end %}
+        else
+          false
+        end
+    {% end %}
+    end
+
     # Converts (casts) this model into a `Num`.
     def to_num : Num
       raise ModelCastException.new("could not convert to num: #{self}")
@@ -78,16 +127,22 @@ module Ven::Suite
       false
     end
 
-    # Returns whether this model is of the type *other*.
+    # Returns whether this model is of the `MType` *other*,
+    # or of any of *other*'s subtypes.
     #
     # ```ven
     # ensure 1 is num;
     # ensure "hello" is str;
+    # ensure typeof is builtin; # direct type
+    # ensure typeof is function; # subtype: builtin is function
     # ```
     def is?(other : MType) : Bool
-      other.type.is_a?(MClass.class) \
-        ? self.class <= other.type.as(MClass.class)
-        : self.class <= other.type.as(MStruct.class)
+      o_model = other.model
+      # Deconstruct ModelClass to ModelClass members, and
+      # check with `<=`.
+      disunion(o_model : ModelClass) do
+        self.class <= o_model
+      end
     end
 
     # Returns whether this model is of the compound type *other*.
@@ -623,21 +678,33 @@ module Ven::Suite
 
   # Ven's type for representing other data types + itself.
   class MType < MClass
+    # An array that contains all instances of this class. Used
+    # to provide `typeof` dynamically.
+    @@instances = [] of MType
+
     # Returns the name of this type.
     getter name : String
-    # Returns the class of the `Model` this type represents;
-    # e.g., `MVector`, `MString`.
-    getter type : MStruct.class | MClass.class
+    # The `Model` this type represents, e.g., `Vec`, `Str`.
+    getter model : MStruct.class | MClass.class
 
     delegate :==, to: @name
 
-    def initialize(@name, @type)
+    def initialize(@name, for @model)
+      @@instances << self
     end
 
-    # Returns whether this type represents the same model as
-    # the other type.
+    # Checks whether *other* type stands for the same model
+    # as this type, or for a subclass model.
     def is?(other : MType)
-      @type == other.type
+      o_name = other.name
+      o_model = other.model
+
+      @name == o_name || o_model == MType ||
+        # Deconstruct ModelClass to ModelClass members, and
+        # check with `<=`.
+        disunion(o_model : ModelClass) do
+          @model <= o_model
+        end
     end
 
     def weight
@@ -646,6 +713,22 @@ module Ven::Suite
 
     def to_s(io)
       io << "type " << @name
+    end
+
+    # Returns whether this type instance's model is an instance
+    # of *other*, or is a child of *other*'s subclasses.
+    def is_for?(other : ModelClass)
+      disunion(other : ModelClass) do
+        disunion(@model : ModelClass) do |model|
+          other <= model
+        end
+      end
+    end
+
+    # Returns the `MType` instance for *model* if there is one,
+    # otherwise nil.
+    def self.[](for model : MStruct.class | MClass.class)
+      @@instances.find &.is_for?(model)
     end
   end
 
@@ -659,7 +742,21 @@ module Ven::Suite
   # ensure 1 x 1000 is vec(1);
   # ```
   class MCompoundType < MClass
-    def initialize(@type : Model, @contents : Models)
+    getter type : Model
+    getter contents : Models
+
+    def initialize(@type, @contents)
+    end
+
+    def is?(other : MType)
+      other.model == MCompoundType
+    end
+
+    def is?(other : MCompoundType)
+      return false unless @type.is?(other.type)
+      return false unless @contents.size == other.contents.size
+
+      @contents.zip(other.contents).all? { |my, its| my.is?(its) }
     end
 
     # Checks whether *other* is of the head type, and its

@@ -8,6 +8,8 @@ module Ven::Library
       defglobal("num", MType.new "num", Num)
       defglobal("str", MType.new "str", Str)
       defglobal("vec", MType.new "vec", Vec)
+      defglobal("type", MType.new "type", MType)
+      defglobal("compound", MType.new "compound", MCompoundType)
       defglobal("bool", MType.new "bool", MBool)
       defglobal("regex", MType.new "regex", MRegex)
       defglobal("range", MType.new "range", MRange)
@@ -29,6 +31,11 @@ module Ven::Library
           machine.die("#{reference} has no set-referent policy for #{referent}")
         end
         value
+      end
+
+      # Returns the type of *model*.
+      defbuiltin "typeof", model : Model do
+        MType[model.class] || machine.die("cannot determine the type of #{model}")
       end
     end
   end
