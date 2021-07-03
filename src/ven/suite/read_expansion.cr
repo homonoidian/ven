@@ -33,12 +33,19 @@ module Ven::Suite
       @holes = [] of QHole
     end
 
+    # Assigns to a conventional lead quote name. Lead quote
+    # name is used in, say, `num`, `str`, `vec`, to get hold
+    # of the current quote.
+    private macro lead(name)
+      q = {{name}}
+    end
+
     # Makes a `QNumber`.
     #
     # Assumes it's run inside `eval`, with *q* in scope and
     # of type `Quote`. Will crash otherwise.
     private macro num(from value)
-      QNumber.new(q.tag, {{value}}.to_big_d)
+      QNumber.new(q.tag, ({{value}}).to_big_d)
     end
 
     # Makes a `QString`.
@@ -46,7 +53,7 @@ module Ven::Suite
     # Assumes it's run inside `eval`, with *q* in scope and
     # of type `Quote`. Will crash otherwise.
     private macro str(from value)
-      QString.new(q.tag, {{value}}.to_s)
+      QString.new(q.tag, ({{value}}).to_s)
     end
 
     # Makes a `QVector`.
@@ -55,6 +62,186 @@ module Ven::Suite
     # of type `Quote`. Will crash otherwise.
     private macro vec(items)
       QVector.new(q.tag, {{items}}, nil)
+    end
+
+    # Makes QTrue or QFalse, depending on whether *value* is
+    # true (actually, anything but false) or false.
+    private macro bool(value)
+      ({{value}}) == false ? QFalse.new(q.tag) : QTrue.new(q.tag)
+    end
+
+    # Implements Ven unary operator semantics.
+    def unary(operator : String, operand : Quote)
+      lead operand
+
+      case operator
+      when "+"
+        case operand
+        when QNumber then operand
+        when QString then num operand.value
+        when QVector then num operand.items.size
+        when QTrue   then num 1
+        when QFalse  then num 0
+        end
+      when "-"
+        case operand
+        when QVector then num -operand.items.size
+        when QString then num "-#{operand.value}"
+        when QNumber then num -operand.value
+        when QTrue   then num -1
+        when QFalse  then num 0
+        end
+      when "~"
+        case operand
+        when QString then operand
+        when QNumber then str operand.value
+        else
+          str Detree.detree(operand)
+        end
+      when "#"
+        case operand
+        when QString then num operand.value.size
+        when QVector then num operand.items.size
+        else
+          num Detree.detree(operand).size
+        end
+      when "&"
+        operand.as?(QVector) || vec [operand]
+      when "not"
+        bool operand.is_a?(QFalse)
+      end
+    end
+
+    # Implements Ven binary operator semantics.
+    def binary(operator : String, left : Quote, right : Quote)
+      lead left
+
+      # The o_ prefix in o_left, o_right means **operant**,
+      # i.e., that on which something (the operator in our
+      # case) operates.
+
+      if operator.in?("<", ">", "<=", ">=")
+        if left.is_a?(QString) && right.is_a?(QString)
+          o_left = left.value.size
+          o_right = right.value.size
+        else
+          o_left = unary("+", left).as(QNumber).value
+          o_right = unary("+", right).as(QNumber).value
+        end
+
+        case operator
+        when "<"
+          return bool o_left < o_right
+        when ">"
+          return bool o_left > o_right
+        when "<="
+          return bool o_left <= o_right
+        when ">="
+          return bool o_left >= o_right
+        end
+      elsif operator.in?("+", "-", "*", "/")
+        o_left = unary("+", left).as(QNumber).value
+        o_right = unary("+", right).as(QNumber).value
+
+        case operator
+        when "+"
+          return num o_left + o_right
+        when "-"
+          return num o_left - o_right
+        when "*"
+          return num o_left * o_right
+        when "/"
+          return num o_left / o_right
+        end
+      elsif operator == "&"
+        o_left = unary("&", left).as(QVector).items
+        o_right = unary("&", right).as(QVector).items
+
+        return vec o_left + o_right
+      elsif operator == "~"
+        o_left = unary("~", left).as(QString).value
+        o_right = unary("~", right).as(QString).value
+
+        return str o_left + o_right
+      elsif operator == "x"
+        # Normalize the sides, similar to `Machine#normalize?`.
+        o_left, o_right =
+          case {left, right}
+          when {_, QVector}, {_, QString}
+            # `n x "hello"`   ==> `"hello" x +n`
+            # `n x [2, 3, 4]` ==> `[2, 3, 4] x +n`
+            {right, unary("+", left).as(QNumber)}
+          when {QString, _}, {QVector, _}
+            # `"hello" x n` ==> `"hello" x +n`
+            # `[2, 3, 4] x n` ==> `[2, 3, 4] x +n`
+            {left, unary("+", right).as(QNumber)}
+          else
+            # `foo x n` ==> `&foo x +n`
+            {unary("&", left).as(QVector),
+             unary("+", right).as(QNumber)}
+          end
+
+        amount = o_right.value.to_big_i
+
+        # Save from overflow. Although Int32::MAX is a big number
+        # and it's dangerous to make such a long vector, it's still
+        # safer than a limitless BigDecimal.
+        if amount > Int32::MAX
+          die("'x': amount overflew")
+        end
+
+        if o_left.is_a?(QVector)
+          return vec o_left.items * amount
+        elsif o_left.is_a?(QString)
+          return str o_left.value * amount
+        end
+      end
+    end
+
+    # Implements runtime Ven 'is' semantics, and readtime
+    # Ven 'is' semantics.
+    #
+    # Readtime Ven semantics kicks in when *left*, or *right*,
+    # or both of them are quotes other than `QNumber`, `QString`,
+    # `QVector`, `QTrue`/`QFalse`, and a few others (refer to
+    # the source code). In this case, it recursively compares
+    # the fields of the two quotes.
+    def is?(left : Quote, right : Quote)
+      lead left
+
+      # If the classes aren't equal, the content doesn't even
+      # matter. Return false right away.
+      return bool false unless left.class == right.class
+
+      case left
+      when QNumber
+        return bool false unless left.value == right.as(QNumber).value
+      when QString
+        return bool false unless left.value == right.as(QString).value
+      when QVector
+        lefts = left.items
+        rights = right.as(QVector).items
+
+        # If sizes of the two vectors are not equal, the
+        # vectors themselves are not equal.
+        return bool false if lefts.size != rights.size
+
+        # Compare the items with each other, and, if one is
+        # not equal to the other, the vectors themselves are
+        # not equal.
+        lefts.each_with_index do |item, index|
+          return bool false if is?(item, rights[index]).is_a?(QFalse)
+        end
+      when QTrue, QFalse
+        # Cannot return *left*, because, say, `false is false`
+        # will return `false`, and that's just wrong.
+        return bool true
+      else
+        # We're taking the short path here,
+        return bool false unless left.to_json == right.to_json
+      end
+
+      left
     end
 
     # Calls `eval(env, quote)` for every quote of *quotes*.
@@ -83,7 +270,8 @@ module Ven::Suite
         quote
       else
         # We use ReadError here, as 'die' can't take custom tag.
-        raise ReadError.new(quote.tag, "#{quote.class} not supported in readtime envelope")
+        raise ReadError.new(quote.tag,
+          "#{quote.class} not supported in readtime envelope")
       end
     end
 
@@ -107,56 +295,54 @@ module Ven::Suite
     def eval(env, q : QUnary)
       operand = eval(env, q.operand)
 
-      case q.operator
-      when "+"
-        case operand
-        when QNumber
-          return operand
-        when QString
-          return num operand.value
-        when QVector
-          return num operand.items.size
-        end
-      when "-"
-        case operand
-        when QVector
-          return num -operand.items.size
-        when QNumber, QString
-          return num -operand.value
-        end
-      when "~"
-        case operand
-        when QString
-          return operand
-        when QNumber
-          return str operand.value
-        else
-          return str Detree.detree(operand)
-        end
-      when "#"
-        case operand
-        when QString
-          return num operand.value.size
-        when QVector
-          return num operand.items.size
-        else
-          return num Detree.detree(operand).size
-        end
-      when "&"
-        case operand
-        when QVector
-          return operand
-        else
-          return vec [operand]
-        end
-      when "not"
-        case operand
-        when QFalse
-          return QTrue.new(q.tag)
-        end
+      unary(q.operator, operand) ||
+        die("'#{q.operator}' does not support #{operand.class}")
+    end
+
+    # :ditto:
+    def eval(env, q : QBinary)
+      # If it's an 'is', we should first check if `eval` supports
+      # the sides. If it does, we continue & eventually `eval` them.
+      # If it doesn't, we pass them to 'is' raw.
+      if q.operator == "is"
+        is_left = nil
+        is_right = nil
+
+        {% for eval in ReadExpansion.methods.select(&.name.== :eval) %}
+          # Type of the current eval's *q* argument.
+          {% q_type = eval.args[1].restriction.resolve %}
+          # Ignore the general 'eval's, or they will override
+          # everything else.
+          {% unless q_type == Quote || q_type == Quotes %}
+            if q.left.is_a?({{q_type}})
+              is_left = eval(env, q.left)
+            end
+            if q.right.is_a?({{q_type}})
+              is_right = eval(env, q.right)
+            end
+          {% end %}
+        {% end %}
+
+        return is?(is_left || q.left, is_right || q.right)
       end
 
-      die("'#{q.operator}' does not support #{operand.class}")
+      left = eval(env, q.left)
+
+      # Short-circuiting for 'and' and 'or'. Although they
+      # have very similar implementations, I still cannot
+      # merge them into one.
+      if q.operator == "and"
+        return left if left.is_a?(QFalse)
+        return eval(env, q.right)
+      elsif q.operator == "or"
+        return left unless left.is_a?(QFalse)
+        return eval(env, q.right)
+      end
+
+      right = eval(env, q.right)
+
+      binary(q.operator, left, right) ||
+        die("'#{q.operator}' does not support #{left.class}, #{right.class}")
     end
 
     # :ditto:
@@ -174,8 +360,14 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QEnsure)
-      operand = eval(env, q.expression)
-      operand.is_a?(QFalse) ? die("ensure: got false") : operand
+      if (expression = eval(env, q.expression)).is_a?(QFalse)
+        # We err using ReadError here, as 'die' can't take
+        # custom tag, and we need to point to the cause as
+        # precisely as possible.
+        raise ReadError.new(q.tag, "ensure: got false")
+      else
+        expression
+      end
     end
 
     # :ditto:

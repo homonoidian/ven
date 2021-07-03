@@ -16,15 +16,90 @@ nud pad(symbol) {
 
     # Make sure we can access symbols.
     # value check todo
-    ensure symbol;
+    ensure symbol is 12;
 
-    # unaries todo
+    # Make sure unaries evaluate [same way as in runtime]:
+    ensure +1 is 1;
+    ensure -1 is -1;
+    ensure ~"hello" is "hello";
+    ensure &[1] is [1];
+    ensure #[1, 2, 3] is 3;
+    ensure #"hello" is 5;
+
+    ensure +"1" is 1;
+    ensure +[2, 4, 6] is 3;
+    ensure +true is 1;
+    ensure +false is 0;
+
+    ensure -"1" is -1;
+    ensure -[2, 4, 6] is -3;
+    ensure -true is -1;
+    ensure -false is 0;
+
+    ensure ~123 is "123";
+    ensure ~[1, 2, 3] is "[1, 2, 3]";
+    ensure ~true is "true";
+    ensure ~false is "false";
+
+    ensure &1 is [1];
+    ensure &"1" is ["1"];
+    ensure &true is [true];
+    ensure &false is [false];
+
+    ensure #123 is 3;
+    ensure #true is 4;
+    ensure #false is 5;
+
+    # Make sure normal binaries evaluate [same way as in runtime]:
+    ensure 1 < 2;
+    ensure 2 > 1;
+    ensure 2 <= 2;
+    ensure 5 >= 4;
+
+    ensure 1 + 1 is 2;
+    ensure 2 - 2 is 0;
+    ensure 2 * 2 is 4;
+    ensure 2 / 2 is 1;
+
+    ensure [1] & [2] is [1, 2];
+    ensure "lead" ~ "tail" is "leadtail";
+
+    ensure "a" x 10 is "aaaaaaaaaa";
+    ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    ensure [1, 2, 3] x 3 is [1, 2, 3, 1, 2, 3, 1, 2, 3];
+
+    # Make sure unexpected binaries evaluate [same way as in runtime]:
+    ensure [1] < "12";
+    ensure "123" > [1, 2];
+    ensure [1, 2] <= [1, 2, 3];
+    ensure "123" >= 3;
+    ensure "1" < "2" is false;
+    ensure "foo" > "barbaz" is false;
+    ensure "1" < "hello";
+    ensure "barbaz" > "foo";
+
+    ensure "1" + 1 is 2;
+    ensure 2 - "2" is 0;
+    ensure "2" * ["two", "items"] is 4;
+    ensure "2" / true is 2;
+
+    ensure 1 & 2 is [1, 2];
+    ensure [1] & 2 is [1, 2];
+    ensure 1 & [2] is [1, 2];
+
+    ensure 1 ~ 2 is "12";
+    ensure "1" ~ 2 is "12";
+    ensure 1 ~ "2" is "12";
+
+    ensure 10 x "a" is "aaaaaaaaaa";
+    ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
     # Make sure we can assign to symbols.
     a = 2;
     b = 3;
-    ensure a;
-    ensure b;
+    ensure a is 2;
+    ensure b is 3;
   }>
 
   say("All tests passed!");
