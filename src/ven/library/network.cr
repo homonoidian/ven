@@ -48,14 +48,14 @@ module Ven
           {funlet = machine.funlet(callback), create_server(funlet)}
         end
 
-        defbuiltin "listen", handle : MNative(Server), port : Num do
+        # Makes *handle* listen on *uri*.
+        defbuiltin "listen", handle : MNative(Server), uri : Str do
           funlet, server = handle.value
-          # Automatically recreate the server if this is not
-          # the first `listen` for *server*.
+          # Re-create the server if this is not the first
+          # `listen` for it.
           server = create_server(funlet) if server.closed?
-          server.bind_tcp(port.to_i)
-          # For the SIGINT trap to work, we have to enable fast
-          # interrupts.
+          server.bind(uri.value)
+          # Have a graceful SIGINT.
           Signal::INT.trap do
             server.close
           end
