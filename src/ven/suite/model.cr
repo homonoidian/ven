@@ -39,11 +39,11 @@ module Ven::Suite
   # :nodoc:
   macro model_template?
     # Yields with Union TypeDeclaration *joint* cast to its
-    # subtypes. E.g., when *joint* is of `foo : Model`, the
-    # block will have *foo* cast to `MClass`, and then to
-    # `MStruct`, available in its scope.
+    # subtypes. E.g., when *joint* is `foo : Model`, the block
+    # will have *foo* cast to `MClass`, and then, separately,
+    # to `MStruct`, available in its scope.
     #
-    # if *joint* is `@foo : Model`, a block argument that will
+    # When *joint* is `@foo : Model`, a block argument that will
     # specify the alternative name for `@foo` is required, as
     # instance variables are not redefinable.
     macro disunion(joint, &block)
@@ -133,13 +133,13 @@ module Ven::Suite
     # ```ven
     # ensure 1 is num;
     # ensure "hello" is str;
-    # ensure typeof is builtin; # direct type
-    # ensure typeof is function; # subtype: builtin is function
+    # ensure typeof is builtin; # directly of this type
+    # ensure typeof is function; # of subtype: builtin is function
     # ```
     def is?(other : MType) : Bool
       o_model = other.model
       # Deconstruct ModelClass to ModelClass members, and
-      # check with `<=`.
+      # check them with `<=`.
       disunion(o_model : ModelClass) do
         self.class <= o_model
       end
@@ -680,12 +680,12 @@ module Ven::Suite
   class MType < MClass
     # An array that contains all instances of this class. Used
     # to provide `typeof` dynamically.
-    @@instances = [] of MType
+    @@instances = [] of self
 
     # Returns the name of this type.
     getter name : String
     # The `Model` this type represents, e.g., `Vec`, `Str`.
-    getter model : MStruct.class | MClass.class
+    getter model : ModelClass
 
     delegate :==, to: @name
 
