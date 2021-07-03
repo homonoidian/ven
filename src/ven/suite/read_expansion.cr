@@ -5,8 +5,8 @@ module Ven::Suite
     private alias Definitions = Hash(String, Quote)
 
     # The exception that, if raised inside an envelope, will
-    # cause immediate return with the given *quote*. This means
-    # that the envelope will only expand into *quote*.
+    # cause an immediate return with the given *quote*. This
+    # means that the envelope will only expand into *quote*.
     private class ReturnException < Exception
       getter quote : Quote
 
@@ -57,7 +57,7 @@ module Ven::Suite
       QVector.new(q.tag, {{items}}, nil)
     end
 
-    # Calls `eval(env, quotes)` for every quote of *quotes*.
+    # Calls `eval(env, quote)` for every quote of *quotes*.
     def eval(env, quotes : Quotes)
       quotes.map do |quote|
         eval(env, quote)
@@ -156,7 +156,7 @@ module Ven::Suite
         end
       end
 
-      die("operation not supported: '#{q.operator}', #{operand.class}")
+      die("'#{q.operator}' does not support #{operand.class}")
     end
 
     # :ditto:
@@ -210,8 +210,8 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QReturnExpression)
-      # QReturnExpression, as with runtime Ven, just sets
-      # the return value without interrupting control flow.
+      # QReturnExpression, as in runtime Ven, just sets the
+      # return value without interrupting control flow.
       env.return = transform(q.value)
 
       q.value
@@ -219,7 +219,7 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QReturnStatement)
-      # QReturnStatement, as with runtime Ven, interrupts control
+      # QReturnStatement, as in runtime Ven, interrupts control
       # flow and returns out of this envelope immediately.
       raise ReturnException.new(transform(q.value))
     end
@@ -237,8 +237,8 @@ module Ven::Suite
     def transform!(q : QHole)
       # We have to manually transform() here, as Transformer
       # does not recognize Quote? as valid transformable
-      # property, and it's quite hard to convince it that
-      # it is.
+      # property type, and it's quite hard to convince it
+      # that it is.
       transform(q.value) || @holes << q
     end
 
@@ -250,6 +250,7 @@ module Ven::Suite
       begin
         body = eval(env, quote.expression)
       rescue e : ReturnException
+        # Statement return causes an immediate return.
         return transform(e.quote)
       ensure
         if @holes.size == 1
@@ -262,9 +263,6 @@ module Ven::Suite
       # Implicit return policy is the same as in runtime Ven:
       # queue overrides expression-return quote, expression-
       # return quote overrides implicit last quote return.
-      #
-      # Statement return causes an immediate return via the
-      # ReturnException, and so is not handled here.
       if !env.queue.empty?
         return QGroup.new(quote.tag, transform(env.queue))
       elsif returned = env.return.as?(Quote)
