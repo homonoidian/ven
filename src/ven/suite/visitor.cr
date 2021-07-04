@@ -90,6 +90,12 @@ module Ven::Suite
                 quote.{{instance_var}} =
                   cast(transform(quote.{{instance_var}}),
                        to: {{instance_var.type}})
+              {% elsif instance_var.type == MaybeQuote %}
+                unless quote.{{instance_var}}.nil?
+                  quote.{{instance_var}} =
+                    cast(transform(quote.{{instance_var}}),
+                       to: {{instance_var.type}})
+                end
               {% end %}
             {% end %}
         {% end %}

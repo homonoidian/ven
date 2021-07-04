@@ -466,11 +466,7 @@ module Ven::Suite
     # Alternatively, if the hole has a value, expands to
     # that value.
     def transform!(q : QHole)
-      # We have to manually transform() here, as Transformer
-      # does not recognize Quote? as valid transformable
-      # property type, and it's quite hard to convince it
-      # that it is.
-      transform(q.value) || @holes << q
+      q.value || @holes << q
     end
 
     # Expands to the quote produced by the expression of the
