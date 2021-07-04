@@ -122,13 +122,11 @@ module Ven::Suite
       # The o_ prefix in o_left, o_right means **operant**,
       # i.e., that on which something (the operator in our
       # case) operates.
-      if operator == "and"
-        return bool !left.is_a?(QFalse) && !right.is_a?(QFalse)
-      elsif operator == "or"
-        return bool !left.is_a?(QFalse) || !right.is_a?(QFalse)
-      elsif operator == "is"
-        return is?(left, right)
-      elsif operator == "in"
+      case operator
+      when "and" then return bool !left.is_a?(QFalse) && !right.is_a?(QFalse)
+      when "or"  then return bool !left.is_a?(QFalse) || !right.is_a?(QFalse)
+      when "is"  then return is?(left, right)
+      when "in"
         if left.is_a?(QString) && right.is_a?(QString)
           # If both sides are strings, do a substring search.
           return right.value.includes?(left.value) ? left : bool false
@@ -142,7 +140,7 @@ module Ven::Suite
         end
 
         return bool false
-      elsif operator.in?("<", ">", "<=", ">=")
+      when "<", ">", "<=", ">="
         if left.is_a?(QString) && right.is_a?(QString)
           o_left = left.value.size
           o_right = right.value.size
@@ -152,40 +150,30 @@ module Ven::Suite
         end
 
         case operator
-        when "<"
-          return bool o_left < o_right
-        when ">"
-          return bool o_left > o_right
-        when "<="
-          return bool o_left <= o_right
-        when ">="
-          return bool o_left >= o_right
+        when "<"  then return bool o_left < o_right
+        when ">"  then return bool o_left > o_right
+        when "<=" then return bool o_left <= o_right
+        when ">=" then return bool o_left >= o_right
         end
-      elsif operator.in?("+", "-", "*", "/")
+      when "+", "-", "*", "/"
         o_left = unary("+", left).as(QNumber).value
         o_right = unary("+", right).as(QNumber).value
 
         case operator
-        when "+"
-          return num o_left + o_right
-        when "-"
-          return num o_left - o_right
-        when "*"
-          return num o_left * o_right
-        when "/"
-          return num o_left / o_right
+        when "+" then return num o_left + o_right
+        when "-" then return num o_left - o_right
+        when "*" then return num o_left * o_right
+        when "/" then return num o_left / o_right
         end
-      elsif operator == "&"
+      when "&"
         o_left = unary("&", left).as(QVector).items
         o_right = unary("&", right).as(QVector).items
-
         return vec o_left + o_right
-      elsif operator == "~"
+      when "~"
         o_left = unary("~", left).as(QString).value
         o_right = unary("~", right).as(QString).value
-
         return str o_left + o_right
-      elsif operator == "x"
+      when "x"
         # Normalize the sides, similar to `Machine#normalize?`.
         o_left, o_right =
           case {left, right}
