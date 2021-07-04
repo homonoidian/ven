@@ -554,6 +554,14 @@ module Ven::Parselet
         die("nameless parses illegal")
       end
 
+      if word_trigger.is_a?(Regex)
+        # If there's an identical Regex trigger in the reader
+        # context, redefine our *word_type* to be that trigger.
+        if identical_trigger_type = @parser.context.trigger?(word_trigger)
+          word_type = identical_trigger_type
+        end
+      end
+
       defword word_type, word_trigger
 
       @parser.context[word_type] = PNudMacro.new(params, body)
@@ -581,8 +589,10 @@ module Ven::Parselet
       when "SYMBOL", .in?(@@subsidiary)
         {@parser.word[:lexeme].upcase, @parser.word![:lexeme]}
       else
-        die("'nud': invalid lead: expected regex or symbol")
+        die("'nud': bad lead: expected regex or symbol")
       end
+    rescue e : ArgumentError
+      die("'nud': bad lead regex: #{e.message}")
     end
 
     # Generates a fresh lead name.
@@ -619,8 +629,18 @@ module Ven::Parselet
     end
 
     def parse
+      definitions = {} of String => Quote
+
+      # Trigger words export named captures. Import them into
+      # the *definitions*.
+      if exports = @token[:exports]
+        exports.each do |capture, match|
+          definitions[capture] = match ? QString.new(@tag, match) : QFalse.new(@tag)
+        end
+      end
+
       # Clone: we do not want to modify the original body.
-      ReadExpansion.new(rest!).transform(@body.clone)
+      ReadExpansion.new(definitions.merge(rest!)).transform(@body.clone)
     end
 
     # Reads the rest of this nud macro by interpreting its

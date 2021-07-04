@@ -44,6 +44,12 @@ module Ven::Suite
       lexeme.in?(@keywords)
     end
 
+    # Returns the word type of *trigger* in this reader context,
+    # or, if not found, nil.
+    def trigger?(trigger : Regex)
+      @triggers.key_for?(trigger)
+    end
+
     # Defines a reader macro that will be triggered by *trigger*,
     # a word type (does not check whether it's valid).
     def []=(trigger : String, nud : Parselet::PNudMacro)

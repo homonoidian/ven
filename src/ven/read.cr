@@ -1,7 +1,7 @@
 module Ven
   # In terms of Ven, a word is a tagged lexeme. A lexeme is a
   # verbatim citation of the source code.
-  alias Word = {type: String, lexeme: String, line: Int32}
+  alias Word = {type: String, lexeme: String, line: Int32, exports: Hash(String, String?)?}
 
   # The type that represents a Ven distinct.
   alias Distinct = Array(String)
@@ -86,7 +86,12 @@ module Ven
       should from immediate true false)
 
     # Returns the current word.
-    getter word = {type: "START", lexeme: "<start>", line: 1}
+    getter word = {
+      type:    "START",
+      lexeme:  "<start>",
+      line:    1,
+      exports: nil.as(Hash(String, String?)?),
+    }
     # Returns this reader's context.
     getter context : CxReader
 
@@ -138,8 +143,14 @@ module Ven
     end
 
     # Makes a `Word` from the given *type* and *lexeme*.
-    private macro word(type, lexeme)
-      { type: {{type}}, lexeme: {{lexeme}}, line: @lineno }
+    #
+    # *match* is the optional `MatchData` of the word. It is
+    # provided only by the custom words (triggers).
+    private macro word(type, lexeme, match = nil.as(Hash(String, String?)?))
+      { type: {{type}},
+        lexeme: {{lexeme}},
+        line: @lineno,
+        exports: {{match}} }
     end
 
     # Returns whether *lexeme* is a keyword.
@@ -201,7 +212,7 @@ module Ven
           when match(RX_IGNORE)
             next @lineno += $0.count("\n")
           when pair = @context.triggers.find { |_, lead| match(lead) }
-            word(pair[0], $0)
+            word(pair[0], $0, $~.named_captures)
           when match(RX_SYMBOL)
             if keyword?($0)
               word($0.upcase, $0)
