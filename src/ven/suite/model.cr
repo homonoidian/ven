@@ -28,10 +28,11 @@ module Ven::Suite
   # Used in, say, generics to determine the order in which
   # the subordinate concretes should be sorted.
   enum MWeight
-    ANON_ANY   = 1
+    ANON_ANY      = 1
     ANY
     ANON_TYPE
-    TYPE
+    ABSTRACT_TYPE
+    CONCRETE_TYPE
     ANON_VALUE
     VALUE
   end
@@ -259,6 +260,12 @@ module Ven::Suite
     end
 
     macro inherited
+      # Returns whether this model class is concrete (i.e.,
+      # is not an abstract class/struct).
+      def self.concrete?
+        \{{!@type.abstract?}}
+      end
+
       \{% if !@type.abstract? %}
         def_clone
       \{% end %}
@@ -708,7 +715,11 @@ module Ven::Suite
     end
 
     def weight
-      MWeight::TYPE
+      if @model.concrete?
+        MWeight::CONCRETE_TYPE
+      else
+        MWeight::ABSTRACT_TYPE
+      end
     end
 
     def to_s(io)
@@ -784,6 +795,10 @@ module Ven::Suite
       end
 
       false
+    end
+
+    def weight
+      @type.weight + @contents.sum(&.weight.value)
     end
 
     def to_s(io)
