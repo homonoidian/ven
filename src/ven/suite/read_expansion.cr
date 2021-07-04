@@ -27,6 +27,16 @@ module Ven::Suite
 
       def initialize(@definitions)
       end
+
+      # Returns a new `Env`, with its definitions obtained by
+      # `Hash#merge`-ing this Env's definitions with *defs*,
+      # and all other properties kept as in this Env.
+      def merge(defs : Definitions)
+        env = Env.new(defs)
+        env.queue = @queue
+        env.return = @return
+        env
+      end
     end
 
     def initialize(@definitions : Definitions)
@@ -112,8 +122,27 @@ module Ven::Suite
       # The o_ prefix in o_left, o_right means **operant**,
       # i.e., that on which something (the operator in our
       # case) operates.
+      if operator == "and"
+        return bool !left.is_a?(QFalse) && !right.is_a?(QFalse)
+      elsif operator == "or"
+        return bool !left.is_a?(QFalse) || !right.is_a?(QFalse)
+      elsif operator == "is"
+        return is?(left, right)
+      elsif operator == "in"
+        if left.is_a?(QString) && right.is_a?(QString)
+          # If both sides are strings, do a substring search.
+          return right.value.includes?(left.value) ? left : bool false
+        elsif right.is_a?(QVector)
+          # If the right side is a vector, go through its items,
+          # trying to find *left* (whatever it is). Return the
+          # **found** value.
+          right.items.each do |item|
+            return item unless is?(item, left).is_a?(QFalse)
+          end
+        end
 
-      if operator.in?("<", ">", "<=", ">=")
+        return bool false
+      elsif operator.in?("<", ">", "<=", ">=")
         if left.is_a?(QString) && right.is_a?(QString)
           o_left = left.value.size
           o_right = right.value.size
@@ -294,31 +323,6 @@ module Ven::Suite
 
     # :ditto:
     def eval(env, q : QBinary)
-      # If it's an 'is', we should first check if `eval` supports
-      # the sides. If it does, we continue & eventually `eval` them.
-      # If it doesn't, we pass them to 'is' raw.
-      if q.operator == "is"
-        is_left = nil
-        is_right = nil
-
-        {% for eval in ReadExpansion.methods.select(&.name.== :eval) %}
-          # Type of the current eval's *q* argument.
-          {% q_type = eval.args[1].restriction.resolve %}
-          # Ignore the general 'eval's, or they will override
-          # everything else.
-          {% unless q_type == Quote || q_type == Quotes %}
-            if q.left.is_a?({{q_type}})
-              is_left = eval(env, q.left)
-            end
-            if q.right.is_a?({{q_type}})
-              is_right = eval(env, q.right)
-            end
-          {% end %}
-        {% end %}
-
-        return is?(is_left || q.left, is_right || q.right)
-      end
-
       left = eval(env, q.left)
 
       # Short-circuiting for 'and' and 'or'. Although they
@@ -367,10 +371,7 @@ module Ven::Suite
     def eval(env, q : QBlock)
       # New definitions in the block will be discarded after
       # it's evaluated, but old are still accessible & mutable.
-      eval(env.dup, q.body)
-      # Currently, returning QVoid seems the most correct
-      # choice. Probably will rethink later.
-      QVoid.new
+      eval(env.dup, q.body).last? || die("empty block")
     end
 
     # :ditto:
@@ -407,6 +408,51 @@ module Ven::Suite
       # QReturnStatement, as in runtime Ven, interrupts control
       # flow and returns out of this envelope immediately.
       raise ReturnException.new(transform(q.value))
+    end
+
+    # :ditto:
+    def eval(env, q : QMapSpread)
+      operand = eval(env, q.operand)
+
+      if !operand.is_a?(QVector) || operand.items.size == 0
+        return operand
+      elsif operand.items.size < 2
+        return operand.items.first
+      end
+
+      items = operand.items
+
+      if q.iterative
+        # Iterative map spreads do '.each' instead of '.map',
+        # and return a copy of the original operand.
+        items.each do |item|
+          # TODO: underscores
+          eval(env.merge({"item" => item}), q.operator)
+        end
+      else
+        items = items.map do |item|
+          # TODO: underscores
+          eval(env.merge({"item" => item}), q.operator)
+        end
+      end
+
+      vec items
+    end
+
+    # :ditto:
+    def eval(env, q : QReduceSpread)
+      operand = eval(env, q.operand)
+
+      if !operand.is_a?(QVector) || operand.items.size == 0
+        return operand
+      elsif operand.items.size < 2
+        return operand.items.first
+      end
+
+      operand.items.reduce do |memo, item|
+        binary(q.operator, memo, item) ||
+          die("|#{q.operator}|: cannot run given #{memo.class}, #{item.class}")
+      end
     end
 
     # Expands to the quote the symbol was assigned.
