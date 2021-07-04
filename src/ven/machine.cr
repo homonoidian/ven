@@ -414,8 +414,7 @@ module Ven
       when {"in", Num, MRange}
         may_be left, if: right.includes?(left.value)
       when {"in", _, Vec}
-        # 'in' with vector is '|left is _| [...]' on steroids.
-        may_be left, if: right.any? { |item| left.is?(item) }
+        right.find &.is?(left) || bool false
       when {"<", Num, Num}
         bool left.value < right.value
       when {">", Num, Num}
@@ -465,11 +464,6 @@ module Ven
           return left, right.to_num
         else
           return left.to_vec, right.to_num
-        end
-      when "in"
-        case {left, right}
-        when {_, Str}, {Str, _}
-          return left.to_str, right.to_str
         end
       when "<", ">", "<=", ">="
         case {left, right}
