@@ -24,17 +24,30 @@ module Ven::Suite
       property return : Quote? = nil
       # A hash of readtime symbol definitions.
       property definitions : Definitions
+      # The underscores (aka contextuals) stack.
+      property underscores = Quotes.new
 
       def initialize(@definitions)
       end
 
-      # Returns a new `Env`, with its definitions obtained by
-      # `Hash#merge`-ing this Env's definitions with *defs*,
-      # and all other properties kept as in this Env.
-      def merge(defs : Definitions)
+      # Returns a new `Env`, with its `definitions` being a
+      # `Hash#merge` of this Env's definitions and *defs*, and
+      # all other properties being the same as in this Env.
+      def with(defs : Definitions)
         env = Env.new(defs)
         env.queue = @queue
         env.return = @return
+        env
+      end
+
+      # Returns a new `Env`, with its `underscores` being
+      # an array of this Env's underscores plus *underscores*,
+      # and all other properties being the same as in this Env.
+      def with(underscores us : Quotes)
+        env = Env.new(@definitions)
+        env.queue = @queue
+        env.return = @return
+        env.underscores = @underscores + us
         env
       end
     end
@@ -291,6 +304,16 @@ module Ven::Suite
     end
 
     # :ditto:
+    def eval(env, q : QUPop)
+      env.underscores.pop? || die("'_': no contextual")
+    end
+
+    # :ditto:
+    def eval(env, q : QURef)
+      env.underscores.last? || die("'&_': no contextual")
+    end
+
+    # :ditto:
     def eval(env, q : QReadtimeSymbol)
       die("there is no need to emphasize readtime symbols " \
           "in a readtime envelope: it's readtime anyway")
@@ -415,12 +438,12 @@ module Ven::Suite
         # and return a copy of the original operand.
         items.each do |item|
           # TODO: underscores
-          eval(env.merge({"item" => item}), q.operator)
+          eval(env.with([item]), q.operator)
         end
       else
         items = items.map do |item|
           # TODO: underscores
-          eval(env.merge({"item" => item}), q.operator)
+          eval(env.with([item]), q.operator)
         end
       end
 
