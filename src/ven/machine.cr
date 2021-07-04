@@ -396,8 +396,22 @@ module Ven
       when {"is", Str, MRegex}
         # `str is regex` is a special case for `is`, for it
         # does not return the value of left, but instead the
-        # whole match result.
-        may_be str($0), if: right.regex === left.value
+        # full match result (or false if there isn't any).
+        #
+        # Also, if there are named groups in the regex, the
+        # matches for those named groups are bound in the
+        # current scope under the corresponding names, unless
+        # one of them conflicts with an existing symbol.
+        if match = right.regex.match(left.value)
+          match.named_captures.each do |capture, value|
+            if @context[capture]?
+              die("capture in conflict with an existing symbol: #{capture}")
+            end
+            @context[capture] = value ? str(value) : bool false
+          end
+          return str(match[0])
+        end
+        bool false
       when {"is", MBool, _}
         # `bool is <any>` is also a special case, as, because
         # `is` returns the *left* value, `false is false` will
