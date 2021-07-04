@@ -48,8 +48,10 @@ fun read(source) given str {
       else
         die("invalid lexeme");
 
-  # `consume`s only if current token type is *type*.
-  fun consume(type) given str = if token[0] is type consume();
+  # `consume`s only if current token type is *token-type*.
+  fun consume(token-type) given str =
+    if token[0] is token-type
+      consume();
 
   # Parses a prefix expression.
   fun prefix =
