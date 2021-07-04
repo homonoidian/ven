@@ -101,6 +101,21 @@ nud pad(symbol) {
     ensure a is 2;
     ensure b is 3;
 
+    # Make sure spread works.
+    ensure (|+| [1, 2, 3]) is 6;
+    ensure (|*| [1, 2, 3, 4, 5]) is 120;
+    ensure |is| 1 x 10;
+    ensure not |is| [1, 2, 3];
+    ensure (|and| [1, 2, 3]) is 3;
+    ensure (|or| [1, 2, 3]) is 1;
+    ensure (|and| [true, false, 3]) is false;
+    ensure (|and| [false, false, 3]) is false;
+    ensure (|or| [false, false, 3]) is 3;
+    ensure (|_ + 1| [2, 3, 4]) is [3, 4, 5];
+    ensure (|#_| [1, 2, 3]) is 1 x 3;
+    ensure (|&_ * _| [2, 3, 4]) is [4, 9, 16];
+    ensure (|if (&_ > 5) _ else _ - 1| [4, 9, 16]) is [3, 9, 16];
+
     # Make sure 'if' works.
     ensure (if 1 2 else 3) is 2;
     ensure (if 1 2) is 2;
