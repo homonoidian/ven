@@ -443,6 +443,15 @@ module Ven::Suite
       end
     end
 
+    # :ditto:
+    def eval(env, q : QIf)
+      if eval(env, q.cond).is_a?(QFalse)
+        eval(env, q.alt || return bool false)
+      else
+        eval(env, q.suc)
+      end
+    end
+
     # Expands to the quote the symbol was assigned.
     def transform!(q : QReadtimeSymbol)
       @definitions[q.value]? ||
