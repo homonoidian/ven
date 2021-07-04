@@ -541,13 +541,14 @@ module Ven
     def reduce(operator : String, operand : Vec)
       case operator
       when "and"
-        # On a false in the vector, 'and' returns false
-        # immediately.
-        return bool !operand.find(&.false?)
+        # On the first false in the vector, 'and' returns
+        # false. Otherwise, it returns the last value in
+        # the vector.
+        return operand.each { |x| x.false? && return bool false } || operand.last
       when "or"
-        # On a non-false in the vector, 'or' returns true
-        # immediately.
-        return bool !!operand.find { |item| !item.false? }
+        # 'or' returns the first non-false value in the vector,
+        # or false.
+        return operand.each { |x| !x.false? && return x } || bool false
       end
 
       case operand.length

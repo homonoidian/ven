@@ -136,8 +136,8 @@ module Ven::Suite
       # i.e., that on which something (the operator in our
       # case) operates.
       case operator
-      when "and" then return bool !left.is_a?(QFalse) && !right.is_a?(QFalse)
-      when "or"  then return bool !left.is_a?(QFalse) || !right.is_a?(QFalse)
+      when "and" then return left.as?(QFalse) || right
+      when "or"  then return left.is_a?(QFalse) ? right : left
       when "is"  then return is?(left, right)
       when "in"
         if left.is_a?(QString) && right.is_a?(QString)
