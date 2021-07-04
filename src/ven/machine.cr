@@ -847,7 +847,11 @@ module Ven
               put str static
             in Opcode::PCRE
               # Puts a regex: (-- x)
-              put regex static
+              begin
+                put regex static
+              rescue e : ArgumentError
+                die("bad regex: #{e.message}")
+              end
             in Opcode::VEC
               # Joins multiple values under a vector: (x1 x2 x3 -- [x1 x2 x3])
               put vec pop static(Int32)

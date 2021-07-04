@@ -417,11 +417,11 @@ module Ven::Suite
 
     # Makes a new Ven regex from the given *stringy*.
     #
-    # Safely prepends '^' to the *stringy*, unless there is
-    # one there already; this is done to make sure we're
-    # matching strictly from the start of any given matchee,
-    # as opposed to Crystal's default of matching anywhere
-    # within a matchee.
+    # Unless there is one already, prepends '^' to *stringy*.
+    # This is done to make sure we're matching strictly from
+    # the start of any given matchee.
+    #
+    # Raises `ModelCastException` if *stringy* is bad.
     def initialize(@stringy : String)
       @regex = /^(?:#{@stringy.lchop('^')})/
     end
