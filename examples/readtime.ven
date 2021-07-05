@@ -1,0 +1,21 @@
+# When running this, remember to add the `-t` flag to enable
+# ensure tests: `ven -t examples/readtime.ven`.
+
+nud `c(?<body>[ad]+)r`(form) = <{
+  |if (_ is "a") {
+    queue <>[0]
+  } else {
+    queue <>[from 1]
+  }|: chars(reverse(body));
+  # Plug *form* into the remaining hole.
+  queue $form;
+}>;
+
+ensure "It works" {
+  should "do caar"
+    caar([[1, 2, 3], 4, 5, 6]) is 1
+  should "do caadr"
+    caadr([[[1, "foo", "bar"], 2, 3], 4, 5, 6]) is ["foo", "bar"]
+  should "do cadadr"
+    cadadr([[1, ["foo", "bar", "baz"], 3], 4, 5]) is ["bar", "baz"]
+}

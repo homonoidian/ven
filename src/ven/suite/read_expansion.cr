@@ -287,7 +287,7 @@ module Ven::Suite
     # Returns the resulting quote.
     def eval(env, quote : Quote)
       case quote
-      when QNumber, QString, QRegex, QTrue, QFalse, QHole
+      when QNumber, QString, QRegex, QTrue, QFalse
         # Homoiconic quotes are the bread-and-butter of readtime
         # Ven. They are the values of readtime Ven.
         quote
@@ -298,33 +298,27 @@ module Ven::Suite
       end
     end
 
-    # :ditto:
     def eval(env, q : QVector)
       vec eval(env, q.items)
     end
 
-    # :ditto:
     def eval(env, q : QUPop)
       env.underscores.pop? || die("'_': no contextual")
     end
 
-    # :ditto:
     def eval(env, q : QURef)
       env.underscores.last? || die("'&_': no contextual")
     end
 
-    # :ditto:
     def eval(env, q : QReadtimeSymbol)
       die("there is no need to emphasize readtime symbols " \
           "in a readtime envelope: it's readtime anyway")
     end
 
-    # :ditto:
     def eval(env, q : QRuntimeSymbol)
       env.definitions[q.value]? || die("readtime symbol not found: #{q.value}")
     end
 
-    # :ditto:
     def eval(env, q : QUnary)
       operand = eval(env, q.operand)
 
@@ -332,7 +326,6 @@ module Ven::Suite
         die("'#{q.operator}' does not support #{operand.class}")
     end
 
-    # :ditto:
     def eval(env, q : QBinary)
       left = eval(env, q.left)
 
@@ -353,7 +346,57 @@ module Ven::Suite
         die("'#{q.operator}' does not support #{left.class}, #{right.class}")
     end
 
-    # :ditto:
+    def eval(env, q : QCall)
+      unless callee = q.callee.as?(QSymbol)
+        die("illegal callee: #{callee.class}")
+      end
+
+      args = eval(env, q.args)
+
+      # Those below are readtime builtins. They're a bunch of
+      # primitive 'functions' that give the user access to
+      # the Reader (upon evaluation), I/O (mostly for debugging),
+      # type manipulation, quote creation, etc.
+      case callee.value
+      when "say"
+        # Outputs the arguments to the screen. If called with
+        # one argument, it returns that argument untouched.
+        # If called with multiple arguments, it returns a
+        # vector of those arguments.
+
+        args.each do |arg|
+          puts unary("~", arg).as(QString).value
+        end
+
+        args.size == 1 ? args.first : vec args
+      when "chars"
+        # TEMPORARY (TODO: `"foo"[]`): returns a vector of
+        # characters of the given string.
+        die("chars(): improper arguments") unless args.size == 1
+
+        chars = unary("~", arg = args.first)
+          .as(QString)
+          .value
+          .chars
+          .map do |char|
+            QString.new(arg.tag, char.to_s).as(Quote)
+          end
+
+        vec chars
+      when "reverse"
+        # TEMPORARY (TODO: `"foo"[from -1]` or `"foo"[-1 to 0]`):
+        # reverses the given string.
+        die("reverse(): improper arguments") unless args.size == 1
+
+        str unary("~", args.first)
+          .as(QString)
+          .value
+          .reverse
+      else
+        die("unsupported call quote")
+      end
+    end
+
     def eval(env, q : QAssign)
       unless target = q.target.as?(QRuntimeSymbol)
         die("unsupported assignment target: #{target.class}")
@@ -366,7 +409,6 @@ module Ven::Suite
       env.definitions[target.value] = eval(env, q.value)
     end
 
-    # :ditto:
     def eval(env, q : QEnsure)
       if (expression = eval(env, q.expression)).is_a?(QFalse)
         # We err using ReadError here, as 'die' can't take
@@ -378,24 +420,23 @@ module Ven::Suite
       end
     end
 
-    # :ditto:
     def eval(env, q : QBlock)
       # New definitions in the block will be discarded after
       # it's evaluated, but old are still accessible & mutable.
       eval(env.dup, q.body).last? || die("empty block")
     end
 
-    # :ditto:
     def eval(env, q : QQueue)
-      # You can think of queue values as being **outside**
-      # of readtime envelope, but still inside the readtime
-      # context.
+      # You can think of queue values as being **outside** of
+      # readtime envelope, but still inside readtime context:
+      # `queue a + b` queues `a + b`; `queue $a + $b` queues
+      # `queue value-of-a + value-of-b`.
       #
-      # If there are holes, we shift-fill them with the
-      # value of this queue.
+      # If there are unfilled holes, we mutate the first hole's
+      # value with this queue's expression.
       #
-      # If there are no holes, we append the value to
-      # the queue.
+      # If there are no holes, we append the value to the
+      # queue, as expected.
       if !@holes.empty?
         @holes.shift.value = transform(q.value)
       else
@@ -405,7 +446,6 @@ module Ven::Suite
       q.value
     end
 
-    # :ditto:
     def eval(env, q : QReturnExpression)
       # QReturnExpression, as in runtime Ven, just sets the
       # return value without interrupting control flow.
@@ -414,14 +454,12 @@ module Ven::Suite
       q.value
     end
 
-    # :ditto:
     def eval(env, q : QReturnStatement)
       # QReturnStatement, as in runtime Ven, interrupts control
       # flow and returns out of this envelope immediately.
       raise ReturnException.new(transform(q.value))
     end
 
-    # :ditto:
     def eval(env, q : QMapSpread)
       operand = eval(env, q.operand)
 
@@ -437,20 +475,17 @@ module Ven::Suite
         # Iterative map spreads do '.each' instead of '.map',
         # and return a copy of the original operand.
         items.each do |item|
-          # TODO: underscores
-          eval(env.with([item]), q.operator)
+          eval(env.with([item]), q.operator.clone)
         end
       else
         items = items.map do |item|
-          # TODO: underscores
-          eval(env.with([item]), q.operator)
+          eval(env.with([item]), q.operator.clone)
         end
       end
 
       vec items
     end
 
-    # :ditto:
     def eval(env, q : QReduceSpread)
       operand = eval(env, q.operand)
 
@@ -466,7 +501,6 @@ module Ven::Suite
       end
     end
 
-    # :ditto:
     def eval(env, q : QIf)
       if eval(env, q.cond).is_a?(QFalse)
         eval(env, q.alt || return bool false)
