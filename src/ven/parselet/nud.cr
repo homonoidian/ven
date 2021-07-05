@@ -652,14 +652,21 @@ module Ven::Parselet
     # Returns a hash of parameter names mapped to arguments,
     # or an empty hash if there weren't any parameters.
     private def rest!
-      args = @parser.after("(") { @parser.repeat(")", ",") }
       names = {} of String => Quote
+
+      # If this nud takes no parameters, make the parentheses
+      # optional (parameterless nuds likely do not want to
+      # look like calls).
+      if @params.empty? && @parser.word[:type] != "("
+        return names
+      end
+
+      args = @parser.after("(") { @parser.repeat(")", ",") }
 
       # Do an arity check. As nuds allow the slurpie, we
       # need to check for that too.
       unless @params.size == args.size || "*".in?(@params) && @params.size >= args.size
-        die("malformed parametric nud: expected " \
-            "#{@params.size} arguments, got #{args.size}")
+        die("malformed nud: expected #{@params.size}, got #{args.size} argument(s)")
       end
 
       @params.each_with_index do |param, index|
