@@ -107,6 +107,10 @@ module Ven::Suite
       transform!(quote).as?(Quote) || quote
     end
 
+    def transform(accessor : FAImmediate)
+      accessor.class.new cast(transform(accessor.access), QSymbol)
+    end
+
     def transform(accessor : FADynamic)
       accessor.class.new transform(accessor.access)
     end

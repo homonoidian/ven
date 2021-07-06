@@ -126,7 +126,7 @@ module Ven
     # Issues the appropriate field gathering instructions
     # for field accessor *accessor*.
     private def field!(accessor : FAImmediate)
-      issue(Opcode::FIELD_IMMEDIATE, accessor.access)
+      issue(Opcode::FIELD_IMMEDIATE, accessor.access.value)
     end
 
     # :ditto:
@@ -146,7 +146,7 @@ module Ven
         if branch.is_a?(QAccessField)
           field! [FADynamic.new(branch.head)] + branch.tail
         elsif branch.is_a?(QRuntimeSymbol)
-          field! FAImmediate.new(branch.value)
+          field! FAImmediate.new(branch)
         else
           field! FADynamic.new(branch)
         end

@@ -277,6 +277,12 @@ module Ven::Suite
     Suite.model_template?
   end
 
+  # The parent of all Class `Model`s (those that are stored
+  # on the heap and referred by reference).
+  abstract class MClass
+    Suite.model_template?
+  end
+
   # A model that holds a value of type *T*.
   abstract struct MValue(T) < MStruct
     getter value : T
@@ -413,7 +419,9 @@ module Ven::Suite
     end
   end
 
-  # Ven's regular expression data type.
+  # Ven's regular expression data type (type regex).
+  #
+  # Ven regexes are immutable.
   struct MRegex < MStruct
     getter regex : Regex
 
@@ -469,7 +477,98 @@ module Ven::Suite
     end
   end
 
-  # Ven's umbrella range data type.
+  # Ven's vector data type (type vec).
+  #
+  # Ven vector is a model wrapper around a reference to an
+  # Array (*items*). If necessary, mutate the *items*, not
+  # your MVector.
+  struct MVector < MStruct
+    getter items : Models
+
+    # Makes a new vector from *items*.
+    def initialize(@items = Models.new)
+    end
+
+    # :nodoc:
+    def initialize(raw_items : Array)
+      @items = raw_items.map &.as(Model)
+    end
+
+    # Returns the length of this vector.
+    def to_num
+      Num.new(size)
+    end
+
+    def to_vec
+      self
+    end
+
+    def true?
+      size != 0
+    end
+
+    def callable?
+      true
+    end
+
+    def indexable?
+      true
+    end
+
+    # Returns whether each consequent item of this vector is
+    # semantically equal to the corresponding item of the
+    # *other* vector.
+    def is?(other : Vec)
+      size == other.size && @items.zip(other.items).all? { |my, its| my.is?(its) }
+    end
+
+    def length
+      size
+    end
+
+    def []?(index : Int)
+      @items[index]?
+    end
+
+    def []?(range : Range)
+      b = range.begin
+      e = range.end
+
+      if b.try(&.< 0)
+        pad = @items.reverse[..e.try(&.-)]?
+      else
+        pad = @items[b..e]?
+      end
+
+      pad.try { |subset| Vec.new(subset) }
+    end
+
+    def []=(index : Num, value : Model)
+      return if size < (index = index.to_i)
+
+      @items[index] = value
+    end
+
+    def to_s(io)
+      io << "[" << @items.join(", ") << "]"
+    end
+
+    # Makes a new vector from *items*, but maps `type.new(item)`
+    # for each item.
+    #
+    # ```
+    # Vec.from([1, 2, 3], Num) # ==> [Num.new(1), Num.new(2), Num.new(3)]
+    # ```
+    def self.from(items, as type : Model.class)
+      new(items.map { |item| type.new(item) })
+    end
+
+    forward_missing_to @items
+  end
+
+  # Ven's umbrella range data type (type range).
+  #
+  # Ven ranges are immutable.
   abstract struct MRange < MStruct
   end
 
@@ -572,7 +671,7 @@ module Ven::Suite
     end
   end
 
-  # Ven's partial range datatype (e.g., `from 10`, `to 100`, etc.)
+  # Ven's partial range datatype (`from 10`, `to 100`, etc.)
   struct MPartialRange < MRange
     # Returns the beginning of this range, if there is one.
     getter begin : Num?
@@ -601,90 +700,27 @@ module Ven::Suite
     end
   end
 
-  # The parent of all Class `Model`s (those that are stored
-  # on the heap and referred by reference).
-  abstract class MClass
-    Suite.model_template?
-  end
-
-  # Ven's vector data type.
-  class MVector < MClass
-    getter items : Models
-
-    # Makes a new vector from *items*.
-    def initialize(@items = Models.new)
-    end
-
-    # :nodoc:
-    def initialize(raw_items : Array)
-      @items = raw_items.map &.as(Model)
-    end
-
-    # Makes a new vector from *items*, but maps `type.new(item)`
-    # for each item.
-    #
-    # ```
-    # Vec.from([1, 2, 3], Num) # ==> [Num.new(1), Num.new(2), Num.new(3)]
-    # ```
-    def self.from(items, as type : Model.class)
-      new(items.map { |item| type.new(item) })
-    end
-
-    # Returns the length of this vector.
-    def to_num
-      Num.new(size)
-    end
-
-    def to_vec
-      self
-    end
-
-    def true?
-      size != 0
-    end
-
-    def callable?
+  # The value (or type) that represents anything (in other
+  # words, the value that matches on anything.)
+  #
+  # If used as a compound type lead, it represents alternative:
+  # `any(1, 2, str)`  means `1`, `2`, or `str`.
+  struct MAny < MStruct
+    def is?(other)
       true
     end
 
-    def indexable?
-      true
-    end
-
-    # Returns whether each consequent item of this vector is
-    # semantically equal to the corresponding item of the
-    # *other* vector.
-    def is?(other : Vec)
-      size == other.size && @items.zip(other.items).all? { |my, its| my.is?(its) }
-    end
-
-    def length
-      size
-    end
-
-    def []?(index : Int)
-      @items[index]?
-    end
-
-    def []?(range : Range)
-      @items[range]?.try { |subset| Vec.new(subset) }
-    end
-
-    def []=(index : Num, value : Model)
-      return if size < (index = index.to_i)
-
-      @items[index] = value
+    def weight
+      MWeight::ANY
     end
 
     def to_s(io)
-      io << "[" << @items.join(", ") << "]"
+      io << "any"
     end
-
-    forward_missing_to @items
   end
 
   # Ven's type for representing other data types + itself.
-  class MType < MClass
+  struct MType < MStruct
     # An array that contains all instances of this class. Used
     # to provide `typeof` dynamically.
     @@instances = [] of self
@@ -753,10 +789,10 @@ module Ven::Suite
   # ensure 1 x 1000 is vec(1);
   # ```
   class MCompoundType < MClass
-    getter type : Model
+    getter lead : Model
     getter contents : Models
 
-    def initialize(@type, @contents)
+    def initialize(@lead, @contents)
     end
 
     def is?(other : MType)
@@ -764,7 +800,7 @@ module Ven::Suite
     end
 
     def is?(other : MCompoundType)
-      return false unless @type.is?(other.type)
+      return false unless @lead.is?(other.lead)
       return false unless @contents.size == other.contents.size
 
       @contents.zip(other.contents).all? { |my, its| my.is?(its) }
@@ -774,11 +810,11 @@ module Ven::Suite
     # contents (whatever this means) match the tail types
     # (content types).
     def is?(other : Model)
-      return false unless other.is?(@type)
+      return false unless other.is?(@lead)
 
       # Compound root 'any' exists to represent general
       # alternative: `1 is any(1, str, vec)`.
-      if @type.is_a?(MAny)
+      if @lead.is_a?(MAny)
         return @contents.any? do |content|
           other.is?(content)
         end
@@ -798,47 +834,31 @@ module Ven::Suite
     end
 
     def weight
-      @type.weight + @contents.sum(&.weight.value)
+      @lead.weight + @contents.sum(&.weight.value)
     end
 
     def to_s(io)
-      io << "compound " unless @type.is_a?(MAny)
-      io << @type << " of " << @contents.join(", or ")
+      io << "compound " unless @lead.is_a?(MAny)
+      io << @lead << " of " << @contents.join(", or ")
     end
   end
 
-  # The value that represents anything (in other words, the
-  # value that matches on anything.)
-  class MAny < MClass
-    def is?(other)
-      true
-    end
-
-    def weight
-      MWeight::ANY
-    end
-
-    def to_s(io)
-      io << "any"
-    end
-  end
-
-  # An abstract umbrella for various kinds of functions.
+  # Ven's umbrella function model. It is the parent of all
+  # function models.
   abstract class MFunction < MClass
-    # Returns the specificity of this function, which is 0
-    # by default.
+    # Returns the specificity of this function. Defaults to 0.
     getter specificity : Int32 do
       0
     end
 
-    # Performs the checks that ensure this function can
-    # receive *args*. Returns nil if it cannot.
+    # Returns the variant of this function that can receive
+    # *args*. Returns nil if found no matching variant.
     def variant?(args : Models)
       self
     end
 
     # Returns whether this function takes *type* as its
-    # first (or *arhno*-th) parameter.
+    # first (or *argno*-th) parameter.
     def leading?(type : Model, argno = 0)
       false
     end
@@ -851,7 +871,7 @@ module Ven::Suite
     #
     # Implements the underflow rule (if *givens* underflow
     # *args*, the last given of *givens* is used to cover
-    # the rest of the *args*).
+    # the remaining *args*).
     def match?(args : Models, givens : Models) : Bool
       args.zip?(givens) do |argument, given|
         return false unless argument.is?(given || givens.last)
@@ -861,12 +881,18 @@ module Ven::Suite
     end
 
     # Pretty-prints *params* alongside *given*.
-    def pg(params : Array(String), given : Models)
+    def pretty(params : Array(String), given : Models)
       params.zip(given).map(&.join ": ").join(", ")
     end
   end
 
   # Ven's most essential function model.
+  #
+  # ```ven
+  # fun add(a, b) = a + b;
+  #
+  # ensure add is concrete;
+  # ```
   class MConcreteFunction < MFunction
     getter name : String
     getter arity : Int32
@@ -878,16 +904,12 @@ module Ven::Suite
     def initialize(@name, @given, @arity, @slurpy, @params, @target)
     end
 
-    # Returns how specific this concrete is.
+    # Returns the specificity of this concrete.
     getter specificity do
       @params.zip(@given).map do |param, typee|
         weight = typee.weight
-
         # Anonymous parameters lose one weight point.
-        if anonymous?(param)
-          weight -= 1
-        end
-
+        weight -= 1 if anonymous?(param)
         weight.value
       end.sum
     end
@@ -925,7 +947,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "concrete " << @name << "(" << pg(@params, @given) << ")"
+      io << "concrete " << @name << "(" << pretty(@params, @given) << ")"
     end
 
     # Returns whether *param* is an anonymous parameter.
@@ -948,9 +970,10 @@ module Ven::Suite
     end
   end
 
-  # A model that brings Crystal's `Proc`s to Ven, allowing
-  # to define primitives. Supports supervisorship by an
-  # `MGenericFunction`.
+  # The function model that can invoke Crystal code (`Proc`)
+  # from Ven.
+  #
+  # Can be a member of an `MGenericFunction`.
   class MBuiltinFunction < MFunction
     getter name : String
     getter arity : Int32
@@ -959,13 +982,15 @@ module Ven::Suite
     def initialize(@name, @arity, @callee)
     end
 
-    # Returns how specific this builtin is. Note that in builtins
-    # all arguments have the weight of `MWeight::ANY`.
+    # Returns the specificity of this builtin.
+    #
+    # Note that in builtins, all arguments have the weight
+    # of `MWeight::ANY`.
     getter specificity do
       MWeight::ANY.value * @arity
     end
 
-    def variant?(args) : self | Bool
+    def variant?(args)
       args.size == @arity ? self : false
     end
 
@@ -995,7 +1020,7 @@ module Ven::Suite
     end
   end
 
-  # An abstract callable entity that supervises a list of
+  # An abstract function model that supervises a list of
   # `MFunction`s.
   class MGenericFunction < MFunction
     getter name : String
@@ -1018,18 +1043,14 @@ module Ven::Suite
     end
 
     # Adds *variant* to the list of variants this generic
-    # supervises. Checks if an identical *variant* already
-    # exists there and overwrites it with the *variant* if
-    # it does,
+    # supervises. Overwrites identical variant, if any.
     def add(variant : MFunction) : self
       @variants.each_with_index do |existing, index|
         if variant == existing
           @variants[index] = variant
-
           return self
         end
       end
-
       add!(variant)
     end
 
@@ -1118,7 +1139,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "box " << @name << "(" << pg(@params, @given) << ")"
+      io << "box " << @name << "(" << pretty(@params, @given) << ")"
     end
   end
 
@@ -1220,7 +1241,17 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "instance of " << @parent
+      if p = @parent.as?(MBox)
+        io << p.name << "("
+        # We display only the specified params, as their order
+        # is known and won't cause any confusion.
+        p.params.join(io, ", ") do |param, io|
+          io << param << "=" << @namespace[param]
+        end
+        io << ")"
+      else
+        io << "instance of " << @parent
+      end
     end
   end
 

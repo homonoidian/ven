@@ -122,17 +122,12 @@ module Ven::Parselet
     # Reads an individual field access. This includes branches
     # access, dynamic field access, or immediate field access.
     private def access
-      lead = @parser.expect("[", "(", "SYMBOL")
-
-      case lead[:type]
-      when "["
+      if @parser.word!("[")
         FABranches.new(branches)
-      when "("
+      elsif @parser.word!("(")
         FADynamic.new(dynamic)
-      when "SYMBOL"
-        FAImmediate.new(lead[:lexeme])
       else
-        raise "PAccessField#access(): unknown lead type"
+        FAImmediate.new(symbol)
       end
     end
 

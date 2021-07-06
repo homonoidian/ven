@@ -37,7 +37,7 @@ module Ven::Suite
   # In the field path `b.c`, both `b` and `c` are immediate
   # field accessors.
   struct FAImmediate < FieldAccessor
-    takes String
+    takes QSymbol
 
     # Makes a copy of this field accessor.
     def clone
