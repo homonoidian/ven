@@ -392,6 +392,8 @@ module Ven::Suite
           .as(QString)
           .value
           .reverse
+      when "quote"
+        QQuoteEnvelope.new(q.tag, args.first)
       else
         die("unsupported call quote")
       end
@@ -489,15 +491,26 @@ module Ven::Suite
     def eval(env, q : QReduceSpread)
       operand = eval(env, q.operand)
 
-      if !operand.is_a?(QVector) || operand.items.size == 0
-        return operand
-      elsif operand.items.size < 2
-        return operand.items.first
-      end
+      case operand
+      when QQuoteEnvelope
+        # Quote joining mode: `|and| quote([a, b, c])` returns
+        # `a and b and c`.
+        return operand unless contents = operand.quote.as?(QVector)
 
-      operand.items.reduce do |memo, item|
-        binary(q.operator, memo, item) ||
-          die("|#{q.operator}|: cannot run given #{memo.class}, #{item.class}")
+        contents.items.reduce do |memo, item|
+          QBinary.new(q.tag, q.operator, memo, item)
+        end
+      when QVector
+        # Readtime reduce spread mode: `|+| [1, 2, 3]`
+        # returns 6.
+        return operand.items.first? || operand if operand.items.size < 2
+
+        operand.items.reduce do |memo, item|
+          binary(q.operator, memo, item) ||
+            die("|#{q.operator}|: cannot reduce #{memo.class}, #{item.class}")
+        end
+      else
+        operand
       end
     end
 

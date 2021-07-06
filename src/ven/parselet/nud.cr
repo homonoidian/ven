@@ -665,7 +665,7 @@ module Ven::Parselet
 
       # Do an arity check. As nuds allow the slurpie, we
       # need to check for that too.
-      unless @params.size == args.size || "*".in?(@params) && @params.size >= args.size
+      unless @params.size == args.size || "*".in?(@params) && args.size >= @params.size
         die("malformed nud: expected #{@params.size}, got #{args.size} argument(s)")
       end
 

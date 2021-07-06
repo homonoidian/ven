@@ -118,6 +118,8 @@ module Ven::Suite
     end
   end
 
+  defquote(QQuoteEnvelope, quote : Quote, desc: "quote envelope")
+
   # The parent of all kinds of Ven symbols.
   #
   # It is serializable; it is possible to have QSymbol be a

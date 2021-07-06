@@ -381,6 +381,14 @@ module Ven::Suite
       "((#{q.params.join(", ")}) #{visit(q.body)})"
     end
 
+    def visit!(q : QPatternEnvelope)
+      "'#{visit(q.pattern)}"
+    end
+
+    def visit!(q : QQuoteEnvelope)
+      "quote(#{visit(q.quote)})"
+    end
+
     def self.detree(quote : Quote)
       new.visit(quote)
     end
