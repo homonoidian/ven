@@ -248,11 +248,17 @@ module Ven::Suite
     def []=(referent : Model, value : Model) : Model?
     end
 
+    # Returns the `MType` of this model.
+    def type
+      MType[self.class]
+    end
+
     # Dies. The subclasses may decide, though, to override
     # the death and handle to/from-JSON conversion.
     def to_json(json : JSON::Builder)
       raise ModelCastException.new("cannot convert #{self} to JSON")
     end
+
 
     macro inherited
       # Returns whether this model class is concrete (i.e.,

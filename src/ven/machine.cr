@@ -502,7 +502,7 @@ module Ven
     # Dies if found no matching conversion.
     def normalize(operator, left, right)
       normalize?(operator, left, right) ||
-        die("'#{operator}': could not normalize: #{left}, #{right}")
+        die("'#{operator}': could not normalize: #{left.type}, #{right.type}")
     end
 
     # Properly defines a function based off an *informer* and
@@ -681,7 +681,7 @@ module Ven
     # Same as `field?`, but dies if found no working field
     # resolution.
     def field(head : Model, field : Model)
-      field?(head, field) || die("#{head.to_s}: no such field or function: #{field}")
+      field?(head, field) || die("#{head.type}: no such field or function: #{field}")
     end
 
     # Starts a primitive state inspector prompt.
@@ -1054,7 +1054,7 @@ module Ven
                   die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
                 end
               else
-                die("illegal callee: #{callee.to_s}")
+                die("illegal callee: #{callee.type}")
               end
             in Opcode::RET
               # Returns from a function. Puts onto the parent stack
@@ -1130,7 +1130,7 @@ module Ven
 
               # Collect nth items in *head*.
               nths = args.map do |arg|
-                head[arg]? || die("[]: item(s) not found: #{arg}")
+                head[arg]? || die("#{head.type}: item(s) not found: #{arg}")
               end
 
               # If there was one value collected, we put it
