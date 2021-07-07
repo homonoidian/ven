@@ -838,13 +838,9 @@ module Ven::Suite
     def is?(other : MMap)
       return false unless @map.size == other.size
 
-      @map.to_a.zip(other.to_a) do |my, its|
-        my_k, my_v = my
-        its_k, its_v = its
-
-        unless my_k == its_k && my_v.is?(its_v)
-          return false
-        end
+      @map.each do |key, val|
+        return false unless other.has_key?(key)
+        return false unless val.is?(other[key])
       end
 
       true
