@@ -175,12 +175,23 @@ module Ven::Parselet
     # Reads the items of this vector. Returns a tuple of
     # items followed by the filter (or nil).
     def items!
-      return {Quotes.new, nil} if @parser.word!("]")
+      items = Quotes.new
+      filter = nil
 
-      {
-        @parser.repeat(sep: ","),
-        @parser.before("]") { @parser.word!("|") ? filter! : nil },
-      }
+      until @parser.word!("]")
+        items << led
+        # If met a '|' after an item, the rest is going
+        # to be the filter.
+        if @parser.word!("|")
+          filter = filter!
+          # There can be no items after the filter.
+          break @parser.expect("]")
+        elsif @parser.word!(",")
+          next # pass
+        end
+      end
+
+      {items, filter}
     end
 
     def filter!
