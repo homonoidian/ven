@@ -761,15 +761,17 @@ module Ven::Parselet
     end
   end
 
-  # Reads a map literal: `%{"a" 1, "b" 2}`
+  # Reads a map literal: `%{"a" 1, "b" 2}`, `%{"foo" 1 "bar" 2}`.
   class PMap < Nud
     def parse
       keys = Quotes.new
       vals = Quotes.new
 
-      @parser.repeat("}", ",") do
-        keys << led
+      until @parser.word!("}")
+        keys << led(Precedence::FIELD)
         vals << led
+        # Optionally read a ','.
+        @parser.word!(",")
       end
 
       QMap.new(@tag, keys, vals)
