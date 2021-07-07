@@ -15,6 +15,10 @@ ensure true?(false) is false;
   values = [1, 2, 3];
   values[1] = "foo";
   ensure values is [1, "foo", 3];
+  mappy = %{"a" 2, "b" 3};
+  mappy["a"] = "Hi!";
+  ensure mappy["a"] is "Hi!";
+  ensure mappy["b"] is 3;
 };
 
 # (_, *)=

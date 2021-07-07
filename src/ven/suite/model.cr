@@ -779,6 +779,48 @@ module Ven::Suite
     end
   end
 
+  # Ven's map (short for mapping) type. A thin wrapper around
+  # Crystal's Hash.
+  struct MMap < MStruct
+    getter map : Hash(String, Model)
+
+    def initialize(@map)
+    end
+
+    def true?
+      !@map.empty?
+    end
+
+    def indexable?
+      true
+    end
+
+    def field(name)
+      case name
+      when "keys"
+        Vec.from(@map.keys, Str)
+      when "vals"
+        Vec.new(@map.values)
+      end
+    end
+
+    def length
+      @map.size
+    end
+
+    def []?(key : Str)
+      @map[key.value]?
+    end
+
+    def []=(key : Str, value : Model)
+      @map[key.value] = value
+    end
+
+    def to_s(io)
+      io << "%{" << map.join(", ") { |k, v| "#{k} #{v}" } << "}"
+    end
+  end
+
   # A compound type is a type paired with an array of alternative
   # content types/models. `is?`-matching is used to check whether
   # one of these alternatives match. `is?`-matching is also used

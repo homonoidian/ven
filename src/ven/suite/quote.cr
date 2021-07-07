@@ -174,6 +174,7 @@ module Ven::Suite
   defquote(QNumber, value : BigDecimal, desc: "number")
 
   defquote(QVector, items : Quotes, filter : MaybeQuote, desc: "vector")
+  defquote(QMap, keys : Quotes, vals : Quotes, desc: "map")
 
   defquote(QTrue, desc: "bool true")
   defquote(QFalse, desc: "bool false")

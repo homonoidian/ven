@@ -715,6 +715,14 @@ module Ven
       issue(Opcode::QUEUE)
     end
 
+    def visit!(q : QMap)
+      q.keys.zip(q.vals) do |key, val|
+        visit(key)
+        visit(val)
+      end
+      issue(Opcode::MAP, q.keys.size + q.vals.size)
+    end
+
     # Makes a compiler, compiles *quotes* with it and disposes
     # the compiler.
     #

@@ -8,6 +8,7 @@ module Ven::Library
       defglobal("num", MType.new "num", Num)
       defglobal("str", MType.new "str", Str)
       defglobal("vec", MType.new "vec", Vec)
+      defglobal("map", MType.new "map", MMap)
       defglobal("type", MType.new "type", MType)
       defglobal("compound", MType.new "compound", MCompoundType)
       defglobal("bool", MType.new "bool", MBool)

@@ -1231,6 +1231,18 @@ module Ven
               @frames.reverse_each do |it|
                 break it.queue << tap if it.goal.function?
               end
+            in Opcode::MAP
+              # Puts a map (short for mapping). Pops the
+              # appropriate amount of key-values and makes
+              # a map out of them.
+              map = pop(static Int32).in_groups_of(2).map do |group|
+                key, value = group[0].not_nil!, group[1].not_nil!
+                # Convert {Model, Model} to {String, Model}
+                # to avoid mutable hash keys.
+                {key.to_str.value, value}
+              end
+
+              put MMap.new(map.to_h)
             end
           rescue error : ModelCastException
             die(error.message.not_nil!)

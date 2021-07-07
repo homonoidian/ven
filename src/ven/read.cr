@@ -31,7 +31,7 @@ module Ven
     {% elsif type == :NUMBER %}
       /(?:(?:\d(?:_?\d)*)?\.(?:_?\d)+|[1-9](?:_?\d)*|0)/
     {% elsif type == :SPECIAL %}
-      /(?:-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*])/
+      /(?:%\{|-[->]|\+\+|=>|[-+*\/~<>&:]=|[-'<>~+\/()[\]{},:;=?.|#&*])/
     {% elsif type == :IGNORE %}
       /(?:[ \n\r\t]+|#(?:[ \t][^\n]*|\n+))/
     {% else %}
@@ -548,6 +548,7 @@ module Ven
       defnud("&_", Parselet::PURef)
       defnud("'", Parselet::PPattern)
       defnud("<", Parselet::PReadtimeEnvelope)
+      defnud("%{", Parselet::PMap)
 
       # Infixes (LEDs):
 

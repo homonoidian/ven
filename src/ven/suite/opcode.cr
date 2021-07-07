@@ -59,6 +59,7 @@ module Ven::Suite
     REST
     TEST_SHOULD
     ACCESS
+    MAP
 
     # Opcodes that take a jump payload.
 

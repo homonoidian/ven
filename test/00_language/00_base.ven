@@ -17,6 +17,17 @@ ensure "Sanity of data types" {
     [0, "1", "2"] is vec;
     [0, "1", "2", [3]] is vec;
     [[0], [1], [2]] is vec
+
+  should "support map"
+    %{} is map;
+    %{ "a" 1 } is map;
+    [1, 2, 3] is not map;
+    %{ "a" 1 }["a"] is 1;
+    %{ "a" 1, "b" 2 }["a", "b"] is [1, 2];
+    #%{} is 0;
+    #%{"a" 2, "b" 3} is 2;
+    %{"a" 2, "b" 3}.keys is ["a", "b"];
+    %{"a" 2, "b" 3}.vals is [2, 3]
 }
 
 ensure "Valid principles of falsehood (/ truthiness)" {
@@ -24,27 +35,31 @@ ensure "Valid principles of falsehood (/ truthiness)" {
     0? is false;
     ""? is false;
     []? is false;
-    (false)? is false
+    (false)? is false;
+    %{}? is false
 
   should "correctly invert falsey values"
     not 0 is true;
     not "" is true;
     not [] is true;
-    not false is true
+    not false is true;
+    not %{} is true
 
   should "view all other values as truthy"
     12? is true;
     "foobar"? is true;
     (true)? is true;
     [1]? is true;
-    [1, 2, 3]? is true
+    [1, 2, 3]? is true;
+    %{"a" 1, "b" 3}? is true
 
   should "correctly invert truthy values"
     not 12? is false;
     not "foobar"? is false;
     not (true)? is false;
     not [1]? is false;
-    not [1, 2, 3]? is false
+    not [1, 2, 3]? is false;
+    not %{"a" 1, "b" 3} is false
 }
 
 ensure "Sanity of unary operators" {
