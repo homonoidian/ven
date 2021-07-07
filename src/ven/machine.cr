@@ -910,7 +910,22 @@ module Ven
               # or is made into one.
               next jump if tap.is_a?(MMap)
 
-              items = pop.to_vec
+              model = pop
+
+              if model.is_a?(Str)
+                begin
+                  put MMap.json_to_ven(model.value)
+                rescue e : JSON::ParseException
+                  message = e.message.not_nil!
+                  # Un-capitalize the message: Ven does not
+                  # capitalize error messages.
+                  die("improper JSON: #{message[0].downcase + message[1..]}")
+                end
+
+                next jump
+              end
+
+              items = model.to_vec
               pairs = [] of {String, Model}
 
               if items.all? { |item| item.is_a?(Vec) && item.size == 2 }

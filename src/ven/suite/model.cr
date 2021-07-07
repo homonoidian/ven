@@ -354,6 +354,11 @@ module Ven::Suite
     def false?
       !@value
     end
+
+    # Writes a JSON bool.
+    def to_json(json : JSON::Builder)
+      json.bool(@value)
+    end
   end
 
   # Ven's string data type (type str).
@@ -794,14 +799,15 @@ module Ven::Suite
   struct MMap < MStruct
     getter map : Hash(String, Model)
 
-    def initialize(@map)
+    def initialize(@map = {} of String => Model)
     end
 
     def to_num
       Num.new(length)
     end
 
-    # Serializes this map into a JSON object.
+    # Serializes this map into a JSON object. You can use
+    # `json_to_ven` to deserialize it back.
     #
     # Dies if some value cannot be serialized.
     def to_str
@@ -860,7 +866,14 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "%{" << map.join(", ") { |k, v| "#{k} #{v}" } << "}"
+      io << "%{"
+      map.join(io, ", ") do |kv, io|
+        k, v = kv
+        k.inspect(io)
+        io << " "
+        v.to_s(io)
+      end
+      io << "}"
     end
 
     # Writes a JSON object.
@@ -869,6 +882,50 @@ module Ven::Suite
     end
 
     forward_missing_to @map
+
+    # Uses *pull* to deserialize a JSON value (i.e., JSON -> Ven).
+    #
+    # Although it's defined on MMap, it can be used to deserialize
+    # all other kinds of JSON values.
+    def self.json_to_ven(pull : JSON::PullParser)
+      case pull.kind
+      when .null?
+        result = MBool.new(!!pull.read_null)
+      when .int?
+        result = Num.new(pull.read_int)
+      when .float?
+        result = Num.new(pull.read_float)
+      when .string?
+        result = Str.new(pull.read_string)
+      when .bool?
+        result = MBool.new(pull.read_bool)
+      when .begin_array?
+        result = Vec.new
+        # Recurse on the items.
+        pull.read_array do
+          result << json_to_ven(pull)
+        end
+      when .begin_object?
+        result = MMap.new
+        # Recurse on the object value. We're fine with the
+        # key being a String.
+        pull.read_object do |key|
+          result[key] = json_to_ven(pull)
+        end
+      else
+        raise ModelCastException.new("unknown JSON value")
+      end
+
+      result
+    end
+
+    # Deserializes *json* (i.e., JSON -> Ven).
+    #
+    # Although it's defined on MMap, it can be used to deserialize
+    # all other kinds of JSON values.
+    def self.json_to_ven(json : String)
+      json_to_ven JSON::PullParser.new(json)
+    end
   end
 
   # A compound type is a type paired with an array of alternative
