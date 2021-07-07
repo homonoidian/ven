@@ -248,15 +248,10 @@ module Ven::Suite
     def []=(referent : Model, value : Model) : Model?
     end
 
-    # Returns a naive, one-way representation of this model.
-    #
-    # This representation includes the type of this model
-    # followed by the string representation of its value.
+    # Dies. The subclasses may decide, though, to override
+    # the death and handle to/from-JSON conversion.
     def to_json(json : JSON::Builder)
-      json.object do
-        json.field("type", \{{ @type.name.split("::").last.stringify }})
-        json.field("value", to_s)
-      end
+      raise ModelCastException.new("cannot convert #{self} to JSON")
     end
 
     macro inherited
@@ -339,6 +334,11 @@ module Ven::Suite
     def -
       Num.new(-@value)
     end
+
+    # Writes a JSON number.
+    def to_json(json : JSON::Builder)
+      json.number(@value)
+    end
   end
 
   # Ven's boolean data type (type bool).
@@ -416,6 +416,11 @@ module Ven::Suite
 
     def to_s(io)
       @value.inspect(io)
+    end
+
+    # Writes a JSON string.
+    def to_json(json : JSON::Builder)
+      json.string(@value)
     end
   end
 
@@ -561,6 +566,11 @@ module Ven::Suite
     # ```
     def self.from(items, as type : Model.class)
       new(items.map { |item| type.new(item) })
+    end
+
+    # Writes a JSON array.
+    def to_json(json : JSON::Builder)
+      @items.to_json(json)
     end
 
     forward_missing_to @items
@@ -787,11 +797,44 @@ module Ven::Suite
     def initialize(@map)
     end
 
+    def to_num
+      Num.new(length)
+    end
+
+    # Serializes this map into a JSON object.
+    #
+    # Dies if some value cannot be serialized.
+    def to_str
+      Str.new(@map.to_json)
+    end
+
+    # Returns the values in this map.
+    def to_vec
+      Vec.new(@map.values)
+    end
+
     def true?
       !@map.empty?
     end
 
     def indexable?
+      true
+    end
+
+    # Returns whether the keys & values of this map are equal
+    # to keys and values of *other* map.
+    def is?(other : MMap)
+      return false unless @map.size == other.size
+
+      @map.to_a.zip(other.to_a) do |my, its|
+        my_k, my_v = my
+        its_k, its_v = its
+
+        unless my_k == its_k && my_v.is?(its_v)
+          return false
+        end
+      end
+
       true
     end
 
@@ -819,6 +862,13 @@ module Ven::Suite
     def to_s(io)
       io << "%{" << map.join(", ") { |k, v| "#{k} #{v}" } << "}"
     end
+
+    # Writes a JSON object.
+    def to_json(json : JSON::Builder)
+      @map.to_json(json)
+    end
+
+    forward_missing_to @map
   end
 
   # A compound type is a type paired with an array of alternative
