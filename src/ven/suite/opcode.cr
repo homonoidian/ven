@@ -42,6 +42,7 @@ module Ven::Suite
     FORCE_RET_QUEUE
     TOR_BL # beginless
     TOR_EL # endless
+    TOM
 
     # Opcodes that take a static payload.
 

@@ -70,6 +70,7 @@ ensure "Sanity of unary operators" {
     &[1] is [1];
     #[1, 2, 3] is 3;
     #"hello" is 5
+    #  %{1 2 3 4} is %{1 2 3 4}
 
   should "return correct result when operand of unexpected type"
     +"1" is 1;
@@ -94,7 +95,16 @@ ensure "Sanity of unary operators" {
 
     #123 is 3;
     #true is 4;
-    #false is 5
+    #false is 5;
+
+    %123 dies;
+    %"123" dies;
+    %true dies;
+    %false dies;
+    %[1] dies;
+    #  %[1 2] is %{1 2}
+    %[1 2 3] dies
+    #  %[1 2 3 4] is %{1 2 3 4}
 }
 
 ensure "Sanity of binary operators" {

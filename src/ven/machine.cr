@@ -897,11 +897,43 @@ module Ven
               # Puts length of an entity: (x1 -- x2)
               put num pop.length
             in Opcode::TOR_BL
-              # Make a beginless range: (x1 -- x2)
+              # Makes a beginless range: (x1 -- x2)
               put MPartialRange.new(to: pop.to_num)
             in Opcode::TOR_EL
-              # Make an endless range: (x1 -- x2)
+              # Makes an endless range: (x1 -- x2)
               put MPartialRange.new(from: pop.to_num)
+            in Opcode::TOM
+              # Makes a map from the given operand: (x1 -- x2)
+              #
+              # If the operand is a map, it is returned immediately.
+              # Alternatively, the operand is assumed to be a vector,
+              # or is made into one.
+              next jump if tap.is_a?(MMap)
+
+              items = pop.to_vec
+              pairs = [] of {String, Model}
+
+              if items.all? { |item| item.is_a?(Vec) && item.size == 2 }
+                # If the vector is of shape [[k v], [k v], ...]:
+                items.each do |item|
+                  key, val = item.as(Vec)
+                  # Convert to str so we don't have to deal
+                  # with mutable keys.
+                  pairs << {key.to_str.value, val}
+                end
+              elsif items.size.even?
+                # If the vector is of shape [k v k v ...]:
+                items.in_groups_of(2, reuse: true) do |group|
+                  key, val = group[0].not_nil!, group[1].not_nil!
+                  # Convert to str so we don't have to deal
+                  # with mutable keys.
+                  pairs << {key.to_str.value, val}
+                end
+              else
+                die("could not convert to map: improper vector shape")
+              end
+
+              put MMap.new(pairs.to_h)
             in Opcode::BINARY
               # Evaluates a binary operation: (x1 x2 -- x3)
               gather { |lhs, rhs| put binary(static, lhs, rhs) }
@@ -1232,17 +1264,19 @@ module Ven
                 break it.queue << tap if it.goal.function?
               end
             in Opcode::MAP
-              # Puts a map (short for mapping). Pops the
-              # appropriate amount of key-values and makes
-              # a map out of them.
-              map = pop(static Int32).in_groups_of(2).map do |group|
-                key, value = group[0].not_nil!, group[1].not_nil!
-                # Convert {Model, Model} to {String, Model}
-                # to avoid mutable hash keys.
-                {key.to_str.value, value}
+              # Puts a map (short for mapping). Pops the specified
+              # amount of key-values and makes a map out of them.
+              items = pop(static Int32)
+              pairs = [] of {String, Model}
+
+              items.in_groups_of(2, reuse: true) do |group|
+                key, val = group[0].not_nil!, group[1].not_nil!
+                # Convert to str so we don't have to deal
+                # with mutable keys.
+                pairs << {key.to_str.value, val}
               end
 
-              put MMap.new(map.to_h)
+              put MMap.new(pairs.to_h)
             end
           rescue error : ModelCastException
             die(error.message.not_nil!)
