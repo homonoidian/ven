@@ -1,0 +1,56 @@
+# This is a typemap. Typemaps emerge from the way Ven 'is'
+# works on maps. With typemaps, you can define & ensure the
+# shape of a map.
+Weather = %{
+  temp `\d+ deg`
+  city any("Moscow", "Berlin")
+  coords %{
+    lat str
+    lon str
+  }
+};
+
+# Here is a bunch of valid & invalid maps. We'll then see
+# whether each one of them conforms our typemap.
+wobj_valid = %{
+  temp "32 deg"
+  city "Berlin"
+  coords %{
+    lat "1234 56 N"
+    lon "1234 56 E"
+  }
+};
+
+wobj_invalid = %{
+  temp "16 deg"
+  city "Moscow"
+  coords %{
+    lat 123 # bad
+    lon "1234 56 E"
+  }
+};
+
+wobj_invalid2 = %{
+  temp "16 deg"
+  city "New York" # bad
+  coords %{
+    lat "1234 56 N"
+    lon "1234 56 E"
+  }
+};
+
+wobj_invalid3 = %{
+  temp "16" # bad
+  city "Moscow"
+  coords %{
+    lat "1234 56 N"
+    lon "1234 56 E"
+  }
+};
+
+# As expected, only the first Weather object is valid.
+ensure wobj_valid is Weather;
+
+ensure wobj_invalid is not Weather;
+ensure wobj_invalid2 is not Weather;
+ensure wobj_invalid3 is not Weather;
