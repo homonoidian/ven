@@ -565,7 +565,7 @@ module Ven
       defled("?", Parselet::PIntoBool, precedence: IDENTITY)
       defled("IS", "IN", ">", "<", ">=", "<=", precedence: IDENTITY)
       defled("TO", precedence: RANGE)
-      defled("+", "-", "~", "&", precedence: ADDITION)
+      defled("+", "-", "~", "&", "%", precedence: ADDITION)
       defled("*", "/", "X", precedence: PRODUCT)
       defled("++", Parselet::PReturnIncrement, precedence: POSTFIX)
       defled("--", Parselet::PReturnDecrement, precedence: POSTFIX)

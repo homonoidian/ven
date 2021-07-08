@@ -129,6 +129,7 @@ ensure "Sanity of binary operators" {
 
     [1] & [2] is [1, 2];
     "lead" ~ "tail" is "leadtail";
+    %{a 1 b 2} % %{a 2 c 3} is %{a 2 b 2 c 3};
 
     "a" x 10 is "aaaaaaaaaa";
     [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -157,6 +158,12 @@ ensure "Sanity of binary operators" {
     "1" ~ 2 is "12";
     1 ~ "2" is "12";
 
+    1 % 2 dies;
+    "1" % 2 dies;
+    1 % "2" dies;
+    ["k1" 2] % ["k2" 4] is %{k1 2 k2 4};
+    ["k1" 2 "k2" 3] % ["k1", -1] is %{k1 (-1) k2 3};
+
     10 x "a" is "aaaaaaaaaa";
     10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
     0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -166,6 +173,9 @@ ensure "Sanity of binary operators" {
     1 is not str;
     "hello" is str;
     [2, 4, 6] is vec;
+    true is bool;
+    false is bool;
+    %{a 1 b 2} is map;
     from 10 is range;
     to 10 is range;
     1 to 10 is range;
@@ -174,6 +184,8 @@ ensure "Sanity of binary operators" {
     num is type;
     str is type;
     vec is type;
+    bool is type;
+    map is type;
     type is type;
     function is type;
     type is not function;
@@ -192,6 +204,9 @@ ensure "Sanity of binary operators" {
     typeof(1) is num;
     typeof("hello") is str;
     typeof([2, 4, 6]) is vec;
+    typeof(true) is bool;
+    typeof(false) is bool;
+    typeof(%{a 1 b 2}) is map;
     typeof(from 10) is range;
     typeof(to 10) is range;
     typeof(1 to 10) is range;

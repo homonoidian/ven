@@ -449,6 +449,8 @@ module Ven
         vec left.items + right.items
       when {"~", Str, Str}
         str left.value + right.value
+      when {"%", MMap, MMap}
+        MMap.new(left.merge(right.map))
       when {"x", Vec, Num}
         vec left.items * right.value.to_big_i
       when {"x", Str, Num}
@@ -492,6 +494,8 @@ module Ven
         return left.to_str, right.to_str
       when "&"
         return left.to_vec, right.to_vec
+      when "%"
+        return left.to_map, right.to_map
       end
     rescue ModelCastException
     end
