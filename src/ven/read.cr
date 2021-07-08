@@ -240,10 +240,10 @@ module Ven
     end
 
     # Returns the current word and consumes the next one, but
-    # only if the current word is of type *type*. Returns nil
-    # otherwise.
-    def word!(type : String)
-      word! if @word[:type] == type
+    # only if the current word is one of the given *types*.
+    # Returns nil otherwise.
+    def word!(*types : String)
+      word! if @word[:type].in?(types)
     end
 
     # Returns the current word and consumes the next one,

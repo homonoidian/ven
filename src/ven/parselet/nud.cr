@@ -768,8 +768,18 @@ module Ven::Parselet
       vals = Quotes.new
 
       until @parser.word!("}")
-        keys << led(Precedence::FIELD)
+        # If the key is a string or a symbol, normalize to
+        # string: `%{a 1 b 2}`. Alternatively, parse led in
+        # parens (so you can use symbol & any other value
+        # as key: `%{(a) 1 (b) 2}`)
+        if key = @parser.word!("STRING", "SYMBOL")
+          keys << QString.new(@tag, key[:lexeme])
+        elsif @parser.expect("(")
+          keys << @parser.before(")")
+        end
+
         vals << led
+
         # Optionally read a ','.
         @parser.word!(",")
       end

@@ -21,9 +21,12 @@ ensure "Sanity of data types" {
   should "support map"
     %{} is map;
     %{ "a" 1 } is map;
+    %{ a 1 } is map;
     [1, 2, 3] is not map;
     %{ "a" 1 }["a"] is 1;
+    %{ a 1 }["a"] is 1;
     %{ "a" 1, "b" 2 }["a", "b"] is [1, 2];
+    %{ a 1 b 2 }["a", "b"] is [1, 2];
     #%{} is 0;
     #%{"a" 2, "b" 3} is 2;
     %{"a" 2, "b" 3}.keys is ["a", "b"];
@@ -70,7 +73,7 @@ ensure "Sanity of unary operators" {
     &[1] is [1];
     #[1, 2, 3] is 3;
     #"hello" is 5;
-    %{1 2 3 4} is %{1 2 3 4};
+    %{(1) 2, (3) 4} is %{(1) 2, (3) 4};
     ~%{} is "{}";
     ~%{"a" 2} is "{\"a\":2}";
     ~%{"a" 2 "b" %{"x" 1 "y" 2}} is "{\"a\":2,\"b\":{\"x\":1,\"y\":2}}";
@@ -107,9 +110,9 @@ ensure "Sanity of unary operators" {
     %true dies;
     %false dies;
     %[1] dies;
-    %[1 2] is %{1 2};
+    %[1 2] is %{(1) 2};
     %[1 2 3] dies;
-    %[1 2 3 4] is %{1 2 3 4}
+    %[1 2 3 4] is %{(1) 2, (3) 4}
 }
 
 ensure "Sanity of binary operators" {
