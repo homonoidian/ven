@@ -903,52 +903,8 @@ module Ven
               # Makes an endless range: (x1 -- x2)
               put MPartialRange.new(from: pop.to_num)
             in Opcode::TOM
-              # Makes a map from the given operand: (x1 -- x2)
-              #
-              # If the operand is a map, it is returned immediately.
-              # Alternatively, the operand is assumed to be a vector,
-              # or is made into one.
-              next jump if tap.is_a?(MMap)
-
-              model = pop
-
-              if model.is_a?(Str)
-                begin
-                  put MMap.json_to_ven(model.value)
-                rescue e : JSON::ParseException
-                  message = e.message.not_nil!
-                  # Un-capitalize the message: Ven does not
-                  # capitalize error messages.
-                  die("improper JSON: #{message[0].downcase + message[1..]}")
-                end
-
-                next jump
-              end
-
-              items = model.to_vec
-              pairs = [] of {String, Model}
-
-              if items.all? { |item| item.is_a?(Vec) && item.size == 2 }
-                # If the vector is of shape [[k v], [k v], ...]:
-                items.each do |item|
-                  key, val = item.as(Vec)
-                  # Convert to str so we don't have to deal
-                  # with mutable keys.
-                  pairs << {key.to_str.value, val}
-                end
-              elsif items.size.even?
-                # If the vector is of shape [k v k v ...]:
-                items.in_groups_of(2, reuse: true) do |group|
-                  key, val = group[0].not_nil!, group[1].not_nil!
-                  # Convert to str so we don't have to deal
-                  # with mutable keys.
-                  pairs << {key.to_str.value, val}
-                end
-              else
-                die("could not convert to map: improper vector shape")
-              end
-
-              put MMap.new(pairs.to_h)
+              # Converts to map (type map).
+              put pop.to_map
             in Opcode::BINARY
               # Evaluates a binary operation: (x1 x2 -- x3)
               gather { |lhs, rhs| put binary(static, lhs, rhs) }

@@ -106,6 +106,11 @@ module Ven::Suite
       MBool.new(inverse ? !true? : true?)
     end
 
+    # Converts (casts) this model into a `MMap`
+    def to_map : MMap
+      raise ModelCastException.new("could not convert to map: #{type}")
+    end
+
     # Returns whether this model is semantically true.
     def true? : Bool
       true
@@ -389,6 +394,19 @@ module Ven::Suite
       self
     end
 
+    # Assumes this string is a JSON value and parses it.
+    #
+    # Returns the corresponding value (may not be a map!)
+    def to_map : Model
+      MMap.json_to_ven(@value)
+    rescue e : JSON::ParseException
+      message = e.message.not_nil!
+      # Un-capitalize the message: Ven does not capitalize
+      # error messages.
+      raise ModelCastException.new(
+        "'%': improper JSON: #{message[0].downcase + message[1..]}")
+    end
+
     def true?
       size != 0
     end
@@ -517,6 +535,35 @@ module Ven::Suite
 
     def to_vec
       self
+    end
+
+    # Interprets this vector as a map. The vector may be of
+    # two shapes: `[[k v], [k v], ...]`, or `[k v k v ...]`.
+    # Raises `ModelCastException` if it is of any other shape.
+    def to_map
+      pairs = [] of {String, Model}
+
+      if all? { |item| item.is_a?(Vec) && item.size == 2 }
+        # This vector is of shape [[k v], [k v], ...].
+        each do |item|
+          key, val = item.as(Vec)
+          # Convert to str so we don't have to deal
+          # with mutable keys.
+          pairs << {key.to_str.value, val}
+        end
+      elsif items.size.even?
+        # This vector is of shape [k v k v ...]:
+        in_groups_of(2, reuse: true) do |group|
+          key, val = group[0].not_nil!, group[1].not_nil!
+          # Convert to str so we don't have to deal
+          # with mutable keys.
+          pairs << {key.to_str.value, val}
+        end
+      else
+        raise ModelCastException.new("'%': improper vector shape")
+      end
+
+      MMap.new(pairs.to_h)
     end
 
     def true?
@@ -823,6 +870,11 @@ module Ven::Suite
     # Returns the values in this map.
     def to_vec
       Vec.new(@map.values)
+    end
+
+    # Returns self.
+    def to_map
+      self
     end
 
     def true?
