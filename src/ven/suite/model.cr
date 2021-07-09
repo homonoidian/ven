@@ -617,16 +617,7 @@ module Ven::Suite
     end
 
     def []?(range : Range)
-      b = range.begin
-      e = range.end
-
-      if b.try(&.< 0)
-        pad = @items.reverse[..e.try(&.-)]?
-      else
-        pad = @items[b..e]?
-      end
-
-      pad.try { |subset| Vec.new(subset) }
+      @items[range]?.try { |subset| Vec.new(subset) }
     end
 
     def []=(index : Num, value : Model)
@@ -923,8 +914,12 @@ module Ven::Suite
       true
     end
 
-    # Provides `.keys`, `.vals`. Otherwise, return nil.
+    # Accesses by key, and provides `.keys`, `.vals`.
+    #
+    # Otherwise, returns nil.
     def field?(name)
+      return @map[name] if has_key?(name)
+
       case name
       when "keys"
         Vec.from(@map.keys, Str)
@@ -1035,31 +1030,46 @@ module Ven::Suite
       @contents.zip(other.contents).all? { |my, its| my.is?(its) }
     end
 
-    # Checks whether *other* is of the head type, and its
-    # contents (whatever this means) match the tail types
-    # (content types).
-    def is?(other : Model)
-      return false unless other.is?(@lead)
+    # Checks whether *subject* is of the head type, and its
+    # contents (whatever this means) match the content types.
+    def is?(subject : Model)
+      return false unless subject.is?(@lead)
 
-      # Compound root 'any' exists to represent general
-      # alternative: `1 is any(1, str, vec)`.
-      if @lead.is_a?(MAny)
-        return @contents.any? do |content|
-          other.is?(content)
+      case subject
+      when MMap
+        # Whether the shape of the subject map nonstrictly
+        # (in a 'some' way) matches the content map.
+        @contents.any? do |content|
+          return false unless content.is_a?(MMap)
+
+          # Keys specified in the content map may be missing,
+          # and keys not specified may be present. But all
+          # those that are present & specified must be of the
+          # expected type.
+          subject.each do |subj_key, subj_value|
+            next unless type = content.map[subj_key]?
+            return false unless subj_value.is?(type)
+          end
+
+          true
         end
-      end
-
-      # All container (`indexable?`) types should be
-      # present here. For `str`, however, it doesn't
-      # make much sense.
-      case other
       when Vec
-        return other.all? do |item|
-          @contents.any? { |content| item.is?(content) }
+        # Whether each item of the subject vector matches
+        # any content.
+        subject.all? do |item|
+          @contents.any? do |content|
+            item.is?(content)
+          end
+        end
+      else
+        # Compound root 'any' exists to represent general
+        # alternative: `1 is any(1, str, vec)`. Compounds
+        # with unsupported heads are mostly synonymous
+        # to `any`.
+        @contents.any? do |content|
+          subject.is?(content)
         end
       end
-
-      false
     end
 
     def weight
@@ -1127,7 +1137,8 @@ module Ven::Suite
     def specificity(params : Array(String), weights : Array(MWeight))
       params.zip(weights).map do |param, weight|
         weight = weight.value
-        # Anonymous parameters lose one weight point:
+        # Anonymous parameters lose one weight point and
+        # become ANON_<>:
         weight -= param.in?("*", "$", "_").to_unsafe
       end.sum
     end

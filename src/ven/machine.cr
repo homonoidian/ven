@@ -416,7 +416,7 @@ module Ven
         # `bool is <any>` is also a special case, as, because
         # `is` returns the *left* value, `false is false` will
         # return false (i.e., the left false); this is, of
-        # course, wrong.
+        # course, not what is expected.
         bool left.is?(right)
       when {"is", _, _}
         # Note that 'is' is not normalized; identity handling
@@ -427,8 +427,14 @@ module Ven
         may_be left, if: right.value.includes?(left.value)
       when {"in", Num, MRange}
         may_be left, if: right.includes?(left.value)
+      when {"in", MCompoundType, Vec}
+        vec right.select(&.is? left)
       when {"in", _, Vec}
-        right.find &.is?(left) || bool false
+        bool !!right.find &.is?(left)
+      when {"in", Str, MMap}
+        bool right.has_key?(left.value)
+      when {"in", _, MMap}
+        MMap.new right.select { |_, v| v.is?(left) }
       when {"<", Num, Num}
         bool left.value < right.value
       when {">", Num, Num}
