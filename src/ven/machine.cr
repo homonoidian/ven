@@ -612,12 +612,6 @@ module Ven
 
     # Resolves field access.
     #
-    # For any *head*, provides several fields itself:
-    #   * `callable?` returns whether this model is callable;
-    #   * `indexable?` returns whether this model is indexable;
-    #   * `crystal` returns the Crystal string representation
-    #   for this model.
-    #
     # If *head* has a field named *field*, returns the value
     # of that field.
     #
@@ -626,16 +620,7 @@ module Ven
     #
     # Returns nil if found no valid field resolution.
     def field?(head : Model, field : Str)
-      case field.value
-      when "callable?"
-        bool head.callable?
-      when "indexable?"
-        bool head.indexable?
-      when "crystal"
-        str head.inspect
-      else
-        head.field(field.value) || field?(head, @context[field.value]?)
-      end
+      head.field(field.value) || field?(head, @context[field.value]?)
     end
 
     # :ditto:

@@ -175,8 +175,31 @@ module Ven::Suite
     # Returns a field's value for this model, or nil if this
     # model has no such field.
     #
-    # This method may be overridden by the subclass if it
-    # wishes to support the following syntax:
+    # Provides several fields itself (but prefers your fields
+    # with the same name):
+    #   * `callable?` returns whether this model is callable;
+    #   * `indexable?` returns whether this model is indexable;
+    #   * `crystal` returns the Crystal string representation
+    #   for this model.
+    #
+    # Do not override this method. Override `field?` instead.
+    def field(name : String) : Model?
+      field?(name) ||
+        case name
+        when "callable?"
+          MBool.new(callable?)
+        when "indexable?"
+          MBool.new(indexable?)
+        when "crystal"
+          Str.new(inspect)
+        end
+    end
+
+    # Returns a field's value for this model, or nil if this
+    # model has no such field.
+    #
+    # This method could  be overridden by a subclass. Then it
+    # would support the following syntax:
     #
     # ```ven
     # foo.field1;
@@ -187,7 +210,7 @@ module Ven::Suite
     # ```
     #
     # Where `foo` is this model.
-    def field(name : String) : Model?
+    def field?(name : String)
     end
 
     # Returns the length of this model.
@@ -692,7 +715,8 @@ module Ven::Suite
       @begin.is?(other.begin) && @end.is?(other.end)
     end
 
-    def field(name)
+    # Provides `.begin`, `.end`, `.empty?`. Otherwise, returns nil.
+    def field?(name)
       case name
       when "begin"
         @begin
@@ -749,7 +773,8 @@ module Ven::Suite
     def initialize(from @begin = nil, to @end = nil)
     end
 
-    def field(name)
+    # Provides `.beginless?`, `.endless?`. Otherwise, returns nil.
+    def field?(name)
       case name
       when "beginless?"
         MBool.new(@begin == nil)
@@ -898,7 +923,8 @@ module Ven::Suite
       true
     end
 
-    def field(name)
+    # Provides `.keys`, `.vals`. Otherwise, return nil.
+    def field?(name)
       case name
       when "keys"
         Vec.from(@map.keys, Str)
@@ -1050,9 +1076,7 @@ module Ven::Suite
   # function models.
   abstract class MFunction < MClass
     # Returns the specificity of this function. Defaults to 0.
-    getter specificity : Int32 do
-      0
-    end
+    abstract def specificity
 
     # Returns the variant of this function that can receive
     # *args*. Returns nil if found no matching variant.
@@ -1068,6 +1092,16 @@ module Ven::Suite
 
     def callable?
       true
+    end
+
+    # Provides `.name`, `.specificity`. Otherwise, returns nil.
+    def field?(name : String)
+      case name
+      when "name"
+        Str.new(name?)
+      when "specificity"
+        Num.new(specificity)
+      end
     end
 
     # Returns whether *givens* match *args* (using `is?`).
@@ -1086,6 +1120,26 @@ module Ven::Suite
     # Pretty-prints *params* alongside *given*.
     def pretty(params : Array(String), given : Models)
       params.zip(given).map(&.join ": ").join(", ")
+    end
+
+    # Computes the specificity number for *params* and *weights*
+    # using the consensus (agreed-upon) algorithm.
+    def specificity(params : Array(String), weights : Array(MWeight))
+      params.zip(weights).map do |param, weight|
+        weight = weight.value
+        # Anonymous parameters lose one weight point:
+        weight -= param.in?("*", "$", "_").to_unsafe
+      end.sum
+    end
+
+    # Returns the name of this function if it has one,
+    # orelse nil.
+    def name?
+      {% if @type.instance_vars.find(&.id.== :name) %}
+        @name
+      {% else %}
+        to_s
+      {% end %}
     end
   end
 
@@ -1108,13 +1162,8 @@ module Ven::Suite
     end
 
     # Returns the specificity of this concrete.
-    getter specificity do
-      @params.zip(@given).map do |param, typee|
-        weight = typee.weight
-        # Anonymous parameters lose one weight point.
-        weight -= 1 if anonymous?(param)
-        weight.value
-      end.sum
+    def specificity
+      super(@params, @given.map &.weight)
     end
 
     def variant?(args)
@@ -1130,18 +1179,18 @@ module Ven::Suite
       type.is?(@given[argno])
     end
 
-    def field(name)
+    # Provides `.arity`, `.slurpy?`, `params`. Otherwise,
+    # delegates to `MFunction`.
+    def field?(name)
       case name
-      when "name"
-        Str.new(@name)
       when "arity"
         Num.new(@arity)
-      when "slurpy"
+      when "slurpy?"
         MBool.new(@slurpy)
       when "params"
         Vec.from(params, Str)
-      when "specificity"
-        Num.new(specificity)
+      else
+        super
       end
     end
 
@@ -1151,11 +1200,6 @@ module Ven::Suite
 
     def to_s(io)
       io << "concrete " << @name << "(" << pretty(@params, @given) << ")"
-    end
-
-    # Returns whether *param* is an anonymous parameter.
-    def anonymous?(param : String)
-      param.in?("*")
     end
 
     # Returns whether this concrete's identity is equal to
@@ -1188,23 +1232,22 @@ module Ven::Suite
     # Returns the specificity of this builtin.
     #
     # Note that in builtins, all arguments have the weight
-    # of `MWeight::ANY`.
-    getter specificity do
-      MWeight::ANY.value * @arity
+    # of `MWeight::ANY` (onymous any).
+    def specificity
+      @arity * MWeight::ANY.value
     end
 
     def variant?(args)
       args.size == @arity ? self : false
     end
 
-    def field(name)
+    # Provides `.arity`. Otherwise, delegates to `MFunction`.
+    def field?(name)
       case name
-      when "name"
-        Str.new(@name)
       when "arity"
         Num.new(@arity)
-      when "specificity"
-        Num.new(specificity)
+      else
+        super
       end
     end
 
@@ -1233,6 +1276,13 @@ module Ven::Suite
     end
 
     delegate :[], :size, to: @variants
+
+    # Returns the specificity of this generic.
+    #
+    # Sums the specificities of its variants.
+    def specificity
+      @variants.map(&.specificity).sum
+    end
 
     # Adds *variant* to the list of variants this generic
     # supervises. Does not check if an identical variant
@@ -1265,12 +1315,12 @@ module Ven::Suite
       @variants.any? &.leading?(type, argno)
     end
 
-    def field(name)
+    def field?(name)
       case name
-      when "name"
-        Str.new(@name)
       when "variants"
         Vec.new(@variants)
+      else
+        super
       end
     end
 
@@ -1296,7 +1346,24 @@ module Ven::Suite
     def initialize(@function, @args)
     end
 
-    delegate :name, :field, :length, :specificity, to: @function
+    delegate :name, :arity, :length, to: @function
+
+    # Returns the specificity of this partial.
+    #
+    # The specificity of this partial is the specificity of
+    # the provided arguments (often `MWeight::VALUE`s), and
+    # the subset of parameters they correspond to.
+    def specificity
+      fn = @function
+
+      if fn.responds_to?(:params)
+        super(fn.params[..@args.size - 1], @args.map &.weight)
+      else
+        # Delegate to the function if it has not exported
+        # any params.
+        fn.specificity
+      end
+    end
 
     def leading?(type)
       @function.leading?(type, @args.size - 1)
@@ -1318,6 +1385,12 @@ module Ven::Suite
     getter params : Array(String)
 
     def initialize(@name, @given, @params, @arity, @target)
+    end
+
+    # Returns the specificity of this box. Internally the
+    # same as concrete.
+    def specificity
+      super(@params, @given.map &.weight)
     end
 
     def variant?(args) : self?
@@ -1349,8 +1422,8 @@ module Ven::Suite
   # An instance of an `MBox`.
   #
   # Carries with it its own copy of Scope (`Context::Machine::Scope`),
-  # which was created at instantiation, and allows to access
-  # the entries of that scope through field access.
+  # called namespace. It allows to access & modify the entries
+  # in that namespace through field access (`instance.field`).
   class MBoxInstance < MClass
     getter parent : MFunction
     getter namespace : CxMachine::Scope
@@ -1398,19 +1471,16 @@ module Ven::Suite
     # Returns one of the fields in the namespace of this box
     # instance.
     #
-    # Additionally, provides: `.name`, which returns the name
-    # of this box, `.parent`, which returns the parent of this
-    # box, and `.fields`, which returns an unordered vector of
-    # fields in this box.
-    def field(name)
+    # Additionally, provides: `.parent`, which returns the
+    # parent of this box, and `.fields`, which returns an
+    # **unordered** vector of fields in this box.
+    def field?(name)
       # Prefer the user's fields over internal fields.
       if value = @namespace[name]?
         return value
       end
 
       case name
-      when "name"
-        Str.new(@parent.name)
       when "parent"
         @parent
       when "fields"
@@ -1429,8 +1499,8 @@ module Ven::Suite
       return unless @namespace.has_key?(field)
 
       if (parent = @parent).is_a?(MBox)
-        # Make sure the types match, if value's one of the
-        # parameters, that is.
+        # Make sure the types match (if the parameter-to-change
+        # is typed).
         typed_at = parent.params.index(field)
 
         if typed_at && !value.is?(type = parent.given[typed_at])
@@ -1460,9 +1530,6 @@ module Ven::Suite
 
   # Represents a Ven lambda (nameless function & closure).
   class MLambda < MFunction
-    # Lambda has to have some name for compatibility with other
-    # MFunctions.
-    getter name = "lambda"
     # Returns the **surrounding** scope (singular!) of this
     # lambda. I.e., won't contain globals etc.
     getter scope : CxMachine::Scope
@@ -1471,16 +1538,17 @@ module Ven::Suite
     getter target : Int32
     getter params : Array(String)
     # Returns the injected contextuals.
-    #
-    # ```ven
-    # div = () _ / _;
-    # div.inject(0, 1);
-    # ensure add() is 0;
-    # ```
     getter contextuals = Models.new
 
     def initialize(@scope, @arity, @slurpy, @params, @target)
       @myselfed = false
+    end
+
+    # Returns the specificity of this lambda. Since lambdas
+    # do not allow `given`, their parameter weights are all
+    # `MWeight::ANY`s.
+    def specificity
+      super(@params, [MWeight::ANY] * @arity)
     end
 
     # Sets the name this lambda knows itself under.
@@ -1497,7 +1565,9 @@ module Ven::Suite
       end
     end
 
-    def field(name)
+    # Provides `.contextuals`, `.params`, and `.slurpy?`. Delegates
+    # to `MFunction` otherwise.
+    def field?(name)
       case name
       when "contextuals"
         Vec.new(@contextuals)
@@ -1505,6 +1575,8 @@ module Ven::Suite
         Vec.from(@params, Str)
       when "slurpy?"
         MBool.new(@slurpy)
+      else
+        super
       end
     end
 
@@ -1554,7 +1626,7 @@ module Ven::Suite
       yield @fields = {} of String => Model
     end
 
-    def field(name)
+    def field?(name)
       @fields[name]?
     end
 

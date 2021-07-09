@@ -16,8 +16,8 @@ b = B();
 ensure a is a and a is not b;
 ensure b is b and b is not a;
 
-ensure a.name is "A" and b.name is "B";
 ensure a.parent is A and b.parent is B;
+ensure a.parent.name is "A" and b.parent.name is "B";
 
 
 box Foo(x, y);
