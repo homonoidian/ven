@@ -11,8 +11,8 @@ module Ven::Suite
     end
 
     getter goal : Goal
+    getter trace : Trace?
 
-    # Chunk pointer, a reference to the chunk this frame executes.
     property cp : Int32
     property ip : Int32 = 0
 
@@ -30,9 +30,9 @@ module Ven::Suite
     @[JSON::Field(emit_null: true)]
     property returns : Model?
 
-    # An array of failure messages. Used inside ensure tests
-    # but generic in nature (may be used to wait for all non-
-    # fatal errors).
+    # An array of failure messages. Used for ensure tests but
+    # generic in nature (may be used to wait for all non-fatal
+    # errors).
     property failures = [] of String
 
     # The queue values of this frame. They are appended here
@@ -40,7 +40,7 @@ module Ven::Suite
     # on the situation.
     property queue = Models.new
 
-    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0, @ip = 0)
+    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0, @ip = 0, @trace = nil)
     end
 
     delegate :last, :last?, to: @stack

@@ -30,36 +30,23 @@ module Ven
 
     # Makes a new `Machine` that will run *chunks*, starting
     # with the chunk at *origin* (the origin chunk).
-    def initialize(@chunks,
-                   @context = CxMachine.new,
-                   @origin = 0,
-                   @enquiry = Enquiry.new,
-                   frames : Array(Frame)? = nil)
+    def initialize(@chunks, @context = CxMachine.new, origin = 0, @enquiry = Enquiry.new, frames : Array(Frame)? = nil)
+      @frames = frames ? frames.not_nil! : [Frame.new(cp: origin)]
       @inspect = @enquiry.inspect.as Bool
       @measure = @enquiry.measure.as Bool
-
-      # Per each frame there should always be a scope; if you
-      # push a frame, that is, you have to push a scope too.
-      # This has to be done so that the frames and the context
-      # scopes are in sync.
-      @frames = frames.nil? ? [Frame.new(cp: @origin)] : frames.not_nil!
-
       @timetable = @enquiry.timetable = Timetable.new
     end
 
     # Dies of runtime error with *message*, which should explain
     # why the error happened.
     def die(message : String)
-      traces = @context.traces.dup
-
       file = chunk.file
       line = fetch.line
 
-      unless traces.last?.try(&.line) == line
-        traces << Trace.new(file, line, "unit")
-      end
+      traces = @frames.select(&.trace).map { |it| it.trace.not_nil! }.to_set
+      traces << Trace.new(file, line, "unit")
 
-      raise RuntimeError.new(traces, file, line, message)
+      raise RuntimeError.new(traces.to_a, file, line, message)
     end
 
     # Builds an `IStatistic` given some *amount*, *duration*
@@ -268,45 +255,38 @@ module Ven
       MRegex.new({{value}})
     end
 
-    # Performs an invokation: pushes a frame, introduces a
-    # child context and starts executing the chunk at *cp*.
+    # Initiates invokation: does `Context#push`, and appends
+    # a function invokation frame to `@frames`.
     #
-    # A trace is made. Trace's filename and line number are
-    # figured out automatically, but its *name* must be provided.
+    # The frame's trace's description is set to *desc* if
+    # it is provided.
     #
-    # The new frame's operand stack is initialized with values
-    # of *import*. **The order of *import* is kept.**
+    # The frame's stack will be initialized with *initial*
+    # values (with their order kept).
     #
-    # See `Frame::Goal` to see what *goal* is for.
-    private macro invoke(name, cp, import values = Models.new, goal = Frame::Goal::Unknown)
-      @context.push(chunk.file, fetch.line, {{name}})
-      @frames << Frame.new({{goal}}, {{values}}, {{cp}})
+    # See `Frame::Goal` to learn about *goal*.
+    private macro invoke(origin, desc = nil, initial = Models.new, goal = Frame::Goal::Function)
+      @context.push
+      @frames << Frame.new({{goal}}, {{initial}}, {{origin}}, 0,
+        {% if desc %}
+          trace: Trace.new(chunk.file, fetch.line, {{desc}}),
+        {% end %}
+      )
     end
 
-    # Reverts the actions of `invoke`.
+    # Performs invokation teardown.
     #
-    # Bool *export* determines whether to put exactly one value
-    # from the stack of the invokation onto the parent stack.
-    #
-    # Returns nil if *export* was requested, but there was no
-    # value to export. Returns true otherwise.
-    #
-    # Pops a scope from the context unless there is but one left.
+    # If *export* is true, requests a return value from
+    # the invokation. Returns the value if that request
+    # was fulfilled, otherwise nil.
     private macro revoke(export = false)
-      %frame = @frames.pop
-
+      @context.pop
       @context.ascend = true
 
-      if @context.size > 1
-        @context.pop
-      end
+      %frame = @frames.pop
 
       {% if export %}
-        if %it = %frame.stack.last?
-          put %it
-
-          true
-        end
+        (%return = %frame.stack.last?) && put %return
       {% else %}
         true
       {% end %}
@@ -336,7 +316,7 @@ module Ven
         die("hook '#{%name}' has no proper variant for #{%args.join(", ")}")
       end
 
-      invoke(%callee.to_s, %variant.target, %args, Frame::Goal::Function)
+      invoke(%variant.target, %variant.to_s, %args)
     end
 
     # Looks up for an underscores value in the frames above
@@ -950,9 +930,9 @@ module Ven
 
                 case found = callee.variant?(args)
                 when MBox
-                  next invoke(callee.to_s, found.target, args)
+                  next invoke(found.target, found.to_s, args, Frame::Goal::Unknown)
                 when MConcreteFunction
-                  next invoke(callee.to_s, found.target, args, Frame::Goal::Function)
+                  next invoke(found.target, found.to_s, args)
                 when MBuiltinFunction
                   put found.callee.call(self, args)
                 when MFrozenLambda
@@ -965,11 +945,7 @@ module Ven
                   # Make use of the lambda's contextuals.
                   underscores.concat(found.contextuals)
                   @context.ascend = false
-                  # 'clone' worsens the performance here (~+50%),
-                  # but it's more correct, as it prevents lambda
-                  # body from mutating the sandbox scope.
                   @context.scopes << found.scope.clone
-                  @context.traces << Trace.new(chunk.file, fetch.line, "lambda")
                   next
                 else
                   die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
@@ -1032,12 +1008,7 @@ module Ven
               put reduce(static, pop)
             in Opcode::GOTO
               # Goes to the chunk it received as the argument.
-              #
-              # Blocks do not need traces, so we're doing a
-              # special-case invoke() here.
-              @frames << Frame.new(Frame::Goal::Unknown, Models.new, static Int32)
-              @context.scopes << CxMachine::Scope.new
-              next
+              next invoke(static(Int32), goal: Frame::Goal::Unknown)
             in Opcode::ACCESS
               # Provides a conventional interface to .indexable?
               # Model's items. May collect (`[1, 2, 3][0, 1]`)
@@ -1093,7 +1064,7 @@ module Ven
 
                 # Revoke that surrounding function & invoke
                 # the one requested by 'next'.
-                revoke && invoke(variant.to_s, variant.target, args, Frame::Goal::Function)
+                revoke && invoke(variant.target, variant.to_s, args)
 
                 # But keep queue values from the revoked
                 # function.

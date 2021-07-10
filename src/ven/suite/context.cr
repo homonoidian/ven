@@ -133,18 +133,10 @@ module Ven::Suite
   class CxMachine
     alias Scope = Hash(String, Model)
 
-    # Maximum amount of entries in the traceback. Overflowing
-    # traces are cleared (forgotten).
-    MAX_TRACES = 64
-
     # The scope hierarchy of this context. To introduce a new,
     # deeper scope, an empty `Scope` should be appended to
     # this array.
     getter scopes = [Scope.new]
-
-    # The list of traceback entries. It is valid until this
-    # context's destruction.
-    getter traces = [] of Trace
 
     # Whether ascending lookup is enabled.
     #
@@ -259,19 +251,14 @@ module Ven::Suite
       self[symbol.name, nest: symbol.nest] = value
     end
 
-    # Introduces a deeper scope **and** a trace.
-    #
-    # Clears (forgets) traces if they exceed `MAX_TRACES`.
-    def push(file, line, name)
-      @traces.clear if @traces.size > MAX_TRACES
+    # Introduces a deeper scope.
+    def push
       @scopes << Scope.new
-      @traces << Trace.new(file, line, name)
     end
 
-    # Pops the current scope **and** the current trace.
+    # Pops the current scope.
     def pop
-      @scopes.pop
-      @traces.pop?
+      @scopes.pop if @scopes.size > 1
     end
 
     def_clone

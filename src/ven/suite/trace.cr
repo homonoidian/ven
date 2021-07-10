@@ -6,18 +6,22 @@ module Ven::Suite
 
     getter file : String
     getter line : Int32
-    getter name : String
+    getter desc : String
 
-    def initialize(tag : QTag, @name)
+    def initialize(tag : QTag, @desc)
       @line = tag.line
       @file = tag.file
     end
 
-    def initialize(@file, @line, @name)
+    def initialize(@file, @line, @desc)
     end
 
     def ==(tag : QTag)
       @file == tag.file && @line == tag.line
+    end
+
+    def ==(trace : Trace)
+      @file == trace.file && @line == trace.line && @desc == trace.desc
     end
 
     # Stringifies this trace.
@@ -27,11 +31,9 @@ module Ven::Suite
     #
     # Colorizes the output.
     def to_s(io)
-      io << "  in #{@name.colorize.bold} (#{@file}:#{@line})"
-
+      io << "  in #{@desc.colorize.bold} (#{@file}:#{@line})"
       if File.exists?(@file)
         excerpt = File.read_lines(@file)[@line - 1]
-
         io << "\n    #{@line}| #{excerpt.lstrip}"
       end
     end
