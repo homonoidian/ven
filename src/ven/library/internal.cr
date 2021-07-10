@@ -38,6 +38,16 @@ module Ven::Library
       defbuiltin "typeof", model : Model do
         MType[model.class] || machine.die("cannot determine the type of #{model}")
       end
+
+      # Freezes the *lambda*. See `MFrozenLambda`.
+      defbuiltin "freeze", lambda : MLambda do
+        lambda.freeze(machine)
+      end
+
+      # A direct binding to Crystal's `spawn`.
+      defbuiltin "spawn", frozen : MFrozenLambda, args : Vec do
+        spawn frozen.call(args.items)
+      end
     end
   end
 end

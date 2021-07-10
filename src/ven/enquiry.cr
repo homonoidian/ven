@@ -34,11 +34,6 @@ module Ven
     property measure = false
     # TO `Program`: the amount of optimize passes.
     property optimize = 8
-    # TO `Machine`: if true, there is no fiber-juggling in
-    # the main interpreter loop, and your program runs faster
-    # (~40% faster); if false, there is, but then Ven catches
-    # SIGINT interrupts (which is the preferred option, of course).
-    property fast_interrupt = false
     # TO `Compiler`: if true, enables test mode (i.e., disignores
     # 'ensure' tests).
     property test_mode = false

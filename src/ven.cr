@@ -605,13 +605,6 @@ module Ven
         end
 
         cmd.flags.add do |flag|
-          flag.name = "fast-interrupt"
-          flag.long = "--fast-interrupt"
-          flag.default = false
-          flag.description = "Disable domestic SIGINT handling."
-        end
-
-        cmd.flags.add do |flag|
           flag.name = "test-mode"
           flag.short = "-t"
           flag.long = "--test"
@@ -650,7 +643,6 @@ module Ven
           @enquiry.measure = options.bool["timetable"]
           @enquiry.inspect = options.bool["inspect"]
           @enquiry.optimize = options.int["optimize"].to_i * 8
-          @enquiry.fast_interrupt = options.bool["fast-interrupt"]
           @enquiry.test_mode = options.bool["test-mode"]
 
           # This ensures that behavior is as the user expects:

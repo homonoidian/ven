@@ -8,21 +8,21 @@ module Ven
     # it as a callback in this particular case) and an HTTP
     # server. The funlet is needed to re-create the server
     # if it was closed.
-    alias Server = {Machine::Funlet, HTTP::Server}
+    alias Server = {MFrozenLambda, HTTP::Server}
 
-    # Makes a new HTTP::Server. The server will call *funlet*
-    # to process the requests.
-    private macro create_server(funlet)
-      %funlet = {{funlet}}
+    # Makes a new HTTP::Server. The server will call *callback*,
+    # and wait until it processes the request.
+    private macro create_server(callback)
+      %callback = {{callback}}
 
       HTTP::Server.new do |context|
-        # %funlet should expect: path, verb, request body
+        # %callback should expect: path, verb, request body
         # (or empty string).
-        output = %funlet.call([
-          Str.new(context.request.path).as(Model),
-          Str.new(context.request.method).as(Model),
-          Str.new((context.request.body.try(&.gets_to_end) || "").to_s).as(Model)
-        ])
+        output = %callback.call(
+          Str.new(context.request.path),
+          Str.new(context.request.method),
+          Str.new((context.request.body.try(&.gets_to_end) || "").to_s)
+        )
         if output.is_a?(Vec)
           # Expected output:
           #   0 status code,
@@ -45,15 +45,15 @@ module Ven
         # Creates a new HTTP server. The server will rely on
         # *callback* to process the requests.
         defbuiltin "new", callback : MLambda do
-          {funlet = machine.funlet(callback), create_server(funlet)}
+          {cb = callback.freeze(machine), create_server(cb)}
         end
 
         # Makes *handle* listen on *uri*.
         defbuiltin "listen", handle : MNative(Server), uri : Str do
-          funlet, server = handle.value
+          cb, server = handle.value
           # Re-create the server if this is not the first
           # `listen` for it.
-          server = create_server(funlet) if server.closed?
+          server = create_server(cb) if server.closed?
           server.bind(uri.value)
           # Have a graceful SIGINT.
           Signal::INT.trap do

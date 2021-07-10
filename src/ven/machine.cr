@@ -9,34 +9,34 @@ module Ven
     alias IStatistics = Hash(Int32, IStatistic)
     alias IStatistic = {amount: Int32, duration: Time::Span, instruction: Instruction}
 
-    # A funlet is a Ven lambda (hence a self-sufficient piece
-    # of Ven code) that (a) can be called from Crystal, and
-    # (b) is thread-safe (supposedly). It evaluates using
-    # its own instance of Machine, and so can be pretty slow
-    # at times.
-    alias Funlet = Proc(Models, Model)
+    # How many interpreter loop ticks to wait before Ven
+    # scheduling logic gives way to the other, enqueued
+    # fibers.
+    SCHEDULER_TICK_PERIOD = 10
 
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
+    # Returns the chunks this machine has knowledge of.
+    getter chunks : Chunks
+    # Returns the context of this machine.
     getter context : CxMachine
 
-    # Whether to do `Fiber.yield` each cycle of the
-    # interpreter loop.
-    property fast_interrupt : Bool
+    # Returns the `Enquiry` object this machine writes to
+    # and reads from.
+    property enquiry : Enquiry
 
     @timetable : Timetable
 
     # Makes a new `Machine` that will run *chunks*, starting
     # with the chunk at *origin* (the origin chunk).
-    def initialize(@chunks : Chunks,
-                   @context = Context::Machine.new,
+    def initialize(@chunks,
+                   @context = CxMachine.new,
                    @origin = 0,
                    @enquiry = Enquiry.new,
                    frames : Array(Frame)? = nil)
       @inspect = @enquiry.inspect.as Bool
       @measure = @enquiry.measure.as Bool
-      @fast_interrupt = @enquiry.fast_interrupt.as Bool
 
       # Per each frame there should always be a scope; if you
       # push a frame, that is, you have to push a scope too.
@@ -735,55 +735,19 @@ module Ven
       end
     end
 
-    # Returns a funlet for *callee*. See `Funlet`.
-    def funlet(callee : MLambda)
-      Proc(MLambda, Funlet).new do |callee|
-        copy = Machine.new(
-          # The copy has access to all compiled chunks.
-          @chunks,
-          # The copy will have access only to the `.clone`d
-          # *callee* scope.
-          CxMachine.new,
-          # The copy will execute *callee*.
-          callee.target,
-          # The copy uses the same enquiry parameters as
-          # the original.
-          @enquiry,
-          # There should be no frames at this point.
-          [] of Frame,
-        )
-
-        # Do not handle interrupts in the copy.
-        copy.fast_interrupt = true
-
-        # Let this be closured into the Proc below.
-        scope = callee.scope.clone
-
-        Proc(Models, Model).new do |args|
-          # We clone for safety here. This way, inplace
-          # mutations won't change the sandbox scope.
-          copy.context.scopes << scope.clone
-          copy.@frames.concat([
-            # Have a purposefully bad frame. It acts as a
-            # wall here. It is used to forcefully halt the
-            # interpreter loop.
-            Frame.new(ip: Int32::MAX - 1),
-            Frame.new(Frame::Goal::Function, args, callee.target),
-          ])
-          # Invoke. Machine will encounter the bad frame and
-          # halt. Then we `return!` the resulting model.
-          copy.start.return!.not_nil!
-        end
-      end.call(callee)
-    end
-
     # Starts the evaluation loop, which begins to fetch the
     # instructions from the current chunk and execute them,
     # until there aren't any left.
-    def start
+    def start(schedule = true)
+      # The amount of ticks gone by. A tick is one iteration
+      # of the interpreter loop. Ven runtime scheduler works
+      # with this number to figure out when to run tasks.
+      ticks = 0_u128
+
+      # Whether it received an interrupt signal.
       interrupt = false
 
-      unless @fast_interrupt
+      if schedule
         Signal::INT.trap do
           interrupt = true
         end
@@ -794,12 +758,16 @@ module Ven
         # in and the current instruction pointer.
         ip, cp = frame.ip, frame.cp
 
-        # De-busy the loop (a temporary solution).
-        #
-        # XXX: have some sort of scheduling logic do this? I.e.,
-        # every 10 instructions `Fiber.yield` to see if an
-        # interrupt was requested.
-        Fiber.yield unless @fast_interrupt
+        if schedule
+          # Loosen up the loop from time to time.
+          #
+          # HELL THIS IS CRUDE!
+          if ticks % SCHEDULER_TICK_PERIOD == 0
+            Fiber.yield
+          end
+
+          ticks += 1
+        end
 
         begin
           if interrupt
@@ -987,6 +955,8 @@ module Ven
                   next invoke(callee.to_s, found.target, args, Frame::Goal::Function)
                 when MBuiltinFunction
                   put found.callee.call(self, args)
+                when MFrozenLambda
+                  put found.call(args)
                 when MLambda
                   # Invoke the lambda manually, as it's not
                   # worth it to make this a special-case of
@@ -1310,7 +1280,7 @@ module Ven
     #
     # Returns the result that was produced by the Machine, or
     # nil if nothing was produced.
-    def self.run(chunks, context = Context::Machine.new, origin = 0)
+    def self.run(chunks, context = CxMachine.new, origin = 0)
       machine = new(chunks, context, origin)
       yield machine
       machine.start.return!

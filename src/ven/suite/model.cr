@@ -1608,6 +1608,60 @@ module Ven::Suite
     def to_s(io)
       io << "lambda " << "(" << params.join(", ") << ")"
     end
+
+    # Freezes this lambda (see `MFrozenLambda`)
+    def freeze(parent : Machine)
+      MFrozenLambda.new(parent, self)
+    end
+  end
+
+  # A frozen lambda is an `MLambda` alongside a `Machine`.
+  # That machine is isolated from the parent machine, and
+  # provides (a) a safe way to call Ven code from Crystal,
+  # and (b) a safe way to parallelize Ven code execution.
+  class MFrozenLambda < MFunction
+    def initialize(parent : Machine, @lambda : MLambda)
+      @scope = @lambda.scope.clone.as(CxMachine::Scope)
+      @chunks = parent.chunks.as(Chunks)
+      @enquiry = parent.enquiry.as(Enquiry)
+    end
+
+    delegate :variant, :specificity, to: @lambda
+
+    # Calls this lambda with *args*.
+    def call(args : Models) : Model
+      machine = Machine.new(@chunks, CxMachine.new, 1, @enquiry, [
+        # Suicide frame. If the interpreter hits it, it will
+        # immediately return.
+        Frame.new(ip: Int32::MAX - 1),
+        # This lambda's frame of execution. It is initialized
+        # with the lambda's arguments and target chunk.
+        Frame.new(Frame::Goal::Function, args, @lambda.target),
+      ])
+
+      # Put the lambda scope clone onto the scopes stack.
+      machine.context.scopes << @scope.clone
+
+      # Run! Disable the scheduler: *parent* is the one who
+      # schedules stuff (?)
+      machine.start(schedule: false).return!.not_nil!
+    end
+
+    # :ditto:
+    def call(*args : Model)
+      call(args.to_a.map &.as(Model))
+    end
+
+    # Returns self. Frozen lambdas do not need to be cloned.
+    def clone
+      self
+    end
+
+    def to_s(io)
+      io << "frozen " << @lambda
+    end
+
+    forward_missing_to @lambda
   end
 
   # A kind of model that wraps around a Crystal value of type
