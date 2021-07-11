@@ -82,6 +82,35 @@ module Ven
       @frames[-1]
     end
 
+    # Yields the closest frame with goal set to *goal*.
+    private macro frame(goal, &block)
+      @frames.reverse_each do |%frame|
+        if %frame.goal == {{goal}}
+          {{*block.args}} = %frame
+          {{yield}}
+          break
+        end
+      end
+    end
+
+    # Same as `frame(goal, &block)`, but destructive (via
+    # `revoke`) to all frames visited before the one with
+    # the matching goal, and to the frame with the matching
+    # goal itself.
+    #
+    # If did not find a frame with the matching goal, **all**
+    # frames are destroyed.
+    private macro rewind(goal, &block)
+      @frames.reverse_each do |%frame|
+        revoke
+        if %frame.goal == {{goal}}
+          {{*block.args}} = %frame
+          {{yield}}
+          break
+        end
+      end
+    end
+
     # Returns the current chunk.
     private macro chunk
       @chunks[frame.cp]
@@ -196,40 +225,6 @@ module Ven
       {% end %}
     end
 
-    # Pops multiple values from the stack and passes them to
-    # the block, keeping their order. E.g., given (x1 x2 x3 --),
-    # will pass |x1, x2, x3|.
-    #
-    # The amount of values to pop is determined from the amount
-    # of block's arguments.
-    #
-    # *cast* can be passed to specify the types of each value
-    # (N values, N *cast*s), or all values (N values, 1 *cast*).
-    # *cast* defaults to `Model`, and thus can be omitted.
-    #
-    # Raises if *cast* underflows the block arguments.
-    private macro gather(cast = {Model}, &block)
-      {% amount = block.args.size %}
-
-      {% if cast.size != 1 && cast.size != amount %}
-        {{raise "cast underflow"}}
-      {% end %}
-
-      %values = frame.stack.pop({{amount}})
-
-      {% for argument, index in block.args %}
-        {% if cast.size == 1 %}
-          {% type = cast.first %}
-        {% else %}
-          {% type = cast[index] %}
-        {% end %}
-
-        {{argument}} = %values[{{index}}].as({{type}})
-      {% end %}
-
-      {{yield}}
-    end
-
     # A shorthand for `Num.new`.
     private macro num(value)
       Num.new({{value}})
@@ -267,7 +262,10 @@ module Ven
     # See `Frame::Goal` to learn about *goal*.
     private macro invoke(origin, desc = nil, initial = Models.new, goal = Frame::Goal::Function)
       @context.push
-      @frames << Frame.new({{goal}}, {{initial}}, {{origin}}, 0,
+      @frames << Frame.new(
+        {{goal}},
+        {{initial}},
+        {{origin}},
         {% if desc %}
           trace: Trace.new(chunk.file, fetch.line, {{desc}}),
         {% end %}
@@ -849,7 +847,8 @@ module Ven
               put pop.to_map
             in Opcode::BINARY
               # Evaluates a binary operation: (x1 x2 -- x3)
-              gather { |lhs, rhs| put binary(static, lhs, rhs) }
+              lhs, rhs = pop 2
+              put binary(static, lhs, rhs)
             in Opcode::BINARY_ASSIGN
               # Almost the same as BINARY, but used specifically
               # in binary assignment.
@@ -1033,78 +1032,61 @@ module Ven
               # (x1 -- x2)
               put field(pop, str static)
             in Opcode::FIELD_DYNAMIC
-              # Pops two values, first being the operand and second
-              # the field, and, if possible, gets the value of a
-              # field. Alternatively, builds a partial: (x1 x2 -- x3)
-              gather do |head, field|
-                put field(head, field)
-              end
+              # Pops two values, first being the operand and
+              # second the field, and, if possible, gets the
+              # value of the field. Alternatively, builds a
+              # partial: (x1 x2 -- x3)
+              head, field = pop 2
+              put field(head, field)
             in Opcode::NEXT_FUN
-              # Implements the semantics of 'next fun', which is
-              # an explicit tail-call (elimination) request. Pops
-              # the callee and N arguments: (x1 ...N --)
-              #
-              # Queue is always preserved.
+              # Performs an explicitly requested tail call.
+              # Queue is preserved. Pops the callee and N
+              # arguments. (x1 ...N --)
               args = pop static(Int32)
-              callee = pop(as: MFunction)
+              callee = pop as: MFunction
 
-              # Pop frames until we meet the nearest surrounding
-              # function. We know there is one because we trust
-              # the Compiler.
-              @frames.reverse_each do |it|
-                next revoke unless it.goal.function?
-
-                variant = callee.variant?(args)
-
+              rewind(Frame::Goal::Function) do |it|
+                unless variant = callee.variant?(args)
+                  die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
+                end
                 unless variant.is_a?(MConcreteFunction)
-                  die("improper 'next fun': #{callee.to_s}: #{args.join(", ")}")
+                  die("unsupported: #{callee.to_s} resolved to non-concrete #{variant}")
                 end
 
-                # Revoke that surrounding function & invoke
-                # the one requested by 'next'.
-                revoke && invoke(variant.target, variant.to_s, args)
+                invoke(variant.target, variant.to_s, args)
 
-                # But keep queue values from the revoked
-                # function.
+                # Move queue values from the revoked frame to
+                # the new frame.
                 frame.queue = it.queue
-
-                break
               end
 
               next
             in Opcode::SETUP_DIES
-              # Sets the 'dies' target of this frame. The 'dies'
-              # target is jumped to whenever a runtime error
-              # occurs.
+              # Sets the 'dies' target of this frame. The
+              # 'dies' target is jumped to whenever a runtime
+              # error occurs.
               frame.dies = target
             in Opcode::RESET_DIES
               # Resets the 'dies' target of this frame.
               frame.dies = nil
             in Opcode::FORCE_RET
-              # Pops a return value and returns out of the nearest
-              # surrounding function. Revokes all frames up to &
-              # including the frame of that nearest surrounding
-              # function. Note that it vetoes `SETUP_RET`: (x1 --)
+              # Immediately returns with return value popped.
+              # Vetoes `SETUP_RET`. (x1 --)
               value = pop
-
-              @frames.reverse_each do |it|
-                revoke; break put value if it.goal.function?
+              rewind(Frame::Goal::Function) do |it|
+                put value
               end
             in Opcode::FORCE_RET_QUEUE
-              # Force-returns the queue of the nearest surrounding
-              # function. Revokes all frames up to & including
-              # the frame of that nearest surrounding function.
-              @frames.reverse_each do |it|
-                revoke; break put vec it.queue if it.goal.function?
+              # Immediately returns with queue as the return value.
+              rewind(Frame::Goal::Function) do |it|
+                put vec it.queue
               end
             in Opcode::SETUP_RET
               # Finds the nearest surrounding function and sets
-              # its return value to whatever was tapped. Does
-              # not break the flow: (x1 -- x1)
-              @frames.reverse_each do |it|
-                if it.goal.function?
-                  break it.returns = tap
-                end
+              # its return value to tap. Does not break the flow.
+              # (x1 -- x1)
+              frame(Frame::Goal::Function) do |it|
+                it.returns = tap
               end
             in Opcode::BOX
               # Makes a box and puts in onto the stack: (...N) -- B,
@@ -1162,8 +1144,8 @@ module Ven
             in Opcode::QUEUE
               # Appends the tapped value to the queue of the
               # frame of the closest surrounding function.
-              @frames.reverse_each do |it|
-                break it.queue << tap if it.goal.function?
+              frame(Frame::Goal::Function) do |it|
+                it.queue << tap
               end
             in Opcode::MAP
               # Puts a map (short for mapping). Pops the specified
@@ -1236,33 +1218,17 @@ module Ven
       stack.delete_at(..).last?
     end
 
-    # Makes a `Machine`, runs *chunks* and disposes the `Machine`.
-    #
-    # *context* is the context that the Machine will run in.
-    # *origin* is the first chunk that will be evaluated (the
-    # main chunk).
-    #
-    # Before running, yields the `Machine` to the block.
-    #
-    # Returns the result that was produced by the Machine, or
-    # nil if nothing was produced.
+    # Yields an instance of `Machine`, and then runs that instance.
+    # You can use the block to configure the instance.
     def self.run(chunks, context = CxMachine.new, origin = 0)
-      machine = new(chunks, context, origin)
-      yield machine
+      yield machine = new(chunks, context, origin)
       machine.start.return!
     end
 
-    # Makes a Machine, runs *chunks* and disposes the Machine.
-    #
-    # *context* is the context that the Machine will run in.
-    # *origin* is the first chunk that will be evaluated (the
-    # main chunk).
-    #
-    # Returns the result that was produced by the Machine, or
-    # nil if nothing was produced.
-    def self.run(chunks, context = Context::Machine.new, origin = 0,
-                 legate = Enquiry.new)
-      new(chunks, context, origin, legate).start.return!
+    # Same as `run`, but configures the machine based on
+    # the arguments.
+    def self.run(chunks, context = CxMachine.new, origin = 0, enquiry = Enquiry.new)
+      new(chunks, context, origin, enquiry).start.return!
     end
   end
 end
