@@ -43,10 +43,10 @@ module Ven
       file = chunk.file
       line = fetch.line
 
-      traces = @frames.select(&.trace).map { |it| it.trace.not_nil! }.to_set
+      traces = @frames.select(&.trace).map(&.trace.not_nil!)
       traces << Trace.new(file, line, "unit")
 
-      raise RuntimeError.new(traces.to_a, file, line, message)
+      raise RuntimeError.new(traces.uniq, file, line, message)
     end
 
     # Builds an `IStatistic` given some *amount*, *duration*
@@ -281,7 +281,6 @@ module Ven
     # was fulfilled, otherwise nil.
     private macro revoke(export = false)
       @context.pop
-      @context.ascend = true
 
       %frame = @frames.pop
 
@@ -944,8 +943,7 @@ module Ven
                   @frames << Frame.new(Frame::Goal::Function, args, found.target)
                   # Make use of the lambda's contextuals.
                   underscores.concat(found.contextuals)
-                  @context.ascend = false
-                  @context.scopes << found.scope.clone
+                  @context.push(isolated: true, initial: found.scope.clone)
                   next
                 else
                   die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
@@ -1126,7 +1124,7 @@ module Ven
               # Instantiates a box and puts the instance onto the
               # stack: (B -- I), where B is the box parent to this
               # instance, and I is the instance.
-              put MBoxInstance.new(pop(as: MFunction), @context.scopes[-1].dup)
+              put MBoxInstance.new(pop(as: MFunction), @context.scopes.last.as_h)
             in Opcode::LAMBDA
               # Makes a lambda from the function it receives
               # as the argument. Assumes there is at least
@@ -1134,10 +1132,7 @@ module Ven
               lambda = function
 
               put MLambda.new(
-                # Collect all superior variables into one big
-                # scope, and make that scope the prelude scope
-                # of this lambda.
-                @context.scopes.reduce { |memo, scope| memo.merge(scope) },
+                context.gather,
                 lambda.arity,
                 lambda.slurpy,
                 lambda.params,

@@ -129,136 +129,143 @@ module Ven::Suite
   end
 
   # Machine context is used to assign and retrieve values of
-  # symbols at runtime. It also supervises a runtime traceback.
+  # symbols runtime.
   class CxMachine
-    alias Scope = Hash(String, Model)
+    # A particular runtime scope in the scope stack.
+    private struct Scope
+      # Returns whether this scope is isolated.
+      getter isolated : Bool
 
-    # The scope hierarchy of this context. To introduce a new,
-    # deeper scope, an empty `Scope` should be appended to
-    # this array.
+      def initialize(@scope = {} of String => Model, @isolated = false)
+      end
+
+      # Returns this scope as hash, with `String` keys and
+      # `Model` values.
+      def as_h
+        @scope
+      end
+
+      forward_missing_to @scope
+    end
+
+    # Returns the scope stack of this context.
     getter scopes = [Scope.new]
 
-    # Whether ascending lookup is enabled.
-    #
-    # There are two modes of lookup: ascending (aka deep),
-    # and shallow.
-    #
-    # Shallow lookup allows to look up and define symbols in
-    # the local scope.
-    #
-    # Ascending lookup allows to look up and define symbols
-    # not only in the local scope,  but also in the higher,
-    # nonlocal scopes.
-    #
-    # Shallow lookups are always faster than ascending lookups.
-    property ascend = true
-
-    # Returns the amount of scopes (aka scope depth, aka nesting).
+    # Returns the amount of scopes.
     delegate :size, to: @scopes
-
-    # Deletes all scopes except the global.
-    def clear
-      @scopes.delete_at(1...)
-    end
 
     # Returns the local scope.
     private macro local
       @scopes[-1]
     end
 
-    # Looks up the value of *symbol*. Raises if not found.
+    # Deletes all scopes except the global.
+    def clear
+      @scopes.delete_at(1...)
+    end
+
+    # Introduces a deeper scope. It can be *isolated*, or
+    # initialized with some *initial* entries.
+    def push(isolated = false, initial = {} of String => Model)
+      @scopes << Scope.new(initial, isolated)
+    end
+
+    # Ejects the deepest scope.
+    def pop
+      @scopes.pop if size > 1
+    end
+
+    # Returns the value of *symbol*. Raises if not found.
     def [](symbol : String | VSymbol)
       self[symbol]? || raise "symbol not found"
     end
 
-    # Returns the local scope's metacontext, if any.
-    def meta(scope = local) : MBoxInstance?
+    # Returns the value of *symbol*, orelse nil.
+    def []?(symbol : VSymbol)
+      self[symbol.name, symbol.nest]?
+    end
+
+    # Assigns *symbol* to *value*.
+    def []=(symbol : VSymbol, value)
+      self[symbol.name, nest: symbol.nest] = value
+    end
+
+    # Returns the metacontext box instance in *scope*,
+    # orelse nil.
+    def meta(scope = local)
       scope["$"]?.as?(MBoxInstance)
     end
 
-    # If the local scope has a metacontext, yields its *namespace*
-    # (see `MBoxInstance#namespace`). Otherwise, returns nil.
-    def with_meta_ns(scope = local) : Model?
-      if namespace = meta(scope).try(&.namespace)
-        yield namespace
-      end
+    # Returns the namespace (see `MBoxInstance#namespace`) of
+    # the metacontext box instance in *scope*, orelse nil.
+    def meta_ns?(scope = local)
+      meta(scope).try(&.namespace)
     end
 
-    # Ascends the scopes, trying to look up the value of
-    # *symbol* in each and every one of them, as well as
-    # in their `$`s.
+    # Yields the namespace of the metacontext box instance in
+    # *scope*, orelse returns nil.
+    def meta_ns?(scope = local)
+      yield meta_ns?(scope) || return
+    end
+
+    # Traverses the scopes and returns the value assigned
+    # to *symbol*, or nil.
     #
-    # Note that choosing to `ascend?` makes execution extremely
-    # slow in case, say, of deep recursion. `ascend?` should be
-    # used as a last resort when doing symbol lookup.
-    def ascend?(symbol : String) : Model?
+    # *nest* is the index of scope in `@scopes` where *symbol*
+    # is supposed to be found.
+    def []?(symbol : String, nest = -1)
+      # Metacontext has the highest priority everywhere, even
+      # when isolated.
+      if field = meta_ns?(&.[symbol]?)
+        return field
+      end
+
+      # If the local scope is isolated, or has *symbol* in
+      # it, return right away.
+      if local.isolated || local.has_key?(symbol)
+        return local[symbol]?
+      end
+
+      if value = @scopes[nest][symbol]?
+        return value
+      end
+
+      # Otherwise, ascend, trying to find *symbol* in the
+      # upper scopes. Take upper metacontexts into account.
       @scopes.reverse_each do |scope|
-        if value = scope[symbol]? || with_meta_ns(scope, &.[symbol]?)
+        if value = meta_ns?(scope, &.[symbol]?) || scope[symbol]?
           return value
         end
       end
     end
 
-    # Looks up the value of *symbol*.
+    # Assigns *symbol* to *value*.
     #
-    # 1. If *symbol* is found to be one of the fields of the
-    # local scope's metacontext (`$`), returns the value of
-    # that field.
-    #
-    # 2. If *symbol* is assigned a value in the local scope,
-    # returns that value.
-    #
-    # 3. Otherwise, given ascending lookup (see `ascend`) is
-    # enabled, ascends the scopes in search of *symbol*. If
-    # found, returns the corresponding value. Else, returns nil.
-    def []?(symbol : String)
-      with_meta_ns(&.[symbol]?) || local[symbol]? || ascend?(symbol)
-    end
-
-    # Same as `[]?(symbol : String)`, but slightly optimized
-    # for *symbol*s with guaranteed nest (aka nesting).
-    def []?(symbol : VSymbol)
-      name = symbol.name
-      nest = symbol.nest
-      with_meta_ns(&.[name]?) || @scopes[nest][name]? || ascend?(name)
-    end
-
-    # Assigns the *value* to *symbol*.
-    #
-    # 1. If *symbol* is found in the scope at *nest*, replaces
-    # its old value with *value*.
-    #
-    # 2. If *symbol* is a field in the local scope's metacontext,
-    # replaces that field's old value with *value*.
-    #
-    # In any other case, assigns in the scope at *nest*.
+    # *nest* is the index of scope in `@scopes` where *symbol*
+    # would like to be assigned in.
     def []=(symbol : String, value : Model, nest = -1)
-      if @scopes[nest].has_key?(symbol)
-        return @scopes[nest][symbol] = value
+      # If the local scope is isolated, or has *symbol* defined,
+      # don't look at *nest* and assign immediately.
+      if local.isolated || local.has_key?(symbol)
+        return local[symbol] = value
       end
 
-      with_meta_ns do |namespace|
-        if namespace.has_key?(symbol)
-          return namespace[symbol] = value
-        end
+      # If the metacontext has a field called *symbol*,
+      # assign to it.
+      meta_ns? do |fields|
+        return fields[symbol] = value if fields.has_key?(symbol)
       end
 
       @scopes[nest][symbol] = value
     end
 
-    # :ditto:
-    def []=(symbol : VSymbol, value)
-      self[symbol.name, nest: symbol.nest] = value
-    end
-
-    # Introduces a deeper scope.
-    def push
-      @scopes << Scope.new
-    end
-
-    # Pops the current scope.
-    def pop
-      @scopes.pop if @scopes.size > 1
+    # Reduces all scopes of this context into one big scope.
+    # Goes top-to-bottom: more local symbols override more
+    # global symbols.
+    def gather : Hash(String, Model)
+      @scopes.reduce({} of String => Model) do |memo, scope|
+        memo.merge(scope.as_h)
+      end
     end
 
     def_clone

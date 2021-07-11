@@ -1437,7 +1437,7 @@ module Ven::Suite
   # in that namespace through field access (`instance.field`).
   class MBoxInstance < MClass
     getter parent : MFunction
-    getter namespace : CxMachine::Scope
+    getter namespace : Hash(String, Model)
 
     def initialize(@parent, @namespace)
     end
@@ -1541,9 +1541,7 @@ module Ven::Suite
 
   # Represents a Ven lambda (nameless function & closure).
   class MLambda < MFunction
-    # Returns the **surrounding** scope (singular!) of this
-    # lambda. I.e., won't contain globals etc.
-    getter scope : CxMachine::Scope
+    getter scope : Hash(String, Model)
     getter arity : Int32
     getter slurpy : Bool
     getter target : Int32
@@ -1621,7 +1619,7 @@ module Ven::Suite
   # and (b) a safe way to parallelize Ven code execution.
   class MFrozenLambda < MFunction
     def initialize(parent : Machine, @lambda : MLambda)
-      @scope = @lambda.scope.clone.as(CxMachine::Scope)
+      @scope = @lambda.scope.clone.as(Hash(String, Model))
       @chunks = parent.chunks.as(Chunks)
       @enquiry = parent.enquiry.as(Enquiry)
     end
@@ -1640,7 +1638,7 @@ module Ven::Suite
       ])
 
       # Put the lambda scope clone onto the scopes stack.
-      machine.context.scopes << @scope.clone
+      machine.context.push(isolated: true, initial: @scope.clone)
 
       # Run! Disable the scheduler: *parent* is the one who
       # schedules stuff (?)
