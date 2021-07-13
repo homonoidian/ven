@@ -1,0 +1,60 @@
+# This file is baked right into the binary. If you change
+# something, don't forget to recompile Ven! Otherwise, the
+# the stuff you've added won't be available.
+
+# Goes over this vector, applying the rest to each of
+# its items.
+fun<vec> __iter(*) given any =
+  |&_.callable? and apply(_, *)() or _| $;
+
+# Assigns this value's subordinates, specified by the rest,
+# to *value*.
+fun<any> __access_assign(value, *) =
+  |subordinate($, _, return value)| *;
+
+# Assigns this value's subordinates, specified by an index
+# range, to *value*.
+fun<any> __access_assign(value, items) given any, range =
+  if items.full? and |and| |$ > _| items
+    apply(__access_assign, [$] & value & items)()
+  else if items.beginless? and $ >= items.end
+    apply(__access_assign, [$] & value & (0 to items.end - 1))()
+  else if items.endless? and $ > items.begin
+    apply(__access_assign, [$] & value & (items.begin to #$ - 1))()
+  else
+    die(typeof($) ~ ": cannot apply '$items'");
+
+# Returns a new vector, with all items for which *fn* returned
+# `false` removed.
+#
+# If *fn*'s arity:
+#
+# 1. = 0, the filteree is put onto the underscores stack.
+# 2. = 1, the filteree is passed as an argument.
+# 3. = N, N consequent filterees (including the filteree
+#    under the cursor) are passed.
+fun<vec> __filter(fn) given any(concrete, lambda, builtin, frozen) =
+  if #fn is 0
+    $.__filter_inject(fn)
+  else if #fn is 1
+    $.__filter_call(fn)
+  else
+    die("$.__filter_take(fn, #fn)");
+
+# Dies: can inject only into lambdas.
+fun<vec> __filter_inject(fn) given function =
+  die("you can only pass arity-zero lambdas");
+
+# Queues only those items for which *fn* returns a non-false.
+fun<vec> __filter_inject(fn) given lambda {
+  |(fn["contextuals"] = [&_]) and fn() and queue _|: $;
+  # Force-return the queue, even if it is empty.
+  return queue
+}
+
+# :ditto:
+fun<vec> __filter_call(fn) given function {
+  |fn(&_) and queue _|: $;
+  # Force-return the queue, even if it is empty.
+  return queue
+}

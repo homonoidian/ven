@@ -654,6 +654,10 @@ module Ven
             spawn broadcast_on!(port + 1)
           end
 
+          # Bake the boot file (look into the file itself
+          # to learn more).
+          @orchestra.from({{read_file("boot/boot.ven")}}, "boot")
+
           if arguments.empty?
             # Do not quit after errors:
             @quit = false
@@ -661,7 +665,7 @@ module Ven
             @result = true
             # Fly!
             repl()
-          elsif arguments.size >= 1
+          else
             file = arguments.first
 
             if options.bool["broadcast"]

@@ -303,7 +303,7 @@ module Ven::Parselet
     # Assumes that the diamond starter, '<', was already
     # consumed.
     def diamond!
-      @parser.before(">") { led(Precedence::FIELD) }
+      @parser.before(">") { led(Precedence::IDENTITY) }
     end
 
     # Reads a 'given' appendix (`given <led>, <led>, <led>`).

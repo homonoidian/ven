@@ -17,6 +17,7 @@ module Ven::Library
       defglobal("partial", MType.new "partial", MPartial)
       defglobal("lambda", MType.new "lambda", MLambda)
       defglobal("builtin", MType.new "builtin", MBuiltinFunction)
+      defglobal("frozen", MType.new "frozen", MFrozenLambda)
       defglobal("generic", MType.new "generic", MGenericFunction)
       defglobal("concrete", MType.new "concrete", MConcreteFunction)
       defglobal("function", MType.new "function", MFunction)
@@ -26,10 +27,10 @@ module Ven::Library
         machine.die(message.value)
       end
 
-      # Invokes the set-referent policy for *reference*.
-      defbuiltin "set-referent", reference : Model, referent : Model, value : Model do
-        unless reference[referent] = value
-          machine.die("#{reference} has no set-referent policy for #{referent}")
+      # Sets the *subordinate* of *model* to *value*.
+      defbuiltin "subordinate", model : Model, subordinate : Model, value : Model do
+        unless model[subordinate] = value
+          machine.die("#{model} has no subordinate policy for #{subordinate}")
         end
         value
       end
@@ -47,6 +48,15 @@ module Ven::Library
       # A direct binding to Crystal's `spawn`.
       defbuiltin "spawn", frozen : MFrozenLambda, args : Vec do
         spawn frozen.call(args.items)
+      end
+
+      # TEMPORARY until Ven has splats.
+      #
+      # ```ven
+      # apply(say, ["Hello World!"])() # ==> Hello World!
+      # ```
+      defbuiltin "apply", callee : MFunction, args : Vec do
+        MPartial.new(callee, args.items)
       end
     end
   end

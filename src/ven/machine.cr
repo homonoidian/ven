@@ -310,7 +310,7 @@ module Ven
       %variant = %callee.variant?(%args = {{args}})
 
       unless %variant.is_a?(MConcreteFunction)
-        die("hook '#{%name}' has no proper variant for #{%args.join(", ")}")
+        die("argument/parameter mismatch: #{%args.join(", ")}")
       end
 
       invoke(%variant.target, %variant.to_s, %args)
@@ -945,7 +945,7 @@ module Ven
                   @context.push(isolated: true, initial: found.scope.clone)
                   next
                 else
-                  die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
+                  die("argument/parameter mismatch for #{callee.to_s}: #{args.join(", ")}")
                 end
               else
                 die("illegal callee: #{callee.type}")
@@ -1047,7 +1047,7 @@ module Ven
 
               rewind(Frame::Goal::Function) do |it|
                 unless variant = callee.variant?(args)
-                  die("improper arguments for #{callee.to_s}: #{args.join(", ")}")
+                  die("argument/parameter mismatch for #{callee.to_s}: #{args.join(", ")}")
                 end
                 unless variant.is_a?(MConcreteFunction)
                   die("unsupported: #{callee.to_s} resolved to non-concrete #{variant}")

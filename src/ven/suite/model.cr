@@ -262,18 +262,19 @@ module Ven::Suite
     def []?(index : Range) : Model?
     end
 
-    # Provides set-referent semantics for this model. In
-    # other words, a way to support the following syntax:
+    # Provides the subordinate policy for this model. In other
+    # words, a way to support the following syntax (also known
+    # as access-assign):
     #
     # ```ven
-    # foo(referent) = value
+    # foo[subordinate] = value
     # ```
     #
     # Where `foo` is this model.
     #
-    # Returns nil if found no *referent* / has no support for
-    # such referent.
-    def []=(referent : Model, value : Model) : Model?
+    # Returns nil if found no *subordinate* / has no support for
+    # such subordinate.
+    def []=(subordinate : Model, value : Model) : Model?
     end
 
     # Returns the `MType` of this model.
@@ -621,7 +622,7 @@ module Ven::Suite
     end
 
     def []=(index : Num, value : Model)
-      return if size < (index = index.to_i)
+      return if size < (index = index.to_i).abs
 
       @items[index] = value
     end
@@ -673,6 +674,11 @@ module Ven::Suite
       @distance = (@end.value - @begin.value).abs + 1
     end
 
+    # Returns the length of this range.
+    def to_num
+      Num.new(@distance)
+    end
+
     # Converts this range to vector.
     #
     # Raises ModelCastException if the resulting vector will
@@ -706,7 +712,8 @@ module Ven::Suite
       @begin.is?(other.begin) && @end.is?(other.end)
     end
 
-    # Provides `.begin`, `.end`, `.empty?`. Otherwise, returns nil.
+    # Provides `.begin`, `.end`, `.empty?`, `.full?`, `beginless?`,
+    # `endless?`. Otherwise, returns nil.
     def field?(name)
       case name
       when "begin"
@@ -715,6 +722,10 @@ module Ven::Suite
         @end
       when "empty?"
         MBool.new(@begin.value == @end.value)
+      when "full?"
+        MBool.new(true)
+      when "beginless?", "endless?"
+        MBool.new(false)
       end
     end
 
@@ -764,13 +775,23 @@ module Ven::Suite
     def initialize(from @begin = nil, to @end = nil)
     end
 
-    # Provides `.beginless?`, `.endless?`. Otherwise, returns nil.
+    # Provides `.begin` (unless beginless), `.end` (unless
+    # endless),`.beginless?`, `.endless?`, `full?`. Otherwise,
+    # returns nil.
     def field?(name)
+      if @begin == nil
+        return @end if name == "end"
+      elsif @end == nil
+        return @begin if name == "begin"
+      end
+
       case name
       when "beginless?"
         MBool.new(@begin == nil)
       when "endless?"
         MBool.new(@end == nil)
+      when "full?"
+        MBool.new(false)
       end
     end
 
@@ -1499,13 +1520,13 @@ module Ven::Suite
       end
     end
 
-    # Sets *referent* field of this box instance to *value*.
+    # Sets *subordinate* field of this box instance to *value*.
     #
-    # If *referent* is one of the typed fields (i.e., it was
+    # If *subordinate* is one of the typed fields (i.e., it was
     # declared as a box parameter and thus has a type), a
     # match against that type is performed.
-    def []=(referent : Str, value : Model)
-      field = referent.value
+    def []=(subordinate : Str, value : Model)
+      field = subordinate.value
 
       return unless @namespace.has_key?(field)
 
