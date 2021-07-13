@@ -3,7 +3,7 @@ module Ven::Library
 
   class Internal < Extension
     on_load do
-      # Globals for types & built-in values.
+      # Globals for types (although `any` isn't really a type).
       defglobal("any", MAny.new)
       defglobal("num", MType.new "num", Num)
       defglobal("str", MType.new "str", Str)
@@ -40,21 +40,19 @@ module Ven::Library
         MType[model.class] || machine.die("cannot determine the type of #{model}")
       end
 
-      # Freezes the *lambda*. See `MFrozenLambda`.
+      # Freezes *lambda*. See `MFrozenLambda`.
       defbuiltin "freeze", lambda : MLambda do
         lambda.freeze(machine)
       end
 
-      # A direct binding to Crystal's `spawn`.
+      # Spawns a call to *frozen* lambda.
       defbuiltin "spawn", frozen : MFrozenLambda, args : Vec do
         spawn frozen.call(args.items)
       end
 
-      # TEMPORARY until Ven has splats.
-      #
-      # ```ven
-      # apply(say, ["Hello World!"])() # ==> Hello World!
-      # ```
+      # Temporary: Returns a partial given *callee*, *args*.
+      # A partial will be returned even if *callee*'s arity
+      # is equal to *args*'s length.
       defbuiltin "apply", callee : MFunction, args : Vec do
         MPartial.new(callee, args.items)
       end

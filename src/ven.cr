@@ -457,7 +457,9 @@ module Ven
           end
         end
 
-        run("interactive", source)
+        fancy.grab_output do
+          run("interactive", source)
+        end
       end
 
       File.open(HISTORY, "w") do |io|
