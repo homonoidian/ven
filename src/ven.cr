@@ -656,9 +656,13 @@ module Ven
             spawn broadcast_on!(port + 1)
           end
 
-          # Bake the boot file (look into the file itself
-          # to learn more).
-          @orchestra.from({{read_file("boot/boot.ven")}}, "boot")
+          # Bake the boot file (peek to learn more) into
+          # the binary.
+          begin
+            @orchestra.from({{read_file("boot/boot.ven")}}, "boot")
+          rescue e : VenError
+            die(e)
+          end
 
           if arguments.empty?
             # Do not quit after errors:

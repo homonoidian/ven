@@ -32,7 +32,7 @@ module Ven::Suite
     # Colorizes the output.
     def to_s(io)
       io << "  in #{@desc.colorize.bold} (#{@file}:#{@line})"
-      if File.exists?(@file)
+      if File.exists?(@file) && File.file?(@file)
         excerpt = File.read_lines(@file)[@line - 1]
         io << "\n    #{@line}| #{excerpt.lstrip}"
       end

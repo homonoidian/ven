@@ -323,8 +323,12 @@ module Ven
     # Returns nil if no underscores value was found.
     private macro u_lookup(pop = true)
       @frames.reverse_each do |above|
-        if it = {{pop}} ? above.underscores.pop? : above.underscores.last?
-          break it
+        if {% if pop %}
+              (%it = above.underscores.pop?)
+           {% else %}
+              (%it = above.underscores.last?)
+           {% end %}
+          break %it
         end
       end
     end
@@ -608,7 +612,7 @@ module Ven
 
     # :ditto:
     def field?(head : Vec, field : MFunction)
-      if field.leading?(head)
+      if field.leading?(MType[Vec])
         return MPartial.new(field, [head.as(Model)])
       end
 
@@ -926,7 +930,15 @@ module Ven
                   callee, args = callee.function, callee.args + args
                 end
 
-                case found = callee.variant?(args)
+                found = callee.variant?(args)
+
+                # *found*, too, can be an `MPartial`. At least,
+                # no one can protect us from that.
+                if found.is_a?(MPartial)
+                  found, args = found.function, found.args + args
+                end
+
+                case found
                 when MBox
                   next invoke(found.target, found.to_s, args, Frame::Goal::Unknown)
                 when MConcreteFunction

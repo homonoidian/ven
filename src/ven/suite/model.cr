@@ -279,7 +279,7 @@ module Ven::Suite
 
     # Returns the `MType` of this model.
     def type
-      MType[self.class]
+      MType[self.class]?
     end
 
     # Dies. The subclasses may decide, though, to override
@@ -879,8 +879,14 @@ module Ven::Suite
 
     # Returns the `MType` instance for *model* if there is one,
     # otherwise nil.
-    def self.[](for model : MStruct.class | MClass.class)
+    def self.[]?(for model : ModelClass)
       @@instances.find &.is_for?(model)
+    end
+
+    # Returns the `MType` instance for *model* if there is one,
+    # otherwise raises.
+    def self.[](for model : ModelClass)
+      self.[model]? || raise "type not found"
     end
   end
 
@@ -1041,7 +1047,7 @@ module Ven::Suite
     end
 
     def is?(other : MType)
-      other.model == MCompoundType
+      other.model == MCompoundType || @lead.is?(other)
     end
 
     def is?(other : MCompoundType)
@@ -1273,6 +1279,10 @@ module Ven::Suite
       args.size == @arity ? self : false
     end
 
+    def leading?(type)
+      false
+    end
+
     # Provides `.arity`. Otherwise, delegates to `MFunction`.
     def field?(name)
       case name
@@ -1443,7 +1453,7 @@ module Ven::Suite
     # ensure A is not B;
     # ```
     def is?(other : MBox)
-      same?(other)
+      @name == other.name && params == other.params
     end
 
     def to_s(io)
