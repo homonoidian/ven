@@ -1,17 +1,17 @@
 module Ven::Parselet
-  # If the value > 0, then we're reading in a readtime context
-  # (nud, led, etc.) If it's 0, we're reading outside of a
-  # readtime context.
+  # If the value is > 0, then we're reading in a readtime
+  # context (nud, led, etc.) If it's 0, we're reading outside
+  # of a readtime context.
   class_property in_readtime_context = 0
 
   abstract class Parselet
-    # The QTag of this parselet.
+    # The current location (see `QTag`)
     @tag = uninitialized QTag
 
     # The word that invoked this parselet.
     @token = uninitialized Word
 
-    # A reference to the reader that invoked this parselet.
+    # A reference to the `Reader` that invoked this parselet
     @parser = uninitialized Reader
 
     # Returns whether a semicolon must follow this parselet.
@@ -26,7 +26,8 @@ module Ven::Parselet
 
     # Invokes this parselet.
     #
-    # All subclasses must implement this method.
+    # Although it's not abstract, all subclasses must implement
+    # this method.
     def parse!(*args)
       raise "not implemented"
     end
@@ -46,8 +47,8 @@ module Ven::Parselet
       @token[:lexeme]
     end
 
-    # Enables readtime context while the block reads. Disables
-    # it afterwards. Forwards block's return value.
+    # Enables readtime context in the block. Returns the
+    # block's value.
     macro in_readtime_context
       Ven::Parselet.in_readtime_context += 1
       begin
@@ -58,16 +59,16 @@ module Ven::Parselet
       %result
     end
 
-    # Returns whether we're currently reading in a readtime
-    # context. Please use this macro instead of checking
-    # `in_readtime_context` yourself.
+    # Returns whether the reading happens in a readtime
+    # context. Please use this macro instead of working
+    # with `Parselet.in_readtime_context` yourself.
     macro in_readtime_context?
       Ven::Parselet.in_readtime_context > 0
     end
 
-    # Returns the proper symbol quote for *token*, unless it
-    # is nil; if it is, reads a symbol and makes a symbol quote
-    # for it.
+    # Returns the proper symbol quote for *token* if it's nil.
+    # Alternatively, reads a symbol and makes the appropriate
+    # symbol quote.
     def symbol(token = nil) : QSymbol
       token ||= @parser.expect("$SYMBOL", "SYMBOL", "*")
 
@@ -88,11 +89,10 @@ module Ven::Parselet
 
     # Reads a Ven block (`{ ... }`).
     #
-    # Returns the quotes inside the block.
+    # Returns the quotes in the block.
     #
-    # If *opening* is false, does not expect the opening
-    # paren. Expects the final semicolon unless *semicolon*
-    # is false.
+    # If *opening* is false, it does not expect the opening
+    # paren. Expects semicolon depending on *semicolon*.
     def block(opening = true, @semicolon = false) : Quotes
       @parser.expect("{") if opening
       @parser.repeat("}") { @parser.statement }

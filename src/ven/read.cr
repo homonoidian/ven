@@ -255,10 +255,16 @@ module Ven
       die("expected #{types.map(&.dump).join(", ")}")
     end
 
-    # Same as `expect(type) && <...block...>`, but ensures
+    # Same as `expect(types) && <...block...>`, but ensures
     # the result of the expression is a Quote.
-    def after(type : String, & : -> R) forall R
-      (expect(type) && yield).as(R)
+    def after(*types : String, & : -> R) forall R
+      (expect(*types) && yield).as(R)
+    end
+
+    # Same as `expect(types) && led`, but ensures the result
+    # of the expression is a `Quote`.
+    def after(*types : String)
+      after(*types) { led }
     end
 
     # Yields and expects *type* to follow. If expectation
