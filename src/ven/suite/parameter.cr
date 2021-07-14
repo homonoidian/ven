@@ -1,5 +1,5 @@
 module Ven::Suite
-  # Holds Ven function parameter information at read-time
+  # Holds Ven function/box parameter information at read-time
   # & compile-time.
   struct Parameter
     include JSON::Serializable
@@ -8,17 +8,20 @@ module Ven::Suite
     getter index : Int32
     # Returns the name of this parameter.
     getter name : String
-    # Returns the given of this parameter, if any.
+    # Returns the given that corresponds to this parameter,
+    # if any.
     getter given : Quote?
     # Returns whether this parameter is slurpy.
     getter slurpy : Bool
-    # Returns whether this parameter is contextual.
+    # Returns whether this parameter is contextual (`_`).
     getter contextual : Bool
 
-    def initialize(@index, @name,
-                   @given = nil,
-                   @slurpy = false,
-                   @contextual = false)
+    def initialize(
+      @index, @name,
+      @given = nil,
+      @slurpy = false,
+      @contextual = false
+    )
     end
 
     def clone
@@ -26,40 +29,37 @@ module Ven::Suite
     end
   end
 
-  # Parameters represents an immutable array of parameters.
-  #
-  # It provides various methods to filter it.
+  # An immutable array of parameters.
   struct Parameters
     include JSON::Serializable
 
-    def initialize(@params : Array(Parameter))
+    def initialize(@contents : Array(Parameter))
     end
 
     # Returns the names of the parameters.
     def names : Array(String)
-      @params.map(&.name)
+      @contents.map(&.name)
     end
 
-    # Returns all slurpy parameters.
-    def slurpies
-      Parameters.new @params.select(&.slurpy)
+    # Returns the slurpy parameters.
+    def slurpies : Parameters
+      Parameters.new @contents.select(&.slurpy)
     end
 
-    # Returns the guaranteed parameters (those that consume
-    # exactly one value, always).
-    def guaranteed
-      Parameters.new @params.reject(&.slurpy)
+    # Returns the required parameters.
+    def required
+      Parameters.new @contents.reject(&.slurpy)
     end
 
     # Returns the givens of the parameters.
     def givens
-      @params.select(&.given)
+      @contents.select(&.given)
     end
 
     def clone
       self
     end
 
-    forward_missing_to @params
+    forward_missing_to @contents
   end
 end

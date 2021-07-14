@@ -428,8 +428,8 @@ module Ven
               q.params.names,
               # How many values 'given'?
               q.params.size,
-              # How many parameters guaranteed?
-              q.params.guaranteed.size,
+              # How many parameters required?
+              q.params.required.size,
               # Slurpy or not?
               !q.params.slurpies.empty?,
             )
@@ -614,8 +614,8 @@ module Ven
             q.params.names,
             # How many values 'given'?
             q.params.size,
-            # How many parameters guaranteed?
-            q.params.guaranteed.size,
+            # How many parameters required?
+            q.params.required.size,
             # Slurpy or not?
             false,
           )
