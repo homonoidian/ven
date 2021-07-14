@@ -154,7 +154,7 @@ module Ven::Suite
 
     # Formats field accessor *accessor*.
     private def field(accessor : FAImmediate)
-      accessor.access
+      visit(accessor.access)
     end
 
     # :ditto:
@@ -387,6 +387,14 @@ module Ven::Suite
 
     def visit!(q : QQuoteEnvelope)
       "quote(#{visit(q.quote)})"
+    end
+
+    def visit!(q : QEnsureTest)
+      "ensure #{visit(q.comment)} {#{i_visit(q.shoulds)}\n#{" " * @indent}}"
+    end
+
+    def visit!(q : QEnsureShould)
+      "should #{q.section.inspect} #{i_visit(q.pad)}"
     end
 
     def self.detree(quote : Quote)
