@@ -1,11 +1,12 @@
 module Ven::Suite
-  # An offset reference to a snippet (called target).
+  # An *offset reference* to a snippet.
   #
-  # Note that labels are (and must be) replaced with `VJump`s
-  # after optimization.
+  # Labels are prominent at compile-time, but are replaced
+  # with `VJump`s after optimization.
   class Label
     include JSON::Serializable
 
+    # Returns the target snippet of this label, if any.
     property target : Int32?
 
     def initialize

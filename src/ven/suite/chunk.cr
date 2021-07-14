@@ -1,14 +1,20 @@
 module Ven::Suite
-  # A chunk is an abstraction over a collection of `Snippet`s.
+  # A chunk is a collection of `Snippet`s.
   class Chunk
+    # Returns the filename of the file this chunk was
+    # produced from.
     getter file : String
+    # Returns the name of this chunk.
     getter name : String
 
-    getter snippets
-    getter seamless
+    # Returns the snippets in this chunk.
+    getter snippets : Array(Snippet)
+    # Returns the instructions in this chunk. Available once
+    # this chunk is stitched (see `complete!`)
+    getter seamless : Array(Instruction)
 
-    # The payload storages of this chunk: all jumps, symbols,
-    # static data and functions end up here.
+    # The payload storages: all jumps, symbols, static data,
+    # and functions end up here.
     @jumps = [] of VJump
     @symbols = [] of VSymbol
     @statics = [] of VStatic
@@ -19,12 +25,13 @@ module Ven::Suite
       @seamless = [] of Instruction
     end
 
-    # These are only used by the Machine, and the Machine does
-    # not (and should not) know anything about snippets. So,
-    # redirect to seamless.
+    # These are only used by the `Machine`, and the `Machine`
+    # does not (and should not) know anything about snippets.
+    # So, redirect to seamless.
+
     delegate :[], :size, to: @seamless
 
-    # Returns the snippet we currently emit to.
+    # Returns the snippet we currently emit into.
     private macro snippet
       @snippets.last
     end
@@ -35,9 +42,9 @@ module Ven::Suite
     end
 
     # Returns the offset of *argument* in the appropriate
-    # payload storage, if it is there already. Otherwise,
-    # adds *argument* to the appropriate payload storage
-    # first, and then returns the resulting offset.
+    # payload storage. If not found, adds *argument* to the
+    # appropriate payload storage first, and then returns
+    # the offset.
     def offset(argument : VJump)
       @jumps.index(argument) || append(@jumps, argument)
     end
@@ -67,8 +74,8 @@ module Ven::Suite
       nil
     end
 
-    # Appends an instruction given its *opcode*, *argument*
-    # and *line* number.
+    # Emits an instruction into the current snippet given its
+    # *opcode*, *argument* and *line* number.
     def add(opcode : Opcode, argument : Label, line : Int32)
       snippet.add(opcode, argument, line)
     end
@@ -78,15 +85,15 @@ module Ven::Suite
       snippet.add(opcode, offset(argument), line)
     end
 
-    # Declares that whatever follows should be emitted under
-    # the label *label*.
+    # Declares emission in another snippet. The snippet is
+    # created automatically given the *label* (see `Snippet`).
     def label(label : Label)
       @snippets << Snippet.new(label)
       label.target = @snippets.size - 1
     end
 
-    # Returns the payload vehicle this instruction references,
-    # or nil if it doesn't reference one.
+    # Returns the `PayloadVehicle` this instruction references,
+    # or nil if it doesn't.
     def resolve?(instruction : Instruction)
       return nil unless argument = instruction.argument
 
@@ -102,36 +109,34 @@ module Ven::Suite
       end
     end
 
-    # Returns the payload vehicle this instruction references.
-    # Raises if it doesn't reference one.
+    # Returns the `PayloadVehicle` this instruction references.
+    # Raises if it doesn't.
     def resolve(instruction : Instruction)
       resolve?(instruction) || raise "Chunk.resolve(): #{instruction}"
     end
 
     # Stitches this chunk.
     #
-    # Stitching is the process of merging many snippets of
-    # instructions into one seamless blob.
+    # Stitching is the process of merging multiple snippets
+    # into one seamless blob.
     #
-    # As labels that reference snippets lose their meaning
-    # with no snippets there, the references to snippets are
-    # changed to the offsets of snippets' first instructions.
+    # As `Label`s, which reference snippets, lose their meaning
+    # with snippets dissolved, their targets are mutated to be
+    # the offset of the appropriate snippet's first instruction.
     #
     # Returns true.
     private def stitch
       @snippets.each do |snippet|
         # Idiomatically, labels point to snippets and never
-        # to IPs. But we can do anything under the hood :)
+        # to IPs. But we can do anything under the hood!
         snippet.label.target = @seamless.size
-
         @seamless += snippet.code
       end
 
       true
     end
 
-    # Replaces all `Label`s in seamless with the appropriate
-    # jumps (see `VJump`).
+    # Replaces all `Label`s in `seamless` with `VJump`s.
     #
     # Returns true.
     private def jumpize
@@ -148,16 +153,17 @@ module Ven::Suite
       true
     end
 
-    # Stitches and jumpizes this chunk.
+    # Stitches and jumpizes this chunk. Use this to make the
+    # chunk executable.
     def complete!
       stitch && jumpize
 
       self
     end
 
-    # Disassembles an *instruction*, trying to resolve its
-    # argument with the payload storage of this chunk. If
-    # got an *index*, prints it before the instruction.
+    # Disassembles an *instruction*, assuming this chunk is
+    # its context. Prints *index* before the instruction
+    # (if specified).
     def to_s(io : IO, instruction : Instruction, index : Int32? = nil)
       argument = resolve?(instruction)
 
@@ -166,7 +172,12 @@ module Ven::Suite
       io << " (" << argument << ")" if argument
     end
 
-    # Disassembles seamless if available, otherwise snippets.
+    # Same as `to_s(io, instruction)`.
+    def to_s(instruction : Instruction, index : Int32? = nil)
+      to_s(String.new, instruction, index)
+    end
+
+    # Disassembles `seamless` if available, otherwise `snippets`.
     def to_s(io : IO, deepen = 2)
       io << @name << " {\n"
 
@@ -187,14 +198,9 @@ module Ven::Suite
       io << "}\n"
     end
 
-    # Disassembles an *instruction* given no IO (see `to_s(io, instruction)`).
-    def to_s(instruction : Instruction, index : Int32? = nil)
-      String.build { |io| to_s(io, instruction, index) }
-    end
-
     # Disassembles this chunk given no IO (see `to_s(io)`)
     def to_s
-      String.build { |io| to_s(io) }
+      to_s(String.new)
     end
   end
 

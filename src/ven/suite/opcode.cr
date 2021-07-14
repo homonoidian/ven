@@ -1,8 +1,8 @@
 module Ven::Suite
   # The list of all opcodes.
   #
-  # NOTE: Sectioning matters. Please add opcodes to the
-  # appropriate sections.
+  # Sectioning matters for further execution. Opcodes must be
+  # added to the appropriate sections.
   enum Opcode
     # Opcodes that take no payload.
 
@@ -86,8 +86,8 @@ module Ven::Suite
     BOX
     LAMBDA
 
-    # Returns the kind of payload an instruction takes, or
-    # nil if it does not take any.
+    # Returns the kind of payload an instruction takes (`:static`,
+    # `:jump`, `:symbol`, `:function`, or nil).
     def payload
       case value
       when 128...512
@@ -101,9 +101,9 @@ module Ven::Suite
       end
     end
 
-    # Returns whether this opcode consumes no values from
-    # the operand stack and puts exactly one value on the
-    # operand stack **with no side effects**.
+    # Returns whether this opcode always puts one value onto
+    # the operand stack without popping any values or producing
+    # side effects.
     def puts_one?
       self.in?(
         DUP,

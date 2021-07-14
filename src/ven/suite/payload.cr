@@ -3,17 +3,15 @@ require "big"
 module Ven::Suite
   alias Static = Int32 | BigDecimal | String
 
-  # Anything that an instruction references by offset is
-  # thought of as payload.
+  # A payload is a remotely stored argument of an instruction.
+  # The instruction references it by specifying its offset in
+  # the appropriate storage.
   #
-  # An abstraction that gives a payload identity is called
-  # payload vehicle.
-  #
-  # There are various kinds of payload vehicles: jump, static
-  # data payload vehicles, etc.
-  abstract struct Payload
-    # Defines the appropriate getters and the initialize method
-    # for this payload, keeping the order of *props*.
+  # Payload vehicles are thin wrappers around the payload. They
+  # may provide additional information about the payload.
+  abstract struct PayloadVehicle
+    # Generates getters, and initialize method parameters,
+    # from *props* of `TypeDeclaration`s.
     macro carries(*props)
       {% for prop in props %}
         getter {{prop}}
@@ -28,9 +26,7 @@ module Ven::Suite
   end
 
   # The jump payload vehicle.
-  #
-  # It carries and defines the identity of a jump target.
-  struct VJump < Payload
+  struct VJump < PayloadVehicle
     carries target : Int32
 
     def ==(other : VJump)
@@ -42,16 +38,15 @@ module Ven::Suite
     end
   end
 
-  # The static data payload vehicle.
+  # The static payload vehicle.
   #
-  # It carries and defines the identity of static data: chunk
-  # offsets, lengths, number and string values, and other
-  # internal data.
-  struct VStatic < Payload
+  # It can carry chunk offsets, lengths, number and string
+  # values, etc. See `Static`.
+  struct VStatic < PayloadVehicle
     carries value : Static
 
     # Compares the values of this and *other* first by class,
-    # and only then by the value itself.
+    # and only then by value.
     def ==(other : VStatic)
       @value.class == other.value.class && @value == other.value
     end
@@ -72,9 +67,9 @@ module Ven::Suite
 
   # The symbol payload vehicle.
   #
-  # It carries and defines the identity of a symbol, whose
-  # name & (probably) nest are known at compile-time.
-  struct VSymbol < Payload
+  # It carries a symbol, whose name and (possibly) nest are
+  # known at compile-time.
+  struct VSymbol < PayloadVehicle
     carries name : String, nest : Int32
 
     @nest = -1
@@ -95,12 +90,13 @@ module Ven::Suite
 
   # The function payload vehicle.
   #
-  # It carries and defines the identity of a function.
-  #
-  # It also provides a number of metadata entries: the names
-  # of the parameters and the amount of them (arity), the amount
-  # of values in the given appendix, and the slurpiness.
-  struct VFunction < Payload
+  # - `VFunction#symbol`: the `VSymbol` of this function;
+  # - `VFunction#target`: the target chunk of this function;
+  # - `VFunction#params`: an array of parameters of this function;
+  # - `VFunction#given`: the amount of `given` values this function expects;
+  # - `VFunction#arity`: the minimum amount of arguments required;
+  # - `VFunction#slurpy`: whether this function is slurpy.
+  struct VFunction < PayloadVehicle
     carries symbol : VSymbol,
       target : Int32,
       params : Array(String),
