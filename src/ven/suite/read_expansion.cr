@@ -86,6 +86,14 @@ module Ven::Suite
       ({{value}}) == false ? QFalse.new(q.tag) : QTrue.new(q.tag)
     end
 
+    # Uses `unary` *operator* to convert *operand* to *type*.
+    private macro unary_to(operator, operand, cast type)
+      %operand = {{operand}}
+
+      unary({{operator}}, %operand).as?({{type}}) ||
+        die("could not cast #{%operand.class} to #{{{type}}}")
+    end
+
     # Implements Ven unary operator semantics.
     def unary(operator : String, operand : Quote)
       q = operand
@@ -136,13 +144,13 @@ module Ven::Suite
       # i.e., that on which something (the operator in our
       # case) operates.
       case operator
-      when "and" then return left.as?(QFalse) || right
-      when "or"  then return left.is_a?(QFalse) ? right : left
-      when "is"  then return is?(left, right)
+      when "and" then left.as?(QFalse) || right
+      when "or"  then left.is_a?(QFalse) ? right : left
+      when "is"  then is?(left, right)
       when "in"
         if left.is_a?(QString) && right.is_a?(QString)
           # If both sides are strings, do a substring search.
-          return right.value.includes?(left.value) ? left : bool false
+          right.value.includes?(left.value) ? left : bool false
         elsif right.is_a?(QVector)
           # If the right side is a vector, go through its items,
           # trying to find *left* (whatever it is). Return the
@@ -152,40 +160,40 @@ module Ven::Suite
           end
         end
 
-        return bool false
+        bool false
       when "<", ">", "<=", ">="
         if left.is_a?(QString) && right.is_a?(QString)
           o_left = left.value.size
           o_right = right.value.size
         else
-          o_left = unary("+", left).as(QNumber).value
-          o_right = unary("+", right).as(QNumber).value
+          o_left = unary_to("+", left, QNumber).value
+          o_right = unary_to("+", right, QNumber).value
         end
 
         case operator
-        when "<"  then return bool o_left < o_right
-        when ">"  then return bool o_left > o_right
-        when "<=" then return bool o_left <= o_right
-        when ">=" then return bool o_left >= o_right
+        when "<"  then bool o_left < o_right
+        when ">"  then bool o_left > o_right
+        when "<=" then bool o_left <= o_right
+        when ">=" then bool o_left >= o_right
         end
       when "+", "-", "*", "/"
-        o_left = unary("+", left).as(QNumber).value
-        o_right = unary("+", right).as(QNumber).value
+        o_left = unary_to("+", left, QNumber).value
+        o_right = unary_to("+", right, QNumber).value
 
         case operator
-        when "+" then return num o_left + o_right
-        when "-" then return num o_left - o_right
-        when "*" then return num o_left * o_right
-        when "/" then return num o_left / o_right
+        when "+" then num o_left + o_right
+        when "-" then num o_left - o_right
+        when "*" then num o_left * o_right
+        when "/" then num o_left / o_right
         end
       when "&"
-        o_left = unary("&", left).as(QVector).items
-        o_right = unary("&", right).as(QVector).items
-        return vec o_left + o_right
+        o_left = unary_to("&", left, QVector).items
+        o_right = unary_to("&", right, QVector).items
+        vec o_left + o_right
       when "~"
-        o_left = unary("~", left).as(QString).value
-        o_right = unary("~", right).as(QString).value
-        return str o_left + o_right
+        o_left = unary_to("~", left, QString).value
+        o_right = unary_to("~", right, QString).value
+        str o_left + o_right
       when "x"
         # Normalize the sides, similar to `Machine#normalize?`.
         o_left, o_right =
@@ -193,15 +201,15 @@ module Ven::Suite
           when {_, QVector}, {_, QString}
             # `n x "hello"`   ==> `"hello" x +n`
             # `n x [2, 3, 4]` ==> `[2, 3, 4] x +n`
-            {right, unary("+", left).as(QNumber)}
+            {right, unary_to("+", left, QNumber)}
           when {QString, _}, {QVector, _}
             # `"hello" x n` ==> `"hello" x +n`
             # `[2, 3, 4] x n` ==> `[2, 3, 4] x +n`
-            {left, unary("+", right).as(QNumber)}
+            {left, unary_to("+", right, QNumber)}
           else
             # `foo x n` ==> `&foo x +n`
-            {unary("&", left).as(QVector),
-             unary("+", right).as(QNumber)}
+            {unary_to("&", left, QVector),
+             unary_to("+", right, QNumber)}
           end
 
         amount = o_right.value.to_big_i
@@ -214,9 +222,9 @@ module Ven::Suite
         end
 
         if o_left.is_a?(QVector)
-          return vec o_left.items * amount
+          vec o_left.items * amount
         elsif o_left.is_a?(QString)
-          return str o_left.value * amount
+          str o_left.value * amount
         end
       end
     end
@@ -351,6 +359,14 @@ module Ven::Suite
         die("illegal callee: #{callee.class}")
       end
 
+      # `quote()`s are an exception to the rule of evaluating
+      # the arguments.
+      if callee.value == "quote"
+        return QQuoteEnvelope.new(q.tag,
+          q.args.first? || die("quote(): improper arguments")
+        )
+      end
+
       args = eval(env, q.args)
 
       # Those below are readtime builtins. They're a bunch of
@@ -363,9 +379,8 @@ module Ven::Suite
         # one argument, it returns that argument untouched.
         # If called with multiple arguments, it returns a
         # vector of those arguments.
-
         args.each do |arg|
-          puts unary("~", arg).as(QString).value
+          puts unary_to("~", arg, QString).value
         end
 
         args.size == 1 ? args.first : vec args
@@ -374,8 +389,7 @@ module Ven::Suite
         # characters of the given string.
         die("chars(): improper arguments") unless args.size == 1
 
-        chars = unary("~", arg = args.first)
-          .as(QString)
+        chars = unary_to("~", arg = args.first, QString)
           .value
           .chars
           .map do |char|
@@ -388,12 +402,7 @@ module Ven::Suite
         # reverses the given string.
         die("reverse(): improper arguments") unless args.size == 1
 
-        str unary("~", args.first)
-          .as(QString)
-          .value
-          .reverse
-      when "quote"
-        QQuoteEnvelope.new(q.tag, args.first)
+        str unary_to("~", args.first, QString).value.reverse
       else
         die("unsupported call quote")
       end
