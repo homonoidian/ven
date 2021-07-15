@@ -38,8 +38,6 @@ module Ven
 
     # Given an explanation message, *message*, dies of `CompileError`.
     private def die(message : String)
-      # `traces` get deleted after a death; we cannot just
-      # have a reference to them.
       traces = @context.traces.dup
 
       # If the last entry in traces does not point to the
@@ -273,13 +271,17 @@ module Ven
 
     def visit!(q : QDies)
       finish = label
-      handler = label
+      truthy = label
+      falsey = label
 
-      issue(Opcode::SETUP_DIES, handler)
+      issue(Opcode::SETUP_DIES, truthy)
       visit(q.operand)
-      issue(Opcode::J, finish)
-      label handler
+      issue(Opcode::J, falsey)
+      label truthy
       issue(Opcode::TRUE)
+      issue(Opcode::J, finish)
+      label falsey
+      issue(Opcode::FALSE)
       label finish
       issue(Opcode::RESET_DIES)
     end

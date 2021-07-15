@@ -106,7 +106,7 @@ ensure "Sanity of unary operators" {
     #false is 5;
 
     %123 dies;
-    %"123" dies;
+    %"123" is 123;
     %true dies;
     %false dies;
     %[1] dies;
