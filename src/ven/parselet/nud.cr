@@ -592,13 +592,19 @@ module Ven::Parselet
     #
     # Returns a tuple of `{trigger_type, trigger}`.
     def trigger!
-      case @parser.word[:type]
+      type, lexeme = @parser.word[:type], @parser.word[:lexeme]
+
+      # If *type* is a user-defined keyword, consume & return
+      # out immediately.
+      if type.downcase.in?(@parser.context.keywords)
+        return type, @parser.word![:lexeme]
+      end
+
+      case type
       when "REGEX"
         {gentype, Regex.new(@parser.word![:lexeme])}
-      when "SYMBOL", .in?(@parser.context.keywords)
-        # By doing the `.in?` clause, we allow to override
-        # user-bound keywords.
-        {@parser.word[:lexeme].upcase, @parser.word![:lexeme]}
+      when "SYMBOL"
+        {lexeme.upcase, @parser.word![:lexeme]}
       else
         die("'nud': bad trigger: expected regex or symbol")
       end
