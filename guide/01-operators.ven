@@ -53,8 +53,8 @@ ensure #123 is 3; # i.e. #123 => #~123 => #"123" => 3
 # Unary 'not' returns the inverse boolean of whatever it
 # is given:
 
-ensure not 0 is true;
-ensure not 1 is false;
+ensure not false is true;
+ensure not true is false;
 
 
 # BINARY OPERATORS (take two values)

@@ -37,7 +37,7 @@ module Ven::Parselet
     def parse
       notted = type.in?(NOTTABLE) && !!@parser.word!("NOT")
       quote = QBinary.new(@tag, lexeme, @left, led)
-      quote = QBinary.new(@tag, "is", quote, QFalse.new(@tag)) if notted
+      quote = QUnary.new(@tag, "not", quote) if notted
       quote
     end
   end

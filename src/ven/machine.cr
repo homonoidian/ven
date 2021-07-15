@@ -375,8 +375,7 @@ module Ven
       when {"to", Num, Num}
         MFullRange.new(left, right)
       when {"is", Str, MRegex}
-        # `str is regex` is a special case for `is`, for it
-        # does not return the value of left, but instead the
+        # `str is regex` does not return *left*, but instead
         # full match result (or false if there isn't any).
         #
         # Also, if there are named groups in the regex, the
@@ -394,27 +393,45 @@ module Ven
         end
         bool false
       when {"is", MBool, _}
-        # `bool is <any>` is also a special case, as, because
-        # `is` returns the *left* value, `false is false` will
-        # return false (i.e., the left false); this is, of
-        # course, not what is expected.
+        # This makes clauses like `false is false` work. The
+        # following machinery will cause these to return the
+        # left `false`, but this is unwanted.
         bool left.is?(right)
+      when {"is", _, MBool}
+        # Returns whether *left*, converted to bool
+        # **non-semantically**, is *right*.
+        may_be left, if: left.to_bool.is?(right)
       when {"is", _, _}
-        # Note that 'is' is not normalized; identity handling
-        # & all its oddities, sugars etc. is all done by the
-        # *left* Model.
+        # Note that 'is' does not normalize; identity handling,
+        # with all its sugars & salts, is done by *left*.
         may_be left, if: left.is?(right)
       when {"in", Str, Str}
+        # Checks for substring. Returns *left*, or bool false.
         may_be left, if: right.value.includes?(left.value)
       when {"in", Num, MRange}
+        # Checks for presence in range. Returns *left*, or
+        # bool false.
         may_be left, if: right.includes?(left.value)
       when {"in", MCompoundType, Vec}
+        # Returns a vector of values matching the specified
+        # compound type, or an empty vector.
         vec right.select(&.is? left)
+      when {"in", MBool, Vec}
+        # Returns whether boolean *left* is in the vector.
+        # Returns true or false.
+        truthy = left.true?
+        bool right.any? &.true?.==(truthy)
       when {"in", _, Vec}
-        bool !!right.find &.is?(left)
+        # Searches for an item matching *left* in the vector.
+        # Returns the found item, or bool false.
+        right.find &.is?(left) || bool false
       when {"in", Str, MMap}
-        bool right.has_key?(left.value)
+        # Searches for a key named *left*, and returns the
+        # corresponding value. Otherwise, returns bool false.
+        may_be right[left.value], if: right.has_key?(left.value)
       when {"in", _, MMap}
+        # Returns a subset map of *right* with only the values
+        # matching *left* kept.
         MMap.new right.select { |_, v| v.is?(left) }
       when {"<", Num, Num}
         bool left.value < right.value
@@ -532,14 +549,13 @@ module Ven
     def reduce(operator : String, operand : Vec)
       case operator
       when "and"
-        # On the first false in the vector, 'and' returns
-        # false. Otherwise, it returns the last value in
+        # Returns the first false, orelse the last value, in
         # the vector.
-        return operand.each { |x| x.false? && return bool false } || operand.last
+        return operand.each { |x| return bool false if x.false? } || operand.last
       when "or"
-        # 'or' returns the first non-false value in the vector,
-        # or false.
-        return operand.each { |x| !x.false? && return x } || bool false
+        # 'or' returns the first non-false in the vector,
+        # orelse false.
+        return operand.each { |x| return x unless x.false? } || bool false
       end
 
       case operand.length
@@ -567,25 +583,16 @@ module Ven
         start = operand.begin.value
         end_ = operand.end.value
 
-        # Uses GMP's factorial. If got |*| -A to -B, outputs
-        # -(|*| A to B); I don't know whether it's the expected
-        # behavior. If |*| (A > 1) to (B > 1), outputs (B - A)!;
-        # about this I also do not know.
-        if neg = start < 0 && end_ < 0
-          start = -start
-          end_ = -end_
-        elsif start < 0 || end_ < 0
-          return num 0
-        end
-
-        sign = neg ? -1 : 1
-
-        if start == 1
-          return num sign * end_.value.factorial
+        # Uses GMP's factorial, which is MUCH faster than any
+        # domestic implementation.
+        if start < 0 || end_ < 0
+          die("|*|: negative ends disallowed")
+        elsif start == 1
+          return num end_.value.factorial
         elsif start > end_
-          return num sign * (start - end_).value.factorial
+          return num (start - end_).value.factorial
         else
-          return num sign * (end_ - start).value.factorial
+          return num (end_ - start).value.factorial
         end
       end
 
@@ -824,13 +831,25 @@ module Ven
               # Converts to str: (x1 -- x1' : str)
               put pop.to_str
             in Opcode::TOB
-              # Converts to bool: (x1 -- x1' : bool)
-              put pop.to_bool
+              # Converts to bool. TOB (aka postfix '?') is the
+              # only way you can get a *semantic boolean* (e.g.
+              # outside of '?', 0 is true; but `0?` is false).
+              # (x1 -- x1' : bool)
+              semantic =
+                case value = pop
+                when Num
+                  value.positive?
+                when Str, Vec, MMap
+                  !value.empty?
+                else
+                  value.true?
+                end
+
+              put bool semantic
             in Opcode::TOIB
-              # Converts to inverse boolean (...#t, ...#f - true/false
-              # by meaning):
-              #   - (x1#t -- false)
-              #   - (x1#f -- true)
+              # Inverts the given boolean.
+              #   - (x1.true? -- false)
+              #   - (x1.false? -- true)
               put pop.to_bool(inverse: true)
             in Opcode::TOV
               # Converts to vec (unless vec):

@@ -111,14 +111,12 @@ module Ven::Suite
       raise ModelCastException.new("could not convert to map: #{type}")
     end
 
-    # Returns whether this model is semantically true.
+    # Returns whether this model is true.
     def true? : Bool
       true
     end
 
-    # Returns whether this model is a false `MBool`.
-    #
-    # This is likely **not** the inverse of `true?`.
+    # Returns whether this model is a false.
     def false? : Bool
       false
     end
@@ -313,7 +311,9 @@ module Ven::Suite
     Suite.model_template?
   end
 
-  # A model that holds a value of type *T*.
+  # A model that holds a `value` of type *T*.
+  #
+  # Forwards missing to `value`.
   abstract struct MValue(T) < MStruct
     getter value : T
 
@@ -327,6 +327,8 @@ module Ven::Suite
     def to_s(io)
       io << @value
     end
+
+    forward_missing_to @value
   end
 
   # Ven's number data type (type num).
@@ -340,10 +342,6 @@ module Ven::Suite
 
     def to_num
       self
-    end
-
-    def true?
-      @value != 0
     end
 
     # Returns whether this number is in the given range.
@@ -431,10 +429,6 @@ module Ven::Suite
         "'%': improper JSON: #{message[0].downcase + message[1..]}")
     end
 
-    def true?
-      size != 0
-    end
-
     def callable?
       true
     end
@@ -501,12 +495,6 @@ module Ven::Suite
 
     def to_str
       Str.new(@stringy)
-    end
-
-    # Any regex is true, as any regex (even an empty one)
-    # matches something.
-    def true?
-      true
     end
 
     # Returns whether this regex is the same as the
@@ -588,10 +576,6 @@ module Ven::Suite
       end
 
       MMap.new(pairs.to_h)
-    end
-
-    def true?
-      size != 0
     end
 
     def callable?
@@ -918,10 +902,6 @@ module Ven::Suite
     # Returns self.
     def to_map
       self
-    end
-
-    def true?
-      !@map.empty?
     end
 
     def indexable?
