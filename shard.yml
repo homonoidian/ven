@@ -1,6 +1,6 @@
 name: ven
 version: 0.1.1-rev16
-crystal: 1.0.0
+crystal: 1.1.0
 
 targets:
   ven:
