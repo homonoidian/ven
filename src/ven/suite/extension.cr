@@ -9,7 +9,8 @@ module Ven::Suite
         machine.die("wrong type for argument \##{{{argno + 1}}}")
     end
 
-    # Yields with cast *argtypes*, a list of type declarations.
+    # Yields with cast *argtypes* (of `TypeDeclaration`s) vars
+    # cast to the corresponding types.
     #
     # ```
     # with_args(a : Str, b : Str) do
@@ -24,7 +25,7 @@ module Ven::Suite
       {{yield}}
     end
 
-    # Yields a consesus builtin Proc. See `with_args` for
+    # Yields a consesus builtin Proc. See `with_args` to see
     # what *argtypes* are.
     #
     # Converts block result to Model using `Adapter.to_model`.
@@ -43,8 +44,8 @@ module Ven::Suite
         in_builtin_proc({{*argtypes}}) { {{ yield }} })
     end
 
-    # Defines *name* to be *value* in the global scope. Notifies
-    # the compiler about it.
+    # Assigns *name* to *value* in the global scope. Notifies
+    # the compiler.
     macro defglobal(name, value)
       {% if !name.is_a?(StringLiteral) %}
         {% name = name.stringify %}
@@ -53,10 +54,10 @@ module Ven::Suite
       m_context[{{name}}] = {{value}}
     end
 
-    # Defines a builtin named *name* in *ns*. See `builtin`.
+    # Defines a builtin *name* in *ns*. See `builtin`.
     #
-    # If *ns* is nil, the global scope is assumed, and compiler
-    # is notified about *name*.
+    # If *ns* is nil, the global scope is assumed, and the
+    # compiler is notified accordingly.
     macro defbuiltin(name, *argtypes, in ns = nil)
       {% if !name.is_a?(StringLiteral) %}
         {% name = name.stringify %}
@@ -102,8 +103,7 @@ module Ven::Suite
       end
     end
 
-    # Exports the definitions into *m_context*. Declares them
-    # in *c_context*.
+    # Loads this extension into *m_context*, *c_context*.
     protected abstract def load(
       c_context : Context::Compiler,
       m_context : Context::Machine

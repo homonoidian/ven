@@ -4,37 +4,51 @@ module Ven::Suite
   struct Trace
     include JSON::Serializable
 
-    getter file : String
+    # The amount of whitespace characters before a trace.
+    TRACE_PADDING = 2
+
+    # Returns the line that this trace points to.
     getter line : Int32
+    # Returns the file that this trace points to.
+    getter file : String
+    # Returns the description of this trace.
     getter desc : String
 
+    # Initializes from `QTag`.
     def initialize(tag : QTag, @desc)
       @line = tag.line
       @file = tag.file
     end
 
+    # Initializes from *file*, *line*.
     def initialize(@file, @line, @desc)
     end
 
+    # Returns whether this trace points to the same location
+    # as `QTag` *tag*.
     def ==(tag : QTag)
       @file == tag.file && @line == tag.line
     end
 
-    def ==(trace : Trace)
-      @file == trace.file && @line == trace.line && @desc == trace.desc
+    # Returns whether this trace points to the same location
+    # as the *other* trace.
+    def ==(other : Trace)
+      @file == other.file && @line == other.line && @desc == other.desc
     end
 
-    # Stringifies this trace.
+    # Returns the string representation of this trace.
     #
-    # Reads the file to provide the excerpt, unless the file
-    # does not exist.
-    #
-    # Colorizes the output.
+    # Reads `file` for an excerpt, unless it isn't a file or
+    # doesn't exist. **Colorizes.**
     def to_s(io)
-      io << "  in #{@desc.colorize.bold} (#{@file}:#{@line})"
-      if File.exists?(@file) && File.file?(@file)
-        excerpt = File.read_lines(@file)[@line - 1]
-        io << "\n    #{@line}| #{excerpt.lstrip}"
+      io << " " * TRACE_PADDING << @desc.colorize.bold
+      io << " (" << @file << ":" << @line << ")"
+
+      # If *file* exists, is a file, and is able to provide
+      # *line*, append the line preview.
+      if File.file?(@file) && (excerpt = File.read_lines(@file)[@line - 1]?)
+        io << "\n" << " " * (TRACE_PADDING + 2)
+        io << @line << "| " << excerpt.lstrip
       end
     end
 
