@@ -659,7 +659,7 @@ module Ven
           # Bake the boot file (peek to learn more) into
           # the binary.
           begin
-            @orchestra.from({{read_file("boot/boot.ven")}}, "boot")
+            @orchestra.from({{read_file("#{__DIR__}/ven/library/basis.ven")}}, "(basis)")
           rescue e : VenError
             die(e)
           end
