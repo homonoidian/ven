@@ -207,7 +207,7 @@ module Ven::Suite
     value : Quote,
     desc: "binary assignment")
 
-  defquote(QDies, operand : Quote, desc: "postifx dies")
+  defquote(QDies, operand : Quote, desc: "postfix dies")
   defquote(QIntoBool, operand : Quote, desc: "postfix into-bool")
   defquote(QReturnDecrement, target : QSymbol, desc: "return-decrement")
   defquote(QReturnIncrement, target : QSymbol, desc: "return-increment")

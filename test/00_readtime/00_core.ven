@@ -115,12 +115,37 @@ nud pad(symbol) {
     ensure (|#_| [1, 2, 3]) is 1 x 3;
     ensure (|&_ * _| [2, 3, 4]) is [4, 9, 16];
     ensure (|if (&_ > 5) _ else _ - 1| [4, 9, 16]) is [3, 9, 16];
+    ensure (|_| [1 2 3]) is [1 2 3];
+    ensure (|&_| [1 2 3]) is [1 2 3];
+    ensure (|_ + 1| [1 2 3]) is [2 3 4];
+    ensure (|&_ + 1| [1 2 3]) is [2 3 4];
+    ensure (|{{{{{_ + 1}}}}}| [1 2 3]) is [2 3 4];
+    ensure (|&_ + _| [1 2 3]) is [2 4 6];
+    ensure (|&_ + &_| [1 2 3]) is [2 4 6];
+    ensure (|if &_ > 1 _| [1 2 3]) is [false 2 3];
+    ensure (||_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
+    ensure (||&_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
+    ensure (||&_ + 1| &_| [[1 2], [3 4]]) is [[2 3], [4 5]];
+    ensure (||&_ + _| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
+    ensure (||&_ + &_| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
+    ensure (||[&_ + &_, _]| &_| [[1 2], [3 4]]) is [[[2 1], [4 2]], [[6 3], [8 4]]];
+    ensure (|[|[&_ + &_, _]| &_, _]| [[1 2], [3 4]]) is [[[[2 1], [4 2]], [1 2]], [[[6 3], [8 4]], [3 4]]];
 
     # Make sure 'if' works.
     ensure (if 1 2 else 3) is 2;
     ensure (if 1 2) is 2;
     ensure (if false 2) is false;
     ensure (if false 2 else 3) is 3;
+    ensure (if false _ else 3) dies;
+    ensure (if 1 > 2 _ else 3) is 3;
+    ensure (if 1 < 2 _ else 3) dies;
+    ensure (if 1 is 2 _ else _) dies;
+    ensure (if 1 is 1 _ else 3) is 1;
+
+    # Make sure 'dies' works.
+    ensure (1 dies) is false;
+    ensure (+"123" dies) is false;
+    ensure (+"abc" dies) is true;
   }>
 
   say("All tests passed!");

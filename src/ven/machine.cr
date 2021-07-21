@@ -954,10 +954,10 @@ module Ven
             in Opcode::STAKE
               # Takes the active superlocal, and puts it onto
               # the operand stack.
-              put @context.stake? || die("'_': inaccessible or hole")
+              put @context.stake? || die("'_': could not borrow")
             in Opcode::STAP
               # Same as `STAKE`, but taps.
-              put @context.stap? || die("'&_': inaccessible or hole")
+              put @context.stap? || die("'&_': could not borrow")
             in Opcode::MAP_SETUP
               # Prepares for a series of map iterations.
               control << tap.length << 0 << stack.size - 2

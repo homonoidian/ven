@@ -139,7 +139,7 @@ module Ven::Suite
       # Returns whether this scope is isolated.
       getter isolated : Bool
       # Returns the superlocal of this scope.
-      getter superlocal = Superlocal.new
+      getter superlocal = Superlocal(Model).new
 
       def initialize(
         @scope = {} of String => Model,

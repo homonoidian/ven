@@ -14,41 +14,41 @@ module Ven::Suite
       end
     end
 
-    # The environment of a single readtime envelope.
+    # The environment of a readtime envelope.
     private class Env
       # The queue of quotes. Queue overrides expression-return
       # & implicit last quote return, and makes the envelope
-      # expand into a QGroup of the Quotes.
+      # expand into a QBlock of quotes it consists of.
       property queue = Quotes.new
-      # The expression-return value.
+      # The value set by an expression return.
       property return : Quote? = nil
       # A hash of readtime symbol definitions.
-      property definitions : Definitions
-      # The references stack (TODO: redef sema!).
-      property refs = Quotes.new
+      getter definitions : Definitions
+      # The superlocal of this environment.
+      getter superlocal : Superlocal(Quote)
 
-      def initialize(@definitions)
+      def initialize(@definitions, @superlocal = Superlocal(Quote).new)
       end
 
-      # Returns a new `Env`, with its `definitions` being a
-      # `Hash#merge` of this Env's definitions and *defs*, and
-      # all other properties being the same as in this Env.
-      def with(defs : Definitions)
-        env = Env.new(defs)
-        env.queue = @queue
-        env.return = @return
-        env
+      # Returns a new `Env`, with its `definitions` being
+      # this environment's definitions merged with *defs*.
+      # Keeps all other properties intact.
+      def with(defs = Definitions.new, borrow = false)
+        merged = @definitions.merge(defs)
+        child = borrow ? Env.new(merged, @superlocal) : Env.new(merged)
+        # So that return & queue expressions redirect to
+        # the parent.
+        child.return = @return
+        child.queue = @queue
+        child
       end
 
-      # Returns a new `Env`, with its `refs` being an array
-      # of this Env's refs plus *refs*, and all other properties
-      # being the same as in this Env.
-      def with(refs us : Quotes)
-        env = Env.new(@definitions)
-        env.refs = @refs + us
-        env.queue = @queue
-        env.return = @return
-        env
+      # Returns a new `Env`, with its `superlocal` filled
+      # with *value*. Keeps all other properties intact.
+      def with(value : Quote, borrow = false)
+        child = self.with(borrow: borrow)
+        child.superlocal.fill(value)
+        child
       end
     end
 
@@ -61,7 +61,12 @@ module Ven::Suite
     # Assumes it's run inside `eval`, with *q* in scope and
     # of type `Quote`. Will crash otherwise.
     private macro num(from value)
-      QNumber.new(q.tag, ({{value}}).to_big_d)
+      %value = {{value}}
+      begin
+        QNumber.new(q.tag, %value.to_big_d)
+      rescue InvalidBigDecimalException
+        die("'#{%value}' is not a base-10 number")
+      end
     end
 
     # Makes a `QString`.
@@ -86,7 +91,8 @@ module Ven::Suite
       ({{value}}) == false ? QFalse.new(q.tag) : QTrue.new(q.tag)
     end
 
-    # Uses `unary` *operator* to convert *operand* to *type*.
+    # Calls `unary(operator, operand)` in order to to convert
+    # *operand* to *type*. Dies if unable to.
     private macro unary_to(operator, operand, cast type)
       %operand = {{operand}}
 
@@ -94,7 +100,8 @@ module Ven::Suite
         die("could not cast #{%operand.class} to #{{{type}}}")
     end
 
-    # Implements Ven unary operator semantics.
+    # Applies Ven unary *operator* to *operand*. Returns
+    # the result, or nil.
     def unary(operator : String, operand : Quote)
       q = operand
 
@@ -136,7 +143,8 @@ module Ven::Suite
       end
     end
 
-    # Implements Ven binary operator semantics.
+    # Applies Ven binary *operator* to *left*, *right*. Returns
+    # the result, or nil.
     def binary(operator : String, left : Quote, right : Quote)
       q = left
 
@@ -227,21 +235,24 @@ module Ven::Suite
           str o_left.value * amount
         end
       end
+    rescue DivisionByZeroError
+      die("'#{operator}': division by zero given #{left}, #{right}")
+    rescue OverflowError
+      die("'#{operator}': numeric overflow")
     end
 
-    # Implements runtime Ven 'is' semantics, and readtime
-    # Ven 'is' semantics.
+    # Applies 'is' to *left*, *right*.
     #
     # Readtime Ven semantics kicks in when *left*, or *right*,
     # or both of them are quotes other than `QNumber`, `QString`,
-    # `QVector`, `QTrue`/`QFalse`, and a few others (refer to
-    # the source code). In this case, it recursively compares
-    # the fields of the two quotes.
+    # `QVector`, `QTrue`/`QFalse`, and a few others. In this
+    # case, it recursively compares the fields of the two quotes.
     def is?(left : Quote, right : Quote)
       q = left
 
-      # If the classes aren't equal, the content doesn't even
-      # matter. Return false right away.
+      # If the classes aren't equal, the content doesn't matter.
+      # Return false right away. This ensures the `.as(...)`es
+      # you'll see below.
       return bool false unless left.class == right.class
 
       case left
@@ -253,7 +264,7 @@ module Ven::Suite
         lefts = left.items
         rights = right.as(QVector).items
 
-        # If sizes of the two vectors are not equal, the
+        # If the sizes of the two vectors are not equal, the
         # vectors themselves are not equal.
         return bool false if lefts.size != rights.size
 
@@ -264,11 +275,10 @@ module Ven::Suite
           return bool false if is?(item, rights[index]).is_a?(QFalse)
         end
       when QTrue, QFalse
-        # Cannot return *left*, because, say, `false is false`
-        # will return `false`, and that's just wrong.
+        # Remember the `left.class == right.class` clause.
         return bool true
       else
-        # We're taking the short path here,
+        # We're taking the short path here:
         return bool false unless left.to_json == right.to_json
       end
 
@@ -282,13 +292,13 @@ module Ven::Suite
       end
     end
 
-    # Implements Ven readtime semantics for the given quote,
-    # taking into account the environment, *env*.
+    # Evaluates the given quote,taking into account the readtime
+    # envelope *env*ironment.
     #
     # Readtime semantics is an alternative interpretation of
     # quotes. Some may say, an alternative backend to quotes.
-    # Some quotes are homoiconic (they represent themselves),
-    # and some aren't. Those homoiconic quotes are values for
+    # Several quotes are homoiconic (they represent themselves),
+    # and some aren't. The homoiconic quotes are values for
     # readtime Ven, in the same sense Models are for runtime
     # Ven.
     #
@@ -311,11 +321,11 @@ module Ven::Suite
     end
 
     def eval(env, q : QSuperlocalTake)
-      env.refs.pop? || die("TODO redef sema '_': no referent")
+      env.superlocal.take? || die("'_': could not borrow")
     end
 
     def eval(env, q : QSuperlocalTap)
-      env.refs.last? || die("TODO redef sema '&_': no referent")
+      env.superlocal.tap? || die("'&_': could not borrow")
     end
 
     def eval(env, q : QReadtimeSymbol)
@@ -337,14 +347,9 @@ module Ven::Suite
     def eval(env, q : QBinary)
       left = eval(env, q.left)
 
-      # Short-circuiting for 'and' and 'or'. Although they
-      # have very similar implementations, I still cannot
-      # merge them into one.
-      if q.operator == "and"
-        return left if left.is_a?(QFalse)
-        return eval(env, q.right)
-      elsif q.operator == "or"
-        return left unless left.is_a?(QFalse)
+      if q.operator.in?("and", "or")
+        # Short-circuiting for 'and' and 'or'.
+        return left if left.is_a?(QFalse) || q.operator == "or"
         return eval(env, q.right)
       end
 
@@ -359,8 +364,8 @@ module Ven::Suite
         die("illegal callee: #{callee.class}")
       end
 
-      # `quote()`s are an exception to the rule of evaluating
-      # the arguments.
+      # Calls to `quote` are an exception to the rule of
+      # evaluating the arguments.
       if callee.value == "quote"
         return QQuoteEnvelope.new(q.tag,
           q.args.first? || die("quote(): improper arguments")
@@ -369,10 +374,9 @@ module Ven::Suite
 
       args = eval(env, q.args)
 
-      # Those below are readtime builtins. They're a bunch of
-      # primitive 'functions' that give the user access to
-      # the Reader (upon evaluation), I/O (mostly for debugging),
-      # type manipulation, quote creation, etc.
+      # The cases are *readtime builtins*. They give the user
+      # access to the Reader (upon evaluation), I/O (mostly
+      # for debugging), type manipulation, quote creation, etc.
       case callee.value
       when "say"
         # Outputs the arguments to the screen. If called with
@@ -414,10 +418,18 @@ module Ven::Suite
       end
 
       # Note how we don't take global assignment (:=) into
-      # account. Well, there is no point in doing that: `:=`
-      # works on scope stack, and there's no scope stack at
-      # read-time.
+      # account. There is no point in doing that: `:=` works
+      # when there's a scope stack, and there's none at readtime.
       env.definitions[target.value] = eval(env, q.value)
+    end
+
+    def eval(env, q : QDies)
+      eval(env, q.operand)
+      # Replicates Ven runtime semantics: false if didn't
+      # die, true otherwise.
+      bool false
+    rescue e : ReadError | TransformDeathException
+      bool true
     end
 
     def eval(env, q : QEnsure)
@@ -432,9 +444,10 @@ module Ven::Suite
     end
 
     def eval(env, q : QBlock)
-      # New definitions in the block will be discarded after
-      # it's evaluated, but old are still accessible & mutable.
-      eval(env.dup, q.body).last? || die("empty block")
+      # Definitions in the block will be discarded after it's
+      # evaluated, but those outside of it are still accessible
+      # & mutable.
+      eval(env.with(borrow: true), q.body).last? || die("empty block")
     end
 
     def eval(env, q : QQueue)
@@ -459,14 +472,14 @@ module Ven::Suite
 
     def eval(env, q : QReturnExpression)
       # QReturnExpression, as in runtime Ven, just sets the
-      # return value without interrupting control flow.
+      # return value, i.e., without interrupting the flow.
       env.return = transform(q.value)
 
       q.value
     end
 
     def eval(env, q : QReturnStatement)
-      # QReturnStatement, as in runtime Ven, interrupts control
+      # QReturnStatement, as in runtime Ven, interrupts the
       # flow and returns out of this envelope immediately.
       raise ReturnException.new(transform(q.value))
     end
@@ -484,13 +497,15 @@ module Ven::Suite
 
       if q.iterative
         # Iterative map spreads do '.each' instead of '.map',
-        # and return a copy of the original operand.
+        # and return the original operand.
         items.each do |item|
-          eval(env.with([item]), q.operator.clone)
+          eval(env.with(item), q.operator.clone)
         end
       else
         items = items.map do |item|
-          eval(env.with([item]), q.operator.clone)
+          # Note how borrows originating from map spreads
+          # are disabled.
+          eval(env.with(item), q.operator.clone)
         end
       end
 
@@ -524,11 +539,23 @@ module Ven::Suite
     end
 
     def eval(env, q : QIf)
-      if eval(env, q.cond).is_a?(QFalse)
-        eval(env, q.alt || return bool false)
+      condition = eval(env, q.cond)
+
+      branch = q.suc
+
+      case condition
+      when QTrue
+      when QFalse
+        branch = q.alt.as?(Quote) || return bool false
       else
-        eval(env, q.suc)
+        # This produces the same behavior as in runtime Ven,
+        # but may leave remnant superlocals unless consumed
+        # by the corresponding branch. This sometimes is good
+        # and sometimes is bad.
+        env.superlocal.fill(condition)
       end
+
+      eval(env, branch)
     end
 
     # Expands to the quote the symbol was assigned.
@@ -567,7 +594,7 @@ module Ven::Suite
       # queue overrides expression-return quote, expression-
       # return quote overrides implicit last quote return.
       if !env.queue.empty?
-        return QGroup.new(quote.tag, transform(env.queue))
+        return QBlock.new(quote.tag, transform(env.queue))
       elsif returned = env.return.as?(Quote)
         return transform(returned)
       end
