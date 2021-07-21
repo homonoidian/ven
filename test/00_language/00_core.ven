@@ -244,6 +244,19 @@ ensure "Sanity of binary operators" {
     typeof(vec(num, type)) is compound;
 
   should "have proper spread & spread superlocal semantics"
+    (|+| [1, 2, 3]) is 6;
+    (|*| [1, 2, 3, 4, 5]) is 120;
+    (|is| 1 x 10) is 1;
+    (|is| [1, 2, 3]) is false;
+    (|and| [1, 2, 3]) is 3;
+    (|or| [1, 2, 3]) is 1;
+    (|and| [true, false, 3]) is false;
+    (|and| [false, false, 3]) is false;
+    (|or| [false, false, 3]) is 3;
+    (|_ + 1| [2, 3, 4]) is [3, 4, 5];
+    (|#_| [1, 2, 3]) is 1 x 3;
+    (|&_ * _| [2, 3, 4]) is [4, 9, 16];
+    (|if (&_ > 5) _ else _ - 1| [4, 9, 16]) is [3, 9, 16];
     (|_| [1 2 3]) is [1 2 3];
     (|&_| [1 2 3]) is [1 2 3];
     (|_ + 1| [1 2 3]) is [2 3 4];
