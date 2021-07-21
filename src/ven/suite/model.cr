@@ -1399,6 +1399,10 @@ module Ven::Suite
       end
     end
 
+    def variant?(args) : self?
+      self if @function.variant?(@args + args)
+    end
+
     def leading?(type)
       @function.leading?(type, @args.size - 1)
     end

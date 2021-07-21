@@ -899,16 +899,31 @@ module Ven
                   # Append the arguments of the call to the
                   # arguments of the partial: partial `1.foo`,
                   # if called like so: `1.foo(2, 3)` - will
-                  # after this become `do(1, 2, 3)`.
+                  # after this become `foo(1, 2, 3)`.
                   callee, args = callee.function, callee.args + args
                 end
 
                 found = callee.variant?(args)
 
-                # *found*, too, can be an `MPartial`. At least,
-                # no one can protect us from that.
-                if found.is_a?(MPartial)
-                  found, args = found.function, found.args + args
+                # Expand partial/generic until met something
+                # else (including failure).
+                #
+                # This should prevent calls like the one below
+                # from letting improper types in:
+                #   `[1 "2" 3].partial-that-takes-num()`
+                #
+                # ... and add (theoretically) support for nested
+                # generics (currently, there is no legal way
+                # to make nested generics, and there is really
+                # no need to).
+                while found.is_a?(MPartial) || found.is_a?(MGenericFunction)
+                  found = callee.variant?(args)
+                  if found.is_a?(MPartial)
+                    found, args = found.function, found.args + args
+                  end
+                  if found.is_a?(MGenericFunction)
+                    found = found.variant?(args)
+                  end
                 end
 
                 case found
