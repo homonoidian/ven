@@ -1,58 +1,53 @@
 module Ven::Suite
-  # A frame is simply some packed state. It is there to make
-  # statekeeping trivial for the `Machine`.
+  # A frame is an element of current runtime state.
   class Frame
-    include JSON::Serializable
-
-    # The reason this frame was created.
-    enum Goal
+    # The label of this frame. It can be used to search for
+    # particular frames during interpretation.
+    enum Label
       Unknown
       Function
     end
 
-    getter goal : Goal
+    # Returns the label of this frame.
+    getter label : Label
+    # Returns the trace of this frame, if it was initialized
+    # with one.
     getter trace : Trace?
 
+    # Returns the chunk pointer of this frame.
     property cp : Int32
+    # Returns the instruction pointer of this frame.
     property ip : Int32 = 0
 
+    # Returns the operand stack (aka stack) of this frame.
     property stack : Models
-    property control = [] of Int32
-    property underscores = Models.new
 
-    # The instruction pointer to jump to if there was a death
-    # in or under this frame.
-    @[JSON::Field(emit_null: true)]
+    # Returns the control stack of this frame.
+    #
+    # Scheduled for removal.
+    property control = [] of Int32
+
+    # The instruction pointer to jump to if there was a death,
+    # and it got intercepted by this frame.
     property dies : Int32?
 
-    # The model that will be returned if everything goes
-    # according to plan.
-    @[JSON::Field(emit_null: true)]
-    property returns : Model?
-
-    # An array of failure messages. Used for ensure tests but
-    # generic in nature (may be used to wait for all non-fatal
-    # errors).
-    property failures = [] of String
-
-    # The queue values of this frame. They are appended here
-    # by Opcode::QUEUE, and used by RET/FORCE_RET, depending
-    # on the situation.
+    # The values pushed by `queue`.
     property queue = Models.new
 
-    def initialize(@goal = Goal::Unknown, @stack = Models.new, @cp = 0, @ip = 0, @trace = nil)
+    # The value set by an expression return.
+    property returns : Model?
+
+    # An array of failure messages. Used by ensure tests but
+    # generic in nature.
+    property failures = [] of String
+
+    def initialize(@label = Label::Unknown, @stack = Models.new, @cp = 0, @ip = 0, @trace = nil)
     end
 
     delegate :last, :last?, to: @stack
 
     def to_s(io)
-      io << "frame@" << @cp << " [goal: " << goal << "]\n"
-      io << "  ip: " << @ip << "\n"
-      io << "  oS: " << @stack.join(" ") << "\n"
-      io << "  cS: " << @control.join(" ") << "\n"
-      io << "  _S: " << @underscores.join(" ") << "\n"
-      io << "   R: " << @returns << "\n"
-      io << "   D: " << @dies << "\n"
+      io << "[frame#" << @label << "@" << @cp << ":" << @ip << "]"
     end
 
     def_clone

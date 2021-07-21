@@ -13,14 +13,14 @@ module Ven::Suite
     getter given : Quote?
     # Returns whether this parameter is slurpy.
     getter slurpy : Bool
-    # Returns whether this parameter is contextual (`_`).
-    getter contextual : Bool
+    # Returns whether this parameter is an underscore (`_`).
+    getter underscore : Bool
 
     def initialize(
       @index, @name,
       @given = nil,
       @slurpy = false,
-      @contextual = false
+      @underscore = false
     )
     end
 

@@ -2,8 +2,6 @@ module Ven::Suite
   # Represents an individual trace entry in an error's
   # traceback.
   struct Trace
-    include JSON::Serializable
-
     # The amount of whitespace characters before a trace.
     TRACE_PADDING = 2
 

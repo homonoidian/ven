@@ -2,7 +2,7 @@ require "fancyline"
 require "./suite/*"
 
 module Ven
-  class Machine
+  struct Machine
     include Suite
 
     alias Timetable = Hash(Int32, IStatistics)
@@ -17,19 +17,20 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
-    # Returns the chunks this machine has knowledge of.
+    # Returns the chunks this machine is aware of.
     getter chunks : Chunks
     # Returns the context of this machine.
     getter context : CxMachine
-
+    # Returns the current frame stack of this machine.
+    getter frames : Array(Frame)
     # Returns the `Enquiry` object this machine writes to
     # and reads from.
-    property enquiry : Enquiry
+    getter enquiry : Enquiry
 
     @timetable : Timetable
 
-    # Makes a new `Machine` that will run *chunks*, starting
-    # with the chunk at *origin* (the origin chunk).
+    # Makes a `Machine` which is aware of *chunks*. Upon `start`,
+    # the machine will execute the *origin*-th chunk.
     def initialize(@chunks, @context = CxMachine.new, origin = 0, @enquiry = Enquiry.new, frames : Array(Frame)? = nil)
       @frames = frames ? frames.not_nil! : [Frame.new(cp: origin)]
       @inspect = @enquiry.inspect.as Bool
@@ -49,18 +50,19 @@ module Ven
       raise RuntimeError.new(traces.uniq, file, line, message)
     end
 
-    # Builds an `IStatistic` given some *amount*, *duration*
-    # and an *instruction*.
+    # Builds an `IStatistic` given *amount*, *duration*
+    # and *instruction*.
     private macro stat(amount, duration, instruction)
       { amount: {{amount}},
         duration: {{duration}},
         instruction: {{instruction}} }
     end
 
-    # Updates the timetable entry for an *instruction* given
-    # *duration* - the time it took to execute.
+    # Updates the timetable entry for the given *instruction*.
     #
-    # *cp* is a chunk pointer to the chunk where the *instruction*
+    # *duration* is the time *instruction* took to execute.
+    #
+    # *cp* is the index of the chunk where the *instruction*
     # is found.
     #
     # *ip* is an instruction pointer to the *instruction*.
@@ -82,10 +84,10 @@ module Ven
       @frames[-1]
     end
 
-    # Yields the closest frame with goal set to *goal*.
-    private macro frame(goal, &block)
+    # Yields with the closest frame labeled *label*.
+    private macro frame(label, &block)
       @frames.reverse_each do |%frame|
-        if %frame.goal == {{goal}}
+        if %frame.label == {{label}}
           {{*block.args}} = %frame
           {{yield}}
           break
@@ -93,17 +95,13 @@ module Ven
       end
     end
 
-    # Same as `frame(goal, &block)`, but destructive (via
-    # `revoke`) to all frames visited before the one with
-    # the matching goal, and to the frame with the matching
-    # goal itself.
-    #
-    # If did not find a frame with the matching goal, **all**
-    # frames are destroyed.
-    private macro rewind(goal, &block)
+    # Same as `frame(label, &block)`, but destructive to all
+    # frames it visited before, and including, the frame with
+    # the matching *label*.
+    private macro rewind(to label, &block)
       @frames.reverse_each do |%frame|
         revoke
-        if %frame.goal == {{goal}}
+        if %frame.label == {{label}}
           {{*block.args}} = %frame
           {{yield}}
           break
@@ -126,19 +124,15 @@ module Ven
       frame.control
     end
 
-    # Returns the current underscores stack.
-    private macro underscores
-      frame.underscores
-    end
-
-    # Returns the instruction at the IP. Raises if there is
-    # no such instruction.
+    # Returns the instruction at the active instruction pointer.
+    # Raises if there is no such instruction.
     private macro fetch
       chunk[frame.ip]
     end
 
-    # Returns the instruction at the IP, or nil if there is
-    # no such instruction.
+    # Returns the instruction at the active instruction pointer,
+    # or nil if the active instruction pointer overflows the
+    # amount of available instructions.
     private macro fetch?
       if (%ip = frame.ip) < chunk.size
         chunk[%ip]
@@ -150,34 +144,39 @@ module Ven
       frame.ip += 1
     end
 
-    # Immediately Jumps to the instruction at *ip*.
+    # **Immediately** jumps to the instruction at *ip*.
     private macro jump(ip)
       next frame.ip = ({{ip}}.not_nil!)
     end
 
-    # Returns this instruction's jump payload.
+    # Assumes *source* instruction's argument is a `VJump`,
+    # and returns its target (see `VJump#target`). Raises
+    # otherwise.
     private macro target(source = this)
       chunk.resolve({{source}}).as(VJump).target
     end
 
-    # Returns this instruction's static payload, making sure
-    # it is of type *cast*.
+    # Assumes *source* instruction's argument is a `VStatic`
+    # with value of type *cast*, and returns the value as
+    # such. Raises otherwise.
     private macro static(cast = String, source = this)
       chunk.resolve({{source}}).as(VStatic).value.as({{cast}})
     end
 
-    # Returns this instruction's symbol payload.
+    # Assumes *source* instruction's argument is a `VSymbol`,
+    # and returns it as such. Raises otherwise.
     private macro symbol(source = this)
       chunk.resolve({{source}}).as(VSymbol)
     end
 
-    # Returns this instruction's function payload.
+    # Assumes *source* instruction's argument is a `VFunction`,
+    # and returns it as such. Raises otherwise.
     private macro function(source = this)
       chunk.resolve({{source}}).as(VFunction)
     end
 
-    # Returns *value* if *condition* is true, and *fallback*
-    # if it isn't.
+    # If *condition* is true, returns *value*. Otherwise,
+    # returns *fallback* (`MBool` false by default).
     private macro may_be(value, if condition, fallback = bool false)
       {{condition}} ? {{value}} : {{fallback}}
     end
@@ -187,33 +186,36 @@ module Ven
       frame.stack << ({{value}})
     end
 
-    # Puts *value* onto the stack if some *condition* is true.
-    # Puts `bool` false otherwise.
+    # If *condition* is true, puts *value* onto the stack.
+    # Otherwise, puts `MBool` false.
     private macro put(value, if condition)
       frame.stack << may_be ({{value}}), if: ({{condition}})
     end
 
-    # Puts multiple *values* onto the stack.
+    # Puts *values* onto the stack.
     private macro put(*values)
       {% for value in values %}
         put {{value}}
       {% end %}
     end
 
-    # Puts multiple *values* onto the stack if some *condition*
-    # is true. Puts `bool` false otherwise.
+    # If *condition* is true, puts *values* onto the stack.
+    # Otherwise, puts `MBool` false.
     private macro put(*values, if condition)
       may_be put *values, if: {{condition}}
     end
 
-    # Returns the last value of the stack. *cast* can be passed
-    # to ensure the type of the value. Raises on underflow.
+    # Returns the topmost value on the stack. *cast* can be
+    # passed to ensure the type of the value.
+    #
+    # Raises on underflow.
     private macro tap(cast = Model)
       frame.stack[-1].as({{cast}})
     end
 
     # Pops *amount* values from the stack. Keeps their order.
     # *cast* can be passed to ensure the type of each value.
+    #
     # Raises on underflow.
     private macro pop(amount = 1, as cast = Model)
       {% if amount == 1 %}
@@ -250,33 +252,37 @@ module Ven
       MRegex.new({{value}})
     end
 
-    # Initiates invokation: does `Context#push`, and appends
-    # a function invokation frame to `@frames`.
+    # Performs abstract invokation: pushes a scope, and appends
+    # a frame to `@frames`. Makes a trace given the *desc*ription
+    # of the frame. Initiates the frame's stack with *initial*
+    # values. Sets the frame's label to *label*.
     #
-    # The frame's trace's description is set to *desc* if
-    # it is provided.
-    #
-    # The frame's stack will be initialized with *initial*
-    # values (with their order kept).
-    #
-    # See `Frame::Goal` to learn about *goal*.
-    private macro invoke(origin, desc = nil, initial = Models.new, goal = Frame::Goal::Function)
-      @context.push
+    # See `Context#push` to learn about *borrow* and *isolated*.
+    private macro invoke(origin, desc = nil, initial = nil, label = nil, borrow = false, isolated = false)
+      # Push the scope:
+      @context.push(
+        borrow: {{borrow}},
+        isolated: {{isolated}},
+      )
+      # ... and the frame:
       @frames << Frame.new(
-        {{goal}},
-        {{initial}},
-        {{origin}},
+        cp: {{origin}},
+        label: {{label}} || Frame::Label::Function,
+        stack: {{initial}} || Models.new,
         {% if desc %}
+          # Make a trace if got *desc*.
           trace: Trace.new(chunk.file, fetch.line, {{desc}}),
         {% end %}
       )
     end
 
-    # Performs invokation teardown.
+    # Tears down an invokation.
     #
     # If *export* is true, requests a return value from
-    # the invokation. Returns the value if that request
-    # was fulfilled, otherwise nil.
+    # the invokation. Returns the value, or nil if there
+    # isn't any.
+    #
+    # If *export* is false, always returns true.
     private macro revoke(export = false)
       @context.pop
 
@@ -289,17 +295,10 @@ module Ven
       {% end %}
     end
 
-    # Looks up a `VSymbol` *symbol* and dies if it was not found.
-    private macro lookup(symbol)
-      @context[%it = {{symbol}}]? || die("symbol not found: #{%it.name}")
-    end
-
-    # Searches for a hook function and evaluates it.
+    # Invokes a hook function called *name*.
     #
-    # A hook function is a function implemented in Ven and
-    # called by the interpreter to perform a particular task
-    # (which might be near to impossible to perform by Machine's
-    # means).
+    # A hook function is a Ven function directly invoked by
+    # the interpreter.
     private macro hook(name, args)
       if !(%callee = @context[%name = {{name}}]?)
         die("hook '#{%name}' not found")
@@ -316,49 +315,20 @@ module Ven
       invoke(%variant.target, %variant.to_s, %args)
     end
 
-    # Looks up for an underscores value in the frames above
-    # the current; depending on *pop*, will either return it,
-    # or pop it in the appropriate frame and return it.
-    #
-    # Returns nil if no underscores value was found.
-    private macro u_lookup(pop = true)
-      @frames.reverse_each do |above|
-        if {% if pop %}
-              (%it = above.underscores.pop?)
-           {% else %}
-              (%it = above.underscores.last?)
-           {% end %}
-          break %it
-        end
-      end
+    # Looks up and returns the value of the given `VSymbol`,
+    # *symbol*, or dies if it was not found.
+    private macro lookup(symbol)
+      @context[%it = {{symbol}}]? || die("symbol not found: #{%it.name}")
     end
 
-    # Assigns `VSymbol` *target* to *value*.
-    #
-    # If *value* is a lambda, does `MLambda#myself=` with
-    # *target*.
-    #
-    # Returns *value*.
+    # Assigns `VSymbol` *target* to *value*. If *value* is a
+    # lambda, sets `MLambda#myself` to *target*. Returns *value*.
     private macro assign(target, value)
       %target = {{target}}.as(VSymbol)
       %value  = {{value}}
 
-      # A snippet of slapcode to make lambdas recursive.
-      #
-      # Lambda assignment happens outside of lambda's isolated
-      # scope, so it has no access to itself. Let it have one.
-      #
-      # The 'myself=' assignment should happen only once, so
-      # this snippet:
-      #
-      # ```ven
-      # x = (a) [x, y];
-      # y = x;
-      # y();
-      # ```
-      #
-      # Will die because 'y' is not defined inside the lambda
-      # (while 'x' is).
+      # Make lambdas recursive. As lambdas gather immediately,
+      # they can't gather themselves.
       if %value.is_a?(MLambda)
         %value.myself = %target.name
       end
@@ -468,10 +438,8 @@ module Ven
       die("'#{operator}': numeric overflow")
     end
 
-    # Normalizes a binary operation (i.e., converts it to its
-    # normal form).
-    #
-    # Returns nil if found no matching conversion.
+    # Normalizes (converts down to the normal form) a binary
+    # operation. Returns nil if failed to convert.
     def normalize?(operator : String, left : Model, right : Model)
       case operator
       when "to"
@@ -504,17 +472,14 @@ module Ven
     rescue ModelCastException
     end
 
-    # Normalizes a binary operation (i.e., converts it to its
-    # normal form).
-    #
-    # Dies if found no matching conversion.
+    # Normalizes (converts down to the normal form) a binary
+    # operation. Dies if failed to convert.
     def normalize(operator, left, right)
       normalize?(operator, left, right) ||
         die("'#{operator}': could not normalize: #{left.type}, #{right.type}")
     end
 
-    # Properly defines a function based off an *informer* and
-    # some *given* values.
+    # Defines an `MFunction` off the *informer* and *given*s.
     def defun(informer : VFunction, given : Models)
       symbol = informer.symbol
 
@@ -529,7 +494,7 @@ module Ven
       when MGenericFunction
         return existing.add(defee)
       when MLambda
-        # pass
+        # pass to overwrite
       when MFunction
         if existing != defee
           defee = MGenericFunction.new(name)
@@ -543,35 +508,31 @@ module Ven
 
     # Reduces vector *operand* using a binary *operator*.
     #
-    # Note:
-    # - If *operand* is empty, returns it back.
+    # - If *operand* is empty, returns it.
     # - If *operand* has one item, returns that one item.
     def reduce(operator : String, operand : Vec)
+      return operand if operand.length == 0
+
       case operator
       when "and"
         # Returns the first false, orelse the last value, in
-        # the vector.
+        # the operand vector.
         return operand.each { |x| return bool false if x.false? } || operand.last
       when "or"
-        # 'or' returns the first non-false in the vector,
-        # orelse false.
+        # Returns the first non-false, orelse false, in the
+        # operand vector.
         return operand.each { |x| return x unless x.false? } || bool false
       end
 
-      case operand.length
-      when 0
-        operand
-      when 1
-        operand[0]
-      else
-        memo = binary(operator, operand[0], operand[1])
-        operand[2..].reduce(memo) do |total, current|
-          binary(operator, total, current)
-        end
+      return operand.first if operand.length == 1
+
+      memo = binary(operator, operand[0], operand[1])
+      operand[2..].reduce(memo) do |total, current|
+        binary(operator, total, current)
       end
     end
 
-    # Reduces range *operand* using a binary *operator*.
+    # Reduces *operand*, a range, using a binary *operator*.
     def reduce(operator, operand : MFullRange)
       start = operand.begin.value
       end_ = operand.end.value
@@ -582,7 +543,6 @@ module Ven
       when "*"
         start = operand.begin.value
         end_ = operand.end.value
-
         # Uses GMP's factorial, which is MUCH faster than any
         # domestic implementation.
         if start < 0 || end_ < 0
@@ -599,7 +559,7 @@ module Ven
       reduce(operator, operand.to_vec)
     end
 
-    # Fallback reduce (converts *operand* to vec).
+    # Fallback reduce (converts *operand* to vec & reduces).
     def reduce(operator, operand)
       reduce(operator, operand.to_vec)
     end
@@ -610,9 +570,9 @@ module Ven
     # of that field.
     #
     # Otherwise, tries to construct a partial from a function
-    # called *field*, if it exists.
+    # called *field*.
     #
-    # Returns nil if found no valid field resolution.
+    # If failed, returns nil.
     def field?(head : Model, field : Str)
       head.field(field.value) || field?(head, @context[field.value]?)
     end
@@ -643,8 +603,9 @@ module Ven
     # If *head*, a vector, has a field *field*, returns the
     # value of that field.
     #
-    # Otherwise, spreads the field access on the items of
-    # *head*. E.g., `[1, 2, 3].a is [1.a, 2.a, 3.a]`
+    # Otherwise, spreads field access on the items of *head*.
+    # E.g., `[1, 2, 3].a is [1.a, 2.a, 3.a]`. Identity if item
+    # has no such field.
     def field(head : Vec, field)
       field?(head, field) || vec (head.map do |item|
         if item.is_a?(Vec)
@@ -661,8 +622,7 @@ module Ven
       end)
     end
 
-    # Same as `field?`, but dies if found no working field
-    # resolution.
+    # Same as `field?`, but dies if failed.
     def field(head : Model, field : Model)
       field?(head, field) || die("#{head.type}: no such field or function: #{field}")
     end
@@ -695,8 +655,6 @@ module Ven
           end
         when ".c"
           puts control.join(" ")
-        when "._"
-          puts underscores.join(" ")
         when ".s"
           @context.scopes.each do |scope|
             scope.each do |name, value|
@@ -712,7 +670,7 @@ module Ven
             ".f : display frame",
             ".s : display scopes",
             ".c : display control",
-            "._ : display underscores",
+            "._ : display superlocals",
             "CTRL-C : step",
             "CTRL-D : skip all"
         when nil # EOF (CTRL-D)
@@ -724,8 +682,10 @@ module Ven
     end
 
     # Starts the evaluation loop, which begins to fetch the
-    # instructions from the current chunk and execute them,
-    # until there aren't any left.
+    # instructions from the active chunk and execute them,
+    # until there aren't any.
+    #
+    # If *schedule* is true, the scheduler is enabled.
     def start(schedule = true)
       # The amount of ticks gone by. A tick is one iteration
       # of the interpreter loop. Ven runtime scheduler works
@@ -742,8 +702,8 @@ module Ven
       end
 
       while this = fetch?
-        # Remember the chunk we are/(at the end, possibly were)
-        # in and the current instruction pointer.
+        # Remember the chunk pointer and the instruction pointer
+        # we were executing in the beginning.
         ip, cp = frame.ip, frame.cp
 
         if schedule
@@ -771,11 +731,8 @@ module Ven
           begin
             case this.opcode
             in Opcode::POP
-              # Pops one value from the stack: (x --)
+              # Pops a value from the stack: (x --).
               pop
-            in Opcode::POP2
-              # Pops two values from the stack (x1 x2 --)
-              pop 2
             in Opcode::SWAP
               # Swaps two last values on the stack: (x1 x2 -- x2 x1)
               stack.swap(-2, -1)
@@ -783,11 +740,8 @@ module Ven
               # Same as POP, but does not raise on underflow.
               stack.pop?
             in Opcode::DUP
-              # Makes a duplicate of the last value: (x1 -- x1 x1')
+              # "Duplicates" the last value: (x1 -- x1 x1')
               put tap
-            in Opcode::CLEAR
-              # Clears the stack: (x1 x2 x3 ... --)
-              stack.clear
             in Opcode::SYM
               # Puts the value of a symbol: (-- x)
               put lookup(symbol)
@@ -921,18 +875,18 @@ module Ven
               @context[this] = num operand.to_num.value - 1
               put operand
             in Opcode::REST
-              # Defines the `*` variable. Pops stack.size - static
-              # values.
+              # Defines the `*`. Pops `stack.size - static` values,
+              # and makes a vector of them. Subsequently, this vector
+              # becomes the value of `*`.
               @context["*"] = vec pop(stack.size - static Int32)
             in Opcode::FUN
-              # Defines a function. Requires the values of the
-              # given appendix (orelse the appropriate number of
-              # `any`s) to be on the stack; it pops them.
+              # Defines a function. Pops the values of `given`,
+              # specified by the `VFunction` instruction argument.
               defun(myself = function, pop myself.given)
             in Opcode::CALL
-              # If *x1* is a fun/box, invokes it. If an indexable,
-              # calls __iter on it: (x1 a1 a2 a3 ... -- R), where
-              # *aN* is an argument, and R is the returned value.
+              # If *x1* is an `MFunction`, invokes it. If an indexable,
+              # calls `__iter`: (x1 a1 a2 a3 ... -- R), where *aN* is
+              # an argument, and R is the returned value.
               args = pop static(Int32)
 
               case callee = pop
@@ -959,7 +913,7 @@ module Ven
 
                 case found
                 when MBox
-                  next invoke(found.target, found.to_s, args, Frame::Goal::Unknown)
+                  next invoke(found.target, found.to_s, args, label: Frame::Label::Unknown)
                 when MConcreteFunction
                   next invoke(found.target, found.to_s, args)
                 when MBuiltinFunction
@@ -967,26 +921,22 @@ module Ven
                 when MFrozenLambda
                   put found.call(args)
                 when MLambda
-                  # Invoke the lambda manually, as it's not
-                  # worth it to make this a special-case of
-                  # invoke():
-                  @frames << Frame.new(Frame::Goal::Function, args, found.target)
-                  # Make use of the lambda's contextuals.
-                  underscores.concat(found.contextuals)
-                  @context.push(isolated: true, initial: found.scope.clone)
-                  next
+                  @frames << Frame.new(Frame::Label::Function, args, found.target)
+                  # Make an isolated context, and clone the original
+                  # scope to make sure the user doesn't change it in
+                  # the lambda body.
+                  next @context.push(isolated: true, initial: found.scope.clone)
                 else
-                  die("argument/parameter mismatch for #{callee.to_s}: #{args.join(", ")}")
+                  die("argument/parameter mismatch for " \
+                      "#{callee.to_s}: #{args.join(", ")}")
                 end
               else
                 die("illegal callee: #{callee.type}")
               end
             in Opcode::RET
-              # Returns from a function. Puts onto the parent stack
-              # the return value defined by the function frame,
-              # unless it wasn't specified. In that case, exports
-              # the last value from the function frame's operand
-              # stack.
+              # Returns from the **active** frame. If the
+              # return value is set for the active frame,
+              # exports it onto the higher stack.
               if !(queue = frame.queue).empty?
                 revoke && put vec queue
               elsif returns = frame.returns
@@ -994,135 +944,147 @@ module Ven
               elsif !revoke(export: true)
                 die("void expression")
               end
-            in Opcode::POP_UPUT
-              # Moves a value onto the underscores stack:
-              #   oS: (x1 --) ==> _S: (-- x1)
-              underscores << pop
-            in Opcode::TAP_UPUT
-              # Copies a value onto the underscores stack:
-              #   oS: (x1 -- x1) ==> _S: (-- x1)
-              underscores << tap
-            in Opcode::UPOP
-              # Moves a value from the underscores stack:
-              put u_lookup || die("'_': no contextual")
-            in Opcode::UREF
-              # Moves a copy of a value from the underscores stack
-              # to the stack:
-              put u_lookup(pop: false) || die("'&_': no contextual")
+            in Opcode::POP_SFILL
+              # Fills the superlocals with the popped value.
+              @context.sfill(pop)
+            in Opcode::IF_SFILL
+              # Fills the superlocals with the tapped value
+              # unless it is a boolean.
+              @context.sfill(tap) unless tap.is_a?(MBool)
+            in Opcode::STAKE
+              # Takes the active superlocal, and puts it onto
+              # the operand stack.
+              put @context.stake? || die("'_': inaccessible or hole")
+            in Opcode::STAP
+              # Same as `STAKE`, but taps.
+              put @context.stap? || die("'&_': inaccessible or hole")
             in Opcode::MAP_SETUP
-              # Prepares for a series of `MAP_ITER`s on a vector.
+              # Prepares for a series of map iterations.
               control << tap.length << 0 << stack.size - 2
             in Opcode::MAP_ITER
-              # Executes each map iteration. Assumes:
-              #   - that control[-2] is the current item index
-              #     in an operand vector;
-              #   - that control[-3] is the length of that
-              #     operand vector;
+              # Executes a map iteration. Assumes that control[-2]
+              # is the index of the current item in the operand
+              # vector, and that control[-3] is the length of
+              # the operand vector.
               length, index, _ = control.last(3)
-
               if index >= length
                 control.pop(3) && jump target
               else
                 put tap.as(Vec)[index]
               end
-
               control[-2] += 1
             in Opcode::MAP_APPEND
-              # A variation of "&" for maps. Assumes that control[-1]
-              # is a stack pointer to a destination vector.
+              # A variation of binary "&", used exclusively
+              # during map spreads. Assumes that control[-1]
+              # is a stack pointer to the destination vector.
               stack[control.last].as(Vec) << pop
+            in Opcode::MAP_OPERATE
+              # Same as `GOTO`, but fills the superlocals
+              # with the popped value.
+              item = pop
+              # Switch to the target chunk.
+              invoke(static(Int32), label: Frame::Label::Unknown)
+              # Fill the superlocals stack with the current
+              # item, and go execute.
+              next @context.sfill(item)
             in Opcode::REDUCE
-              # Reduces a vector using a binary operator: ([...] -- x1)
+              # Pops a vector, and reduces it using a binary
+              # operator. The operator is provided by a `VStatic`
+              # instruction argument.
               put reduce(static, pop)
             in Opcode::GOTO
-              # Goes to the chunk it received as the argument.
-              next invoke(static(Int32), goal: Frame::Goal::Unknown)
+              # Goes to the given chunk.
+              next invoke(static(Int32),
+                label: Frame::Label::Unknown,
+                # `GOTO` doesn't prevent superlocals
+                # from borrowing.
+                borrow: true)
             in Opcode::ACCESS
-              # Provides a conventional interface to .indexable?
-              # Model's items. May collect (`[1, 2, 3][0, 1]`)
-              # items or return a specific one (`[1, 2, 3][0]`).
+              # Provides a convenient interface to `.indexable?`
+              # Models' items. May collect (`[1, 2, 3][0, 1]`)
+              # multiple, or return one (`[1, 2, 3][0]`).
               args = pop static(Int32)
               head = pop
 
               unless head.indexable?
-                die("[]: head not indexable")
+                die("[]: #{head.type} is not indexable")
               end
 
-              # Collect nth items in *head*.
               nths = args.map do |arg|
                 head[arg]? || die("#{head.type}: item(s) not found: #{arg}")
               end
 
-              # If there was one value collected, we put it
-              # bare. If there were more, we wrap them in
-              # a vec.
+              # If *nths* consists of one value, put it bare.
+              # Otherwise, wrap *nths* in a vec.
               nths.size == 1 ? put nths.first : put vec nths
             in Opcode::FIELD_IMMEDIATE
-              # Pops an operand and, if possible, gets the value
-              # of its field. Alternatively, builds a partial:
-              # (x1 -- x2)
+              # Pops a value, and, if possible, puts the value
+              # of its field onto the stack. The name the field
+              # is provided by the `VStatic` instruction argument.
+              # Alternatively, builds a partial.
               put field(pop, str static)
             in Opcode::FIELD_DYNAMIC
-              # Pops two values, first being the operand and
-              # second the field, and, if possible, gets the
-              # value of the field. Alternatively, builds a
-              # partial: (x1 x2 -- x3)
+              # Pops two values, the operand and the field,
+              # and, if possible, gets the value of the field.
+              # Alternatively, builds a partial.
               head, field = pop 2
               put field(head, field)
             in Opcode::NEXT_FUN
-              # Performs an explicitly requested tail call.
-              # Queue is preserved. Pops the callee and N
-              # arguments. (x1 ...N --)
+              # Performs an explicit tail call. Preserves the
+              # queue. Pops the callee and the appropriate
+              # amount of arguments. **Breaks the flow.**
               args = pop static(Int32)
               callee = pop as: MFunction
 
-              rewind(Frame::Goal::Function) do |it|
+              rewind(Frame::Label::Function) do |it|
                 unless variant = callee.variant?(args)
-                  die("argument/parameter mismatch for #{callee.to_s}: #{args.join(", ")}")
+                  die("argument/parameter mismatch for " \
+                      "#{callee.to_s}: #{args.join(", ")}")
                 end
+
                 unless variant.is_a?(MConcreteFunction)
-                  die("unsupported: #{callee.to_s} resolved to non-concrete #{variant}")
+                  die("unsupported: #{callee.to_s} resolved " \
+                      "to non-concrete #{variant}")
                 end
 
                 invoke(variant.target, variant.to_s, args)
 
-                # Move queue values from the revoked frame to
-                # the new frame.
+                # Keep the queue of the rewound frame.
                 frame.queue = it.queue
               end
 
               next
             in Opcode::SETUP_DIES
-              # Sets the 'dies' target of this frame. The
-              # 'dies' target is jumped to whenever a runtime
-              # error occurs.
+              # Sets this frame's *dies* target to the `VJump`
+              # instruction argument. The *dies* target is
+              # jumped to whenever a runtime error occurs.
               frame.dies = target
             in Opcode::RESET_DIES
-              # Resets the 'dies' target of this frame.
+              # Resets the *dies* target of this frame.
               frame.dies = nil
             in Opcode::FORCE_RET
-              # Immediately returns with return value popped.
-              # Vetoes `SETUP_RET`. (x1 --)
+              # Pops a return value, and immediately returns.
+              # Vetoes `SETUP_RET`. **Breaks the flow.**
               value = pop
-              rewind(Frame::Goal::Function) do |it|
+              rewind(Frame::Label::Function) do |it|
                 put value
               end
             in Opcode::FORCE_RET_QUEUE
-              # Immediately returns with queue as the return value.
-              rewind(Frame::Goal::Function) do |it|
+              # Immediately returns, with queue as the return
+              # value. **Breaks the flow.**
+              rewind(Frame::Label::Function) do |it|
                 put vec it.queue
               end
             in Opcode::SETUP_RET
-              # Finds the nearest surrounding function and sets
-              # its return value to tap. Does not break the flow.
-              # (x1 -- x1)
-              frame(Frame::Goal::Function) do |it|
+              # Sets the return value of the surrounding function
+              # frame to tap. **Does not break the flow.**
+              frame(Frame::Label::Function) do |it|
                 it.returns = tap
               end
             in Opcode::BOX
-              # Makes a box and puts in onto the stack: (...N) -- B,
-              # where N is the number of arguments a box receives
-              # and B is the resulting box.
+              # Makes an `MBox` from the `VFunction` instruction
+              # argument: pops the appropriate amount of givens,
+              # and puts the `MBox` onto the stack.
               defee = function
               name = defee.symbol.name
               given = pop defee.given
@@ -1134,14 +1096,13 @@ module Ven
                 defee.target
               )
             in Opcode::BOX_INSTANCE
-              # Instantiates a box and puts the instance onto the
-              # stack: (B -- I), where B is the box parent to this
-              # instance, and I is the instance.
+              # Pops an `MFunction`, which will act as the parent
+              # for this box instance, instantiates, and puts the
+              # box instance onto the stack.
               put MBoxInstance.new(pop(as: MFunction), @context.scopes.last.as_h)
             in Opcode::LAMBDA
-              # Makes a lambda from the function it receives
-              # as the argument. Assumes there is at least
-              # one scope in the scope hierarchy.
+              # Makes a lambda from the `VFunction` instruction
+              # argument.
               lambda = function
 
               put MLambda.new(
@@ -1152,11 +1113,11 @@ module Ven
                 lambda.target,
               )
             in Opcode::TEST_TITLE
-              # Pops and uses that to print ensure test title.
+              # Displays the popped value as ensure test title.
               puts "[#{chunk.file}]: #{pop(as: Str).value}".colorize.bold
             in Opcode::TEST_ASSERT
-              # Checks if tap is false, and, if it is, emits
-              # a failure.
+              # Checks if the tapped value is false, and, if it
+              # is, appends a failure to this frame's failures.
               if tap.false?
                 frame.failures << "#{chunk.file}:#{this.line}: got #{tap.to_s}"
               end
@@ -1174,20 +1135,19 @@ module Ven
               end
             in Opcode::QUEUE
               # Appends the tapped value to the queue of the
-              # frame of the closest surrounding function.
-              frame(Frame::Goal::Function) do |it|
+              # surrounding function frame.
+              frame(Frame::Label::Function) do |it|
                 it.queue << tap
               end
             in Opcode::MAP
               # Puts a map (short for mapping). Pops the specified
-              # amount of key-values and makes a map out of them.
+              # amount of key-values and makes an `MMap` from them.
               items = pop(static Int32)
               pairs = [] of {String, Model}
 
               items.in_groups_of(2, reuse: true) do |group|
                 key, val = group[0].not_nil!, group[1].not_nil!
-                # Convert to str so we don't have to deal
-                # with mutable keys.
+                # Convert to str so we don't have mutable keys.
                 pairs << {key.to_str.value, val}
               end
 
@@ -1197,15 +1157,13 @@ module Ven
             die(error.message.not_nil!)
           end
         rescue error : RuntimeError
-          @enquiry.broadcast("Error", error)
-
           dies = @frames.reverse_each do |it|
             break it.dies || next revoke
           end
 
           unless dies
-            # Re-raise if climbed up all frames & didn't find
-            # a 'dies' handler.
+            # Re-raise if climbed up all frames but didn't
+            # find a 'dies' handler.
             raise error
           end
 
@@ -1219,17 +1177,9 @@ module Ven
             record!(this, Time.monotonic - began, cp, ip)
           end
 
-          if @enquiry.broadcast
-            @enquiry.broadcast("Frames", @frames)
-            @enquiry.broadcast("Instruction", {
-              "Content" => this,
-              "Nanos"   => (Time.monotonic - began.not_nil!).total_nanoseconds,
-            })
-          end
-
           # If there is anything left to inspect (there is
           # nothing in case of an error), and if inspector
-          # functionality itself is enabled, then inspect.
+          # itself is enabled, then inspect.
           if !@frames.empty? && @inspect
             @inspect = inspector
           end
@@ -1241,23 +1191,13 @@ module Ven
       self
     end
 
-    # Cleans up and returns the last value on the operand
-    # stack, if any.
+    # Returns the last value on the operand stack, if any.
     def return!
-      @context.clear
-
-      stack.delete_at(..).last?
+      stack.last?
     end
 
-    # Yields an instance of `Machine`, and then runs that instance.
-    # You can use the block to configure the instance.
-    def self.run(chunks, context = CxMachine.new, origin = 0)
-      yield machine = new(chunks, context, origin)
-      machine.start.return!
-    end
-
-    # Same as `run`, but configures the machine based on
-    # the arguments.
+    # Initializes the machine, starts it, and returns
+    # the result (as per `Machine#return!`).
     def self.run(chunks, context = CxMachine.new, origin = 0, enquiry = Enquiry.new)
       new(chunks, context, origin, enquiry).start.return!
     end

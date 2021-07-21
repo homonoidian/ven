@@ -179,8 +179,8 @@ module Ven::Suite
   defquote(QTrue, desc: "bool true")
   defquote(QFalse, desc: "bool false")
 
-  defquote(QURef, desc: "'_'")
-  defquote(QUPop, desc: "'&_'")
+  defquote(QSuperlocalTake, desc: "superlocal take")
+  defquote(QSuperlocalTap, desc: "superlocal tap")
 
   defquote(QUnary,
     operator : String,

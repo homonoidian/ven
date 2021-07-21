@@ -7,7 +7,6 @@ module Ven::Suite
     # Opcodes that take no payload.
 
     POP             = 16
-    POP2
     SWAP
     TRY_POP
     DUP
@@ -21,11 +20,10 @@ module Ven::Suite
     NEG
     LEN
     ENS
-    POP_UPUT
-    TAP_UPUT
-    UPOP
-    UREF
-    CLEAR
+    POP_SFILL
+    IF_SFILL
+    STAKE
+    STAP
     RET
     MAP_SETUP
     MAP_APPEND
@@ -51,6 +49,7 @@ module Ven::Suite
     VEC
     PCRE
     GOTO
+    MAP_OPERATE
     CALL
     REDUCE
     BINARY
@@ -113,8 +112,7 @@ module Ven::Suite
         PCRE,
         TRUE,
         FALSE,
-        UPOP,
-        UREF,
+        STAP,
         ANY)
     end
   end

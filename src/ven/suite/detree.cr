@@ -80,11 +80,11 @@ module Ven::Suite
       "false"
     end
 
-    def visit!(q : QUPop)
+    def visit!(q : QSuperlocalTake)
       "_"
     end
 
-    def visit!(q : QURef)
+    def visit!(q : QSuperlocalTap)
       "&_"
     end
 
@@ -288,8 +288,8 @@ module Ven::Suite
         io << "(" if param.index == 0
         if param.slurpy
           io << "*"
-        elsif param.contextual
-          io << "$"
+        elsif param.underscore
+          io << "_"
         else
           io << param.name
         end

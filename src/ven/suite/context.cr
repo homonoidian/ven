@@ -133,10 +133,19 @@ module Ven::Suite
   class CxMachine
     # A particular runtime scope in the scope stack.
     private struct Scope
+      # Returns whether this scope allows a superlocal borrow
+      # to pass through.
+      getter borrow = false
       # Returns whether this scope is isolated.
       getter isolated : Bool
+      # Returns the superlocal of this scope.
+      getter superlocal = Superlocal.new
 
-      def initialize(@scope = {} of String => Model, @isolated = false)
+      def initialize(
+        @scope = {} of String => Model,
+        @borrow = false,
+        @isolated = false
+      )
       end
 
       # Returns this scope as hash, with `String` keys and
@@ -159,15 +168,45 @@ module Ven::Suite
       @scopes[-1]
     end
 
-    # Deletes all scopes except the global.
-    def clear
-      @scopes.delete_at(1...)
+    # `Superlocal#take?` under this context's supervision.
+    def stake?
+      @scopes.reverse_each do |scope|
+        if value = scope.superlocal.take?
+          return value
+        end
+        break unless scope.borrow
+      end
     end
 
-    # Introduces a deeper scope. It can be *isolated*, or
-    # initialized with some *initial* entries.
-    def push(isolated = false, initial = {} of String => Model)
-      @scopes << Scope.new(initial, isolated)
+    # `Superlocal#tap?` under this context's supervision.
+    def stap?
+      @scopes.reverse_each do |scope|
+        if value = scope.superlocal.tap?
+          return value
+        end
+        break unless scope.borrow
+      end
+    end
+
+    # `Superlocal#fill`s in the local scope.
+    def sfill(value : Model)
+      local.superlocal.fill(value)
+    end
+
+    # Deletes all scopes except the global.
+    def clear
+      @scopes.delete_at(1..)
+    end
+
+    # Introduces a deeper scope. It can be initialized with
+    # some *initial* entries. It can be *isolated* (and thus
+    # im*borrow*able). If the scope is not *isolated*, you
+    # can specify its *borrow* separately.
+    def push(borrow = false, isolated = false, initial = {} of String => Model)
+      @scopes << Scope.new(initial,
+        borrow: !isolated || borrow,
+        isolated: isolated,
+      )
     end
 
     # Ejects the deepest scope.

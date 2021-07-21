@@ -115,11 +115,11 @@ module Ven
             #   ==> "a" ~ ""
             # This is useful when working with interpolation:
             #   ~> "hello$world"
-            #   => "hello" ~ world ~ ""
+            # => "hello" ~ world ~ ""
             #   ==> "hello" ~ world
-            if static_as(triplet[0], String) == "~"   &&
-                 static_as(triplet[1], String) == ""  &&
-                 static_as(triplet[2], String) == "~"
+            if static_as(triplet[0], String) == "~" &&
+               static_as(triplet[1], String) == "" &&
+               static_as(triplet[2], String) == "~"
               break snippet.remove(start, 2)
             end
           end
@@ -135,7 +135,7 @@ module Ven
             break snippet.replace(start, 2, Opcode::VEC, argument pair[0])
           when [Opcode::TAP_ASSIGN, Opcode::POP]
             break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
-          when [Opcode::POP_UPUT, Opcode::UPOP]
+          when [Opcode::POP_SFILL, Opcode::STAKE]
             break snippet.remove(start, 2)
           end
 

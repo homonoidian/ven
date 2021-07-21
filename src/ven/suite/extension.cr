@@ -5,8 +5,10 @@ module Ven::Suite
     #
     # Dies if unsuccessful.
     private macro as_type(argno, type)
-      args[{{argno}}].as?({{type}}) ||
-        machine.die("wrong type for argument \##{{{argno + 1}}}")
+      args[{{argno}}].as?({{type}}) || machine.die(
+        "type mismatch for argument #{{{argno + 1}}}: " \
+        "expected #{MType[{{type.resolve == Model ? MAny : type}}]}"
+      )
     end
 
     # Yields with cast *argtypes* (of `TypeDeclaration`s) vars
@@ -17,7 +19,7 @@ module Ven::Suite
     #   ...
     # end
     # ```
-    private macro with_args(*argtypes)
+    private macro with_args(argtypes)
       {% for argtype, index in argtypes %}
         {{argtype.var}} = as_type({{index}}, {{argtype.type}})
       {% end %}
@@ -29,19 +31,22 @@ module Ven::Suite
     # what *argtypes* are.
     #
     # Converts block result to Model using `Adapter.to_model`.
-    private macro in_builtin_proc(*argtypes)
+    private macro in_builtin_proc(argtypes)
       ->(machine : Machine, args : Models) do
         Adapter
-          .to_model(with_args({{*argtypes}}) { {{ yield }}})
+          .to_model(with_args({{argtypes}}) { {{ yield }}})
           .as(Model)
       end
     end
 
     # Returns an `MBuiltinFunction` named *name*. For yield
     # and *argtype* semantics, see `in_builtin_proc`.
-    private macro builtin(name, *argtypes)
+    macro builtin(name, argtypes)
       MBuiltinFunction.new({{name}}, {{argtypes.size}},
-        in_builtin_proc({{*argtypes}}) { {{ yield }} })
+        in_builtin_proc({{argtypes}}) do
+          {{ yield }}
+        end
+      )
     end
 
     # Assigns *name* to *value* in the global scope. Notifies
@@ -70,9 +75,31 @@ module Ven::Suite
         c_context.bound({{name}})
       {% end %}
 
-      {{ns}}[{{name}}] = builtin({{name}}, {{*argtypes}}) do
+      {{ns}}[{{name}}] = builtin({{name}}, {{argtypes}}) do
         {{yield}}
       end
+    end
+
+    # Defines a generic named *name*. Each variant of *variants*
+    # must be an `MFunction`. If *ns* is nil, the global scope
+    # is assumed, and the compiler is notified accordingly.
+    macro defgeneric(name, *variants, in ns = nil)
+      {% if !name.is_a?(StringLiteral) %}
+        {% name = name.stringify %}
+      {% end %}
+
+      {% if ns == nil %}
+        # If not passed *ns*, assume it to be *m_context*. In
+        # this case, also declare in the compiler context.
+        {% ns = :m_context.id %}
+        c_context.bound({{name}})
+      {% end %}
+
+      {{ns}}[{{name}}] =
+        MGenericFunction.new({{ name }})
+          {% for variant in variants %}
+            .add({{variant}})
+          {% end %}
     end
 
     # Defines a global `MInternal` under *name*.

@@ -5,8 +5,6 @@ module Ven::Suite
   # either a `Label` or an `Int32`. What this `Int32` means is
   # not of `Instruction`'s concern.
   struct Instruction
-    include JSON::Serializable
-
     # Returns the line number of the line that produced
     # this instruction.
     getter line : Int32

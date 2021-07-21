@@ -24,8 +24,8 @@ module Ven::Suite
       property return : Quote? = nil
       # A hash of readtime symbol definitions.
       property definitions : Definitions
-      # The underscores (aka contextuals) stack.
-      property underscores = Quotes.new
+      # The references stack (TODO: redef sema!).
+      property refs = Quotes.new
 
       def initialize(@definitions)
       end
@@ -40,14 +40,14 @@ module Ven::Suite
         env
       end
 
-      # Returns a new `Env`, with its `underscores` being
-      # an array of this Env's underscores plus *underscores*,
-      # and all other properties being the same as in this Env.
-      def with(underscores us : Quotes)
+      # Returns a new `Env`, with its `refs` being an array
+      # of this Env's refs plus *refs*, and all other properties
+      # being the same as in this Env.
+      def with(refs us : Quotes)
         env = Env.new(@definitions)
+        env.refs = @refs + us
         env.queue = @queue
         env.return = @return
-        env.underscores = @underscores + us
         env
       end
     end
@@ -310,12 +310,12 @@ module Ven::Suite
       vec eval(env, q.items)
     end
 
-    def eval(env, q : QUPop)
-      env.underscores.pop? || die("'_': no contextual")
+    def eval(env, q : QSuperlocalTake)
+      env.refs.pop? || die("TODO redef sema '_': no referent")
     end
 
-    def eval(env, q : QURef)
-      env.underscores.last? || die("'&_': no contextual")
+    def eval(env, q : QSuperlocalTap)
+      env.refs.last? || die("TODO redef sema '&_': no referent")
     end
 
     def eval(env, q : QReadtimeSymbol)

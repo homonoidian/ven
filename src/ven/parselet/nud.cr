@@ -94,17 +94,17 @@ module Ven::Parselet
     end
   end
 
-  # Reads `_` into `QUPop`.
-  class PUPop < Nud
+  # Reads `_` into `QSuperlocalTake`.
+  class PSuperlocalTake < Nud
     def parse
-      QUPop.new(@tag)
+      QSuperlocalTake.new(@tag)
     end
   end
 
-  # Reads `&_` into `QURef`.
-  class PURef < Nud
+  # Reads `&_` into `QSuperlocalTap`.
+  class PSuperlocalTap < Nud
     def parse
-      QURef.new(@tag)
+      QSuperlocalTap.new(@tag)
     end
   end
 

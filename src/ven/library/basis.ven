@@ -1,19 +1,53 @@
-# This file is baked right into the binary. If you change
-# something, don't forget to recompile Ven! Otherwise, the
+# This file is baked right into the executable. If you change
+# something here, don't forget to recompile Ven! Otherwise,
 # the stuff you've added won't be available.
+#
+# - Do not 'expose': it may not work as expected.
+# - Do not specify 'distinct': basis lives inside the executable,
+#   and therefore is not accessible to the lookup infrastructure.
 
-# Goes over this vector, applying the rest to each of
-# its items.
+
+# Maps over this vector, performing `apply(item, *)` for each
+# item **if it is callable**, orelse ignoring the item.
+#
+# ```ven
+# [2, (n) n + 1, 4](1) # => [2, 3, 4]
+# ```
 fun<vec> __iter(*) given any =
   |&_.callable? and apply(_, *)() or _| $;
 
 # Assigns this value's subordinates, specified by the rest,
 # to *value*.
+#
+# ```ven
+# # Usage with vectors:
+# foo = 0 x 100;
+# foo[0] = "1";
+# say(foo); # ["1" 0 0 0 0 0 0 ...];
+#
+# # Usage with box instances:
+# immediate box Bar;
+# Bar["x"] = 1;
+# Bar["y"] = 2;
+# Bar.[x, y].say(); # [1 2]
+#
+#
+# # Usage with maps:
+# person = %{ first-name "John" last-name "Doe" };
+# person["first-name"] = "Samuel";
+# person.[first-name, last-name].say(); # ["Samuel" "Doe"]
+# ```
 fun<any> __access_assign(value, *) =
   |subordinate($, _, return value)| *;
 
-# Assigns this value's subordinates, specified by an index
-# range, to *value*.
+# Assigns an index range of this value's subordinates
+# to *value*.
+#
+# ```ven
+# foo = 0 x 100;
+# foo[to 2] = 1;
+# say(foo); # [1 1 0 0 0 0 0 ...]
+# ```
 fun<any> __access_assign(value, items) given any, range =
   if items.full? and |and| |$ > _| items
     apply(__access_assign, [$] & value & items)()
@@ -29,13 +63,14 @@ fun<any> __access_assign(value, items) given any, range =
 #
 # If *fn*'s arity:
 #
-# 1. = 0, the filteree is put onto the underscores stack.
-# 2. = 1, the filteree is passed as an argument.
+# 1. = 0, the filteree is put onto *fn*'s references stack.
+# 2. = 1, the filteree is passed to *fn*.
 # 3. = N, N consequent filterees (including the filteree
-#    under the cursor) are passed.
+#    under the cursor) are passed to *fn*.
 fun<vec> __filter(fn) given any(concrete, lambda, builtin, frozen) =
   if #fn is 0
-    $.__filter_inject(fn)
+    die("todo")
+    #  $.__filter_inject(fn)
   else if #fn is 1
     $.__filter_call(fn)
   else
@@ -47,7 +82,7 @@ fun<vec> __filter_inject(fn) given function =
 
 # Queues only those items for which *fn* returns a non-false.
 fun<vec> __filter_inject(fn) given lambda {
-  |(fn["contextuals"] = [&_]) and fn() and queue _|: $;
+  |(fn["refs"] = [&_]) and fn() and queue _|: $;
   # Force-return the queue, even if it is empty.
   return queue
 }

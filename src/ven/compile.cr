@@ -197,12 +197,12 @@ module Ven
       issue(Opcode::FALSE)
     end
 
-    def visit!(q : QUPop)
-      issue(Opcode::UPOP)
+    def visit!(q : QSuperlocalTake)
+      issue(Opcode::STAKE)
     end
 
-    def visit!(q : QURef)
-      issue(Opcode::UREF)
+    def visit!(q : QSuperlocalTap)
+      issue(Opcode::STAP)
     end
 
     def visit!(q : QUnary)
@@ -328,8 +328,15 @@ module Ven
       issue(Opcode::MAP_SETUP)
       label start
       issue(Opcode::MAP_ITER, stop)
-      issue(Opcode::POP_UPUT)
-      visit(q.operator)
+
+      @context.child do
+        under "<map block>" do |target|
+          visit(q.operator.as(QBlock).body)
+          issue(Opcode::RET)
+        end
+
+        issue(Opcode::MAP_OPERATE, target)
+      end
 
       if q.iterative
         issue(Opcode::POP)
@@ -352,10 +359,7 @@ module Ven
 
       visit(q.cond)
 
-      # XXX: This is very much disputed, as it makes things
-      # like `|if (_ > 1) _ else 0| [1, 2, 3]` work wrongly.
-      #
-      issue(Opcode::TAP_UPUT)
+      issue(Opcode::IF_SFILL)
 
       if alt = q.alt
         issue(Opcode::JIF, else_b)
@@ -442,8 +446,8 @@ module Ven
                 issue(Opcode::REST, param.index)
               when "_"
                 # Ignore, but not really. Put on the
-                # underscores stack.
-                issue(Opcode::POP_UPUT)
+                # references stack.
+                issue(Opcode::POP_SFILL)
               else
                 # Assign in the local scope.
                 issue(Opcode::POP_ASSIGN, mksym param.name)
@@ -677,7 +681,6 @@ module Ven
           end
 
           visit(q.body)
-          # RET will work fine with lambdas.
           issue(Opcode::RET)
         end
       end
@@ -692,7 +695,6 @@ module Ven
         visit(q.shoulds)
       end
 
-      # Hmm... Return true... Why not?
       issue(Opcode::TRUE)
     end
 

@@ -130,11 +130,7 @@ module Ven
 
     # Given an explanation message, *message*, dies of `ReadError`.
     def die(message : String)
-      error = ReadError.new(@word, @file, message)
-      # Broadcast the error to the audience.
-      @enquiry.broadcast("Error", error)
-
-      raise error
+      raise ReadError.new(@word, @file, message)
     end
 
     # Makes a `QTag`.
@@ -204,8 +200,6 @@ module Ven
 
     # Returns the current word and consumes the next one.
     def word!
-      @enquiry.broadcast("Word", @word)
-
       fresh =
         loop do
           break case
@@ -550,8 +544,8 @@ module Ven
       defnud("(", Parselet::PGroup)
       defnud("{", Parselet::PBlock)
       defnud("[", Parselet::PVector)
-      defnud("_", Parselet::PUPop)
-      defnud("&_", Parselet::PURef)
+      defnud("_", Parselet::PSuperlocalTake)
+      defnud("&_", Parselet::PSuperlocalTap)
       defnud("'", Parselet::PPattern)
       defnud("<", Parselet::PReadtimeEnvelope)
       defnud("%{", Parselet::PMap)

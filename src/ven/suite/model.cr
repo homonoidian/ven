@@ -529,7 +529,7 @@ module Ven::Suite
   # Array (*items*). If necessary, mutate the *items*, not
   # your MVector.
   struct MVector < MStruct
-    getter items : Models
+    property items : Models
 
     # Makes a new vector from *items*.
     def initialize(@items = Models.new)
@@ -623,6 +623,14 @@ module Ven::Suite
     # ```
     def self.from(items, as type : Model.class)
       new(items.map { |item| type.new(item) })
+    end
+
+    # Makes a **raw vector** from *items*. Raw vectors provide
+    # direct access to *items*.
+    def self.around(items)
+      vec = new
+      vec.items = items
+      vec
     end
 
     # Writes a JSON array.
@@ -1259,8 +1267,12 @@ module Ven::Suite
       args.size == @arity ? self : false
     end
 
+    # As builtins' argument types are basically `any`s, it
+    # could be assumed that each may receive *type* too.
+    #
+    # Always returns true.
     def leading?(type)
-      false
+      true
     end
 
     # Provides `.arity`. Otherwise, delegates to `MFunction`.
@@ -1557,8 +1569,6 @@ module Ven::Suite
     getter slurpy : Bool
     getter target : Int32
     getter params : Array(String)
-    # Returns the injected contextuals.
-    getter contextuals = Models.new
 
     def initialize(@scope, @arity, @slurpy, @params, @target)
       @myselfed = false
@@ -1585,12 +1595,10 @@ module Ven::Suite
       end
     end
 
-    # Provides `.contextuals`, `.params`, and `.slurpy?`. Delegates
-    # to `MFunction` otherwise.
+    # Provides `.params`, and `.slurpy?`. Delegates to
+    # `MFunction` otherwise.
     def field?(name)
       case name
-      when "contextuals"
-        Vec.new(@contextuals)
       when "params"
         Vec.from(@params, Str)
       when "slurpy?"
@@ -1602,12 +1610,6 @@ module Ven::Suite
 
     def length
       @arity
-    end
-
-    def []=(target : Str, value : Vec)
-      return unless target.value == "contextuals"
-
-      @contextuals = value.items.reverse
     end
 
     def variant?(args)
@@ -1635,7 +1637,7 @@ module Ven::Suite
       @enquiry = parent.enquiry.as(Enquiry)
     end
 
-    delegate :variant, :specificity, to: @lambda
+    delegate :variant?, :specificity, to: @lambda
 
     # Calls this lambda with *args*.
     def call(args : Models) : Model
@@ -1644,8 +1646,8 @@ module Ven::Suite
         # immediately return.
         Frame.new(ip: Int32::MAX - 1),
         # This lambda's frame of execution. It is initialized
-        # with the lambda's arguments and target chunk.
-        Frame.new(Frame::Goal::Function, args, @lambda.target),
+        # with the lambda's arguments and the target chunk.
+        Frame.new(Frame::Label::Function, args, @lambda.target),
       ])
 
       # Put the lambda scope clone onto the scopes stack.
