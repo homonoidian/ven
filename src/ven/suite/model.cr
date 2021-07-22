@@ -108,7 +108,7 @@ module Ven::Suite
 
     # Converts (casts) this model into a `MMap`
     def to_map : MMap
-      raise ModelCastException.new("could not convert to map: #{type}")
+      raise ModelCastException.new("could not convert to map: #{type?}")
     end
 
     # Returns whether this model is true.
@@ -275,17 +275,25 @@ module Ven::Suite
     def []=(subordinate : Model, value : Model) : Model?
     end
 
-    # Returns the `MType` of this model.
-    def type
-      MType[self.class]?
+    # Returns the `MType` of this model, or nil if could
+    # not determine.
+    #
+    # Please override `type` instead; overriding `type?` may
+    # cause unwanted fuckery.
+    def type? : MType?
+      type || MType[self.class]?
     end
 
-    # Dies. The subclasses may decide, though, to override
-    # the death and handle to/from-JSON conversion.
+    # Returns the `MType` of this model, or nil if could
+    # not determine.
+    def type : MType?
+    end
+
+    # Dies. The implementing classes may decide to override
+    # handle to/from-JSON conversion.
     def to_json(json : JSON::Builder)
       raise ModelCastException.new("cannot convert #{self} to JSON")
     end
-
 
     macro inherited
       # Returns whether this model class is concrete (i.e.,
@@ -309,6 +317,10 @@ module Ven::Suite
   # on the heap and referred by reference).
   abstract class MClass
     Suite.model_template?
+
+    def to_s(io)
+      io << self
+    end
   end
 
   # A model that holds a `value` of type *T*.
@@ -1255,6 +1267,9 @@ module Ven::Suite
     def initialize(@name, @arity, @callee)
     end
 
+    def initialize(@name, @arity, &@callee : Machine, Models -> Model)
+    end
+
     # Returns the specificity of this builtin.
     #
     # Note that in builtins, all arguments have the weight
@@ -1679,13 +1694,19 @@ module Ven::Suite
     forward_missing_to @lambda
   end
 
-  # A kind of model that wraps around a Crystal value of type
-  # *T*. Provides an in-Ven way to pass around native Crystal
-  # values.
+  # A kind of model that wraps around a Crystal object of
+  # type *T*. It provides an in-Ven way to pass native Crystal
+  # values around. Note that many things in here are done
+  # statically, so you'll have to recompile Ven to add new
+  # `MNative` types.
   class MNative(T) < MClass
     getter value : T
 
     def initialize(@value)
+    end
+
+    def type
+      MType.new("native object #{T}", MNative(T))
     end
 
     def to_s(io)

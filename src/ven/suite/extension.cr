@@ -33,9 +33,8 @@ module Ven::Suite
     # Converts block result to Model using `Adapter.to_model`.
     private macro in_builtin_proc(argtypes)
       ->(machine : Machine, args : Models) do
-        Adapter
-          .to_model(with_args({{argtypes}}) { {{ yield }}})
-          .as(Model)
+        %result = with_args({{argtypes}}) { {{ yield }} }
+        Adapter.to_model(%result).as(Model)
       end
     end
 

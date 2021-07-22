@@ -476,7 +476,7 @@ module Ven
     # operation. Dies if failed to convert.
     def normalize(operator, left, right)
       normalize?(operator, left, right) ||
-        die("'#{operator}': could not normalize: #{left.type}, #{right.type}")
+        die("'#{operator}': could not normalize: #{left.type?}, #{right.type?}")
     end
 
     # Defines an `MFunction` off the *informer* and *given*s.
@@ -624,7 +624,7 @@ module Ven
 
     # Same as `field?`, but dies if failed.
     def field(head : Model, field : Model)
-      field?(head, field) || die("#{head.type}: no such field or function: #{field}")
+      field?(head, field) || die("#{head.type?}: no such field or function: #{field}")
     end
 
     # Starts a primitive state inspector prompt.
@@ -946,7 +946,7 @@ module Ven
                       "#{callee.to_s}: #{args.join(", ")}")
                 end
               else
-                die("illegal callee: #{callee.type}")
+                die("illegal callee: #{callee.type?}")
               end
             in Opcode::RET
               # Returns from the **active** frame. If the
@@ -1022,11 +1022,11 @@ module Ven
               head = pop
 
               unless head.indexable?
-                die("[]: #{head.type} is not indexable")
+                die("[]: #{head.type?} is not indexable")
               end
 
               nths = args.map do |arg|
-                head[arg]? || die("#{head.type}: item(s) not found: #{arg}")
+                head[arg]? || die("#{head.type?}: item(s) not found: #{arg}")
               end
 
               # If *nths* consists of one value, put it bare.

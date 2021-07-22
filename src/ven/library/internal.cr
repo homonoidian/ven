@@ -37,7 +37,7 @@ module Ven::Library
 
       # Returns the type of *model*.
       defbuiltin "typeof", model : Model do
-        MType[model.class]? || machine.die("cannot determine the type of #{model}")
+        model.type? || machine.die("cannot determine the type of #{model}")
       end
 
       # Freezes *lambda*. See `MFrozenLambda`.
