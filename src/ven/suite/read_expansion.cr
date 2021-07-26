@@ -27,7 +27,11 @@ module Ven::Suite
     # string (see `repr`).
     REPR_CAP = 32
 
-    def initialize(@reader : Reader, @definitions : Readtime::Definitions)
+    def initialize(
+      @parent : Parselet::Parselet,
+      @reader : Reader,
+      @definitions : Readtime::Definitions
+    )
       @holes = [] of QHole
     end
 
@@ -208,7 +212,7 @@ module Ven::Suite
         when "quote"
           return QQuoteEnvelope.new(q.tag, args.first? || break)
         else
-          call = Readtime::Builtin.new(self, @reader)
+          call = Readtime::Builtin.new(self, state, @reader, @parent)
           args = eval(state, args)
           return call.do(callee, args) || break
         end

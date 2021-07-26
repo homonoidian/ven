@@ -52,4 +52,50 @@ nud TEST = <{
   }
 }>;
 
-TEST()
+TEST();
+
+# Below are a number of tests for blocks. They're outside
+# because there is no way to check whether block parsing
+# works readtime-only. Also, unfortunately there is no way
+# to check whether block reading dies; this destroys the
+# reader logic (by introducing some sort of slippage).
+
+nud TAKES-A-BLOCK = <block()>;
+nud TAKES-CURLY-BLOCK = <curly-block()>;
+nud TAKES-LOOSE-BLOCK = <loose-block()>;
+nud TAKES-TIGHT-BLOCK = <tight-block()>;
+
+ensure "readtime block() reads blocks, and they evaluate" {
+  should "block(): accept curly block"
+    TAKES-A-BLOCK() { 1 + 1 } is 2;
+
+  should "block(): accept loose block"
+    (TAKES-A-BLOCK() = 1 + 1) is 2;
+
+  should "block(): accept tight block"
+    (TAKES-A-BLOCK() 123) is 123;
+    # tight-block() has very tight precedence: read the
+    # following as `((TAKES-A-BLOCK() 123) + 1) is 124`,
+    # which expands to `({ 123 } + 1) is 124`.
+    (TAKES-A-BLOCK() 123 + 1) is 124;
+}
+
+ensure "readtime curly-block() reads curly block" {
+  should "read curly block"
+    TAKES-CURLY-BLOCK() { 1 + 1 } is 2;
+}
+
+ensure "readtime loose-block() reads loose block" {
+  should "read loose block"
+    (TAKES-LOOSE-BLOCK() = 1 + 1) is 2;
+}
+
+ensure "readtime tight-block() reads tight block" {
+  should "read tight block"
+    TAKES-TIGHT-BLOCK() 123 is 123;
+    # tight-block() has very tight precedence: read the
+    # following as `((TAKES-A-BLOCK() 123) + 1) is 124`,
+    # which expands to `({ 123 } + 1) is 124`.
+    (TAKES-TIGHT-BLOCK() 123 + 1) is 124;
+
+}

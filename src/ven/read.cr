@@ -341,7 +341,7 @@ module Ven
         this = stmt.parse!(self, tag, word!)
         semi = stmt.semicolon
       else
-        nud = @nud[(@word[:type])]?
+        nud = nud_for?(@word[:type])
         this = led
         # XXX: the decision made by *nud* remains with it
         # even after it finished reading. Doing a bit hairy

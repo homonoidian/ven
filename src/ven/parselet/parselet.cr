@@ -6,19 +6,20 @@ module Ven::Parselet
 
   abstract class Parselet
     # The current location (see `QTag`)
-    @tag = uninitialized QTag
-
+    getter tag : QTag
     # The word that invoked this parselet.
-    @token = uninitialized Word
-
-    # A reference to the `Reader` that invoked this parselet
-    @parser = uninitialized Reader
-
-    # Returns whether a semicolon must follow this parselet.
-    getter semicolon = true
-
+    getter token : Word
+    # Refers to the `Reader` that invoked this parselet.
+    getter parser : Reader
     # Returns the precedence of this parselet.
     getter precedence = Precedence::ZERO
+
+    # Whether a semicolon must follow this parselet.
+    property semicolon = true
+
+    @tag = uninitialized QTag
+    @token = uninitialized Word
+    @parser = uninitialized Reader
 
     # Makes a parselet with the given *precedence*.
     def initialize(@precedence = Precedence::ZERO)
@@ -93,9 +94,16 @@ module Ven::Parselet
     #
     # If *opening* is false, it does not expect the opening
     # paren. Expects semicolon depending on *semicolon*.
-    def block(opening = true, @semicolon = false) : Quotes
+    def block(opening = true, semicolon = false) : Quotes
       @parser.expect("{") if opening
-      @parser.repeat("}") { @parser.statement }
+
+      body = @parser.repeat("}") { @parser.statement }
+
+      # Set semicolon afterwards, as the decision made
+      # beforehand may be overwritten by a nested block.
+      @semicolon = semicolon
+
+      body
     end
 
     # Reads a led of the given *precedence*.

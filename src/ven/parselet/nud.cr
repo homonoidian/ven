@@ -596,7 +596,7 @@ module Ven::Parselet
 
       # If *type* is a user-defined keyword, consume & return
       # out immediately.
-      if type.downcase.in?(@parser.context.keywords)
+      if @parser.context.keyword?(lexeme)
         return type, @parser.word![:lexeme]
       end
 
@@ -662,7 +662,7 @@ module Ven::Parselet
       # Clone: we do not want to modify the original body.
       body = QBlock.new(@tag, @body.clone)
 
-      ReadExpansion.new(@parser, definitions).transform(body)
+      ReadExpansion.new(self, @parser, definitions).transform(body)
     end
 
     # Reads the parameters of this nud macro.
