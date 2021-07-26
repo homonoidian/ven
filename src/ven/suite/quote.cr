@@ -33,6 +33,11 @@ module Ven::Suite
   abstract class Quote
     include JSON::Serializable
 
+    # Returns whether this quote is `QFalse`.
+    def false?
+      is_a?(QFalse)
+    end
+
     macro finished
       # This (supposedly) makes it possible to reconstruct
       # a Quote tree from JSON. Will probably be useful in

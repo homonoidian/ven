@@ -1,0 +1,55 @@
+distinct ven.tests.readtime.builtins;
+
+nud TEST = <{
+  # It isn't possible to test printing itself right now. But
+  # later, we may be able to catch the print event via some
+  # sort of readtime, IO try/catch?
+  ensure "builtin 'say' works" {
+    should "return empty vector if given no arguments"
+      say() is [];
+
+    should "return the argument if given one argument"
+      say(1) is 1;
+      say("foobar") is "foobar";
+
+    should "return a vector of arguments if given multiple arguments"
+      say(1, 2, 3) is [1 2 3];
+  }
+
+  # 'reverse' is a temporary builtin that covers the unsupported
+  # `foo[from -1]`.
+  ensure "builtin 'reverse' works" {
+    should "return empty string if given empty string"
+      reverse("") is "";
+
+    should "return the reversed string"
+      reverse("foobar") is "raboof";
+      reverse("abba") is "abba";
+
+    should "die on anything but string"
+      reverse(12) dies;
+      reverse([1 2 3]) dies;
+      reverse(true) dies;
+      reverse(quote(a + b)) dies;
+      # ... etc
+  }
+
+  # 'chars' is a temporary builtin that covers the unsupported
+  # `foo[]`.
+  ensure "builtin 'chars' works" {
+    should "return empty vector if given empty string"
+      chars("") is [];
+
+    should "return the characters in a string"
+      chars("foo") is ["f" "o" "o"];
+
+    should "die on anything but string"
+      chars(12) dies;
+      chars([1 2 3]) dies;
+      chars(true) dies;
+      chars(quote(a + b)) dies;
+      # ... etc
+  }
+}>;
+
+TEST()

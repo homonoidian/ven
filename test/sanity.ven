@@ -13,6 +13,9 @@ distinct sanity;
 # exposed in is not really guaranteed (by Ven); and we ourselves
 # did not specify any.
 
+expose ven.tests.readtime.core;
+expose ven.tests.readtime.builtins;
+
 expose ven.tests.language.base;
 expose ven.tests.language.scope;
 expose ven.tests.language.return_;

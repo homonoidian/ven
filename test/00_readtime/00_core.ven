@@ -1,154 +1,369 @@
-nud pad(symbol) {
-  <{
-    # These ensures are run at read-time.
+distinct ven.tests.readtime.core;
 
-    # Make sure homoiconics evaluate.
-    ensure 12;
-    ensure "12";
-    ensure `12`;
-    ensure true;
-    ensure not false;
+nud UNARY-TEST = <[
+  ensure "Unary '+' works" {
+    should "return operand if operand is a number"
+      +123 is 123;
 
-    # Make sure vectors evaluate.
-    ensure [1, 2, 3];
-    ensure [1, "2", 3];
-    ensure [[1, 2, 3], 4, 5];
+    should "parse a number from string operand, or dies"
+      +"0" is 0;
+      +"123" is 123;
+      +"123.456" is 123.456;
+      +"" dies;
+      +"abc" dies;
+      +"123abc" dies;
+      +"abc123" dies;
 
-    # Make sure we can access symbols.
-    # value check todo
-    ensure symbol is 12;
+    should "return the length of vector operand"
+      +[] is 0;
+      +[2 4 6] is 3;
 
-    # Make sure unaries evaluate [same way as in runtime]:
-    ensure +1 is 1;
-    ensure -1 is -1;
-    ensure ~"hello" is "hello";
-    ensure &[1] is [1];
-    ensure #[1, 2, 3] is 3;
-    ensure #"hello" is 5;
+    should "return 1 if operand is `true`"
+      +true is 1;
 
-    ensure +"1" is 1;
-    ensure +[2, 4, 6] is 3;
-    ensure +true is 1;
-    ensure +false is 0;
+    should "return 0 is operand is `false`"
+      +false is 0;
 
-    ensure -"1" is -1;
-    ensure -[2, 4, 6] is -3;
-    ensure -true is -1;
-    ensure -false is 0;
+    should "die in any other case"
+      +quote(1 + 1) dies;
+  }
 
-    ensure ~123 is "123";
-    ensure ~[1, 2, 3] is "[1, 2, 3]";
-    ensure ~true is "true";
-    ensure ~false is "false";
+  ensure "Unary '-': same as unary '+', but negates the resulting number" {
+    should "negate number operand"
+      -123 is -123;
 
-    ensure &1 is [1];
-    ensure &"1" is ["1"];
-    ensure &true is [true];
-    ensure &false is [false];
+    should "negate string operand"
+      -"0" is 0;
+      -"123" is -123;
+      -"123.456" is -123.456;
+      -"" dies;
+      -"abc" dies;
+      -"123abc" dies;
+      -"abc123" dies;
 
-    ensure #123 is 3;
-    ensure #true is 4;
-    ensure #false is 5;
+    should "negate vector operand"
+      -[] is 0;
+      -[2 4 6] is -3;
 
-    # Make sure normal binaries evaluate [same way as in runtime]:
-    ensure 1 < 2;
-    ensure 2 > 1;
-    ensure 2 <= 2;
-    ensure 5 >= 4;
+    should "negate `true`"
+      -true is -1;
 
-    ensure 1 + 1 is 2;
-    ensure 2 - 2 is 0;
-    ensure 2 * 2 is 4;
-    ensure 2 / 2 is 1;
+    should "negate `false`"
+      -false is 0;
 
-    ensure [1] & [2] is [1, 2];
-    ensure "lead" ~ "tail" is "leadtail";
+    should "die in any other case"
+      -quote(1 + 1) dies;
+  }
 
-    ensure "a" x 10 is "aaaaaaaaaa";
-    ensure [1] x 10 is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-    ensure [1, 2, 3] x 3 is [1, 2, 3, 1, 2, 3, 1, 2, 3];
+  ensure "Unary '~' works" {
+    should "return operand if operand is a string"
+      ~"foo" is "foo";
 
-    # Make sure unexpected binaries evaluate [same way as in runtime]:
-    ensure [1] < "12";
-    ensure "123" > [1, 2];
-    ensure [1, 2] <= [1, 2, 3];
-    ensure "123" >= 3;
-    ensure "1" < "2" is false;
-    ensure "foo" > "barbaz" is false;
-    ensure "1" < "hello";
-    ensure "barbaz" > "foo";
+    should "detree operand in any other case"
+      ~123 is "123";
+      ~123.456 is "123.456";
+      ~(-123.456) is "-123.456";
+      ~[1 2 3] is "[1, 2, 3]";
+      ~quote(1 + 1) is "1 + 1";
+  }
 
-    ensure "1" + 1 is 2;
-    ensure 2 - "2" is 0;
-    ensure "2" * ["two", "items"] is 4;
-    ensure "2" / true is 2;
+  ensure "Unary '&' works" {
+    should "return operand if operand is vector"
+      &[1 2 3] is [1 2 3];
 
-    ensure 1 & 2 is [1, 2];
-    ensure [1] & 2 is [1, 2];
-    ensure 1 & [2] is [1, 2];
+    should "surround operand with vector in any other case"
+      &123 is [123];
+      &"123" is ["123"];
+      &quote(1 + 1) is [quote(1 + 1)];
+  }
 
-    ensure 1 ~ 2 is "12";
-    ensure "1" ~ 2 is "12";
-    ensure 1 ~ "2" is "12";
+  ensure "Unary '#' works" {
+    should "return the length of string operand"
+      #"foobar" is 6;
 
-    ensure 10 x "a" is "aaaaaaaaaa";
-    ensure 10 x [1] is [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-    ensure 0 x 10 is [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    should "return the length of vector operand"
+      #[2 4 6] is 3;
 
-    # Make sure we can assign to symbols.
-    a = 2;
-    b = 3;
-    ensure a is 2;
-    ensure b is 3;
+    should "return 1 in any other case"
+      #123 is 1;
+      #true is 1;
+      #false is 1;
+      #quote(1 + 1) is 1;
+  }
 
-    # Make sure spread works.
-    ensure (|+| [1, 2, 3]) is 6;
-    ensure (|*| [1, 2, 3, 4, 5]) is 120;
-    ensure |is| 1 x 10;
-    ensure not |is| [1, 2, 3];
-    ensure (|and| [1, 2, 3]) is 3;
-    ensure (|or| [1, 2, 3]) is 1;
-    ensure (|and| [true, false, 3]) is false;
-    ensure (|and| [false, false, 3]) is false;
-    ensure (|or| [false, false, 3]) is 3;
-    ensure (|_ + 1| [2, 3, 4]) is [3, 4, 5];
-    ensure (|#_| [1, 2, 3]) is 1 x 3;
-    ensure (|&_ * _| [2, 3, 4]) is [4, 9, 16];
-    ensure (|if (&_ > 5) _ else _ - 1| [4, 9, 16]) is [3, 9, 16];
-    ensure (|_| [1 2 3]) is [1 2 3];
-    ensure (|&_| [1 2 3]) is [1 2 3];
-    ensure (|_ + 1| [1 2 3]) is [2 3 4];
-    ensure (|&_ + 1| [1 2 3]) is [2 3 4];
-    ensure (|{{{{{_ + 1}}}}}| [1 2 3]) is [2 3 4];
-    ensure (|&_ + _| [1 2 3]) is [2 4 6];
-    ensure (|&_ + &_| [1 2 3]) is [2 4 6];
-    ensure (|if &_ > 1 _| [1 2 3]) is [false 2 3];
-    ensure (||_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
-    ensure (||&_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
-    ensure (||&_ + 1| &_| [[1 2], [3 4]]) is [[2 3], [4 5]];
-    ensure (||&_ + _| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
-    ensure (||&_ + &_| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
-    ensure (||[&_ + &_, _]| &_| [[1 2], [3 4]]) is [[[2 1], [4 2]], [[6 3], [8 4]]];
-    ensure (|[|[&_ + &_, _]| &_, _]| [[1 2], [3 4]]) is [[[[2 1], [4 2]], [1 2]], [[[6 3], [8 4]], [3 4]]];
+  ensure "Unary 'not' works" {
+    should "return true if operand is false"
+      not false is true;
 
-    # Make sure 'if' works.
-    ensure (if 1 2 else 3) is 2;
-    ensure (if 1 2) is 2;
-    ensure (if false 2) is false;
-    ensure (if false 2 else 3) is 3;
-    ensure (if false _ else 3) dies;
-    ensure (if 1 > 2 _ else 3) is 3;
-    ensure (if 1 < 2 _ else 3) dies;
-    ensure (if 1 is 2 _ else _) dies;
-    ensure (if 1 is 1 _ else 3) is 1;
+    should "return false in any other case"
+      not true is false;
+      not 0 is false;
+      not 1 is false;
+      not "" is false;
+      not "foo" is false;
+      not [] is false;
+      not [1 2 3] is false;
+      not quote(1 + 1) is false;
+  }
+]>;
 
-    # Make sure 'dies' works.
-    ensure (1 dies) is false;
-    ensure (+"123" dies) is false;
-    ensure (+"abc" dies) is true;
-  }>
+nud BINARY-TEST = <[
+  ensure "'and'/'or' work" {
+    should "'and': return last if all true"
+      ("foo" and "bar") is "bar";
 
-  say("All tests passed!");
-};
+    should "'and': return false if any false"
+      (false and "foo") is false;
+      ("foo" and false) is false;
+      (false and false) is false;
 
-pad(12)
+    should "'or': return first nonfalse"
+      ("foo" or "bar") is "foo";
+      ("foo" or false) is "foo";
+      (false or "foo") is "foo";
+
+    should "'or': return false if all false"
+      (false or false) is false;
+  }
+
+  ensure "Binary 'is' works" {
+    should "return true given 'true is true', 'false is false'"
+      true is true;
+      false is false;
+
+    should "return left if numbers equal, otherwise false"
+      (123.456 is 123.456) is 123.456;
+      (123.456 is 234.567) is false;
+
+    should "return left if strings equal, otherwise false"
+      ("foo" is "foo") is "foo";
+      ("bar" is "foo") is false;
+
+    should "return left if vectors deep equal, otherwise false"
+      ([] is [1]) is false;
+      ([1 2 3] is [1]) is false;
+      ([1 2 3] is [1 3 3]) is false;
+      ([[1 2 3], [4 5 6]] is [[1 3 3], [4 5 6]]) is false;
+      ([[1 2 3], [4 5 6]] is [[1 2 3], [4 6 6]]) is false;
+      ([[1 2 3], [4 5 6]] is [[1 2 3], [4 5 6]]) is [[1 2 3], [4 5 6]];
+      ([1, "n", (3 + 4)] is [1 "n" 7]) is [1, "n", (5 + 2)];
+
+    should "return left if quotes deep equal, otherwise false"
+      quote(a + b * c) is quote(a + b * c);
+      (quote(a + b / c) is quote(a + b * c)) is false;
+      quote(deeply(nested(value.of.some("kind")))) is quote(deeply(nested(value.of.some("kind"))));
+  }
+
+  ensure "Binary 'in' works" {
+    should "find & return substring, otherwise false"
+      ("f" in "foo") is "f";
+      ("foo" in "foobar") is "foo";
+      ("bar" in "foobarbaz") is "bar";
+      ("bar" in "quux") is false;
+
+    should "stringify left & search in string"
+      (true in "This world isn't true to me anymore") is "true";
+      (12 in "Hazy12") is "12";
+      (quote(1 + 1) in "The answer to 1 + 1 is 3") is "1 + 1";
+
+    should "find & return item, otherwise false"
+      (1 in [1 2 3]) is 1;
+      (1 in ["1" "2" "3"]) is false;
+      (1 in ["hello" "foo" "bar"]) is false;
+      ([1, (2 + 3), 3] in [[4 5 6], [1, (1 + 4), 3]]) is [1 5 3];
+      (quote(1 + 1) in [1 2 3]) is false;
+      (quote(1 + 1) in ["a" quote(1 + 1) "b" "c"]) is quote(1 + 1);
+
+    should "return true if searching for 'false', otherwise false"
+      (false in [1 2 3]) is false;
+      (false in [1 false 2 true]) is true;
+
+    # should "search by regex & return the match"
+    #   (`fo+` in "foo") is "foo";
+    #   (`fo+` in "fooooooooo") is "fooooooooo";
+    #   (`fo+` in "foobar") is "foo";
+    #   (`fo+` in "bazfoooobar") is "foooo";
+  }
+
+  ensure "Binary '<', '>', '<=', '>=' work" {
+    should "properly compare numbers, returning true/false"
+      1 < 2 is true;
+      2 < 1 is false;
+      2 < 2 is false;
+      2 > 1 is true;
+      1 > 2 is false;
+      1 > 1 is false;
+      1 <= 2 is true;
+      4 <= 2 is false;
+      1 <= 1 is true;
+      1 >= 2 is false;
+      3 >= 2 is true;
+      2 >= 2 is true;
+
+    should "compare strings by their sizes"
+      "1" < "2" is false;
+      "abc" < "de" is false;
+      "abc" > "de" is true;
+
+    should "convert to numbers otherwise, then compare"
+      [1 2 3] < [4 5 6] is false;
+      [1 2 3] > [4 5] is true;
+      true < false is false;
+      false < true is true;
+  }
+
+  ensure "Binary numeric '+', '-', '*', '/' work" {
+    should "return correct results given two numbers"
+      2 + 2 is 4;
+      2 + -1 is 1;
+      2 - 2 is 0;
+      2 - 100 is -98;
+      2 * 16 is 32;
+      2 / 2 is 1;
+      0 / 2 is 0;
+      2 / 8 is 0.25;
+      0.1 + 0.2 is 0.3;
+
+    should "die on division by zero"
+      2 / 0 dies;
+
+    should "convert to numbers otherwise, then compute"
+      [] + [4 5] is 2;
+      [1] + [5 4] is 3;
+      true + false is 1;
+      true + true is 2;
+      true - false is 1;
+      true * true is 1;
+      true * false is 0;
+      true / true is 1;
+      false / true is 0;
+  }
+
+  ensure "Vector concatenation ('&') works" {
+    should "concat two vectors"
+      [1 2] & [3 4] is [1 2 3 4];
+
+    should "convert to vectors otherwise, then concat"
+      1 & 2 is [1 2];
+      [1] & 2 is [1 2];
+      1 & [2] is [1 2];
+      [&1] & 2 is [[1] 2];
+      quote(1 + 1) & quote(2 + 2) is [quote(1 + 1) quote(2 + 2)];
+  }
+
+  ensure "String concatenation (aka stitch, '~') works" {
+    should "concat two strings"
+      "foo" ~ "bar" is "foobar";
+
+    should "convert to strings otherwise, then concat"
+      1 ~ 2 is "12";
+      1.23 ~ "!" is "1.23!";
+      true ~ false is "truefalse";
+      quote(a + b) ~ " = " ~ quote(c + d) is "a + b = c + d";
+  }
+
+  ensure "Repeat ('x') works" {
+    should "normal: repeat string, vector a _number_ of times"
+      "foo" x 3 is "foofoofoo";
+      [1 2 3] x 3 is [1 2 3 1 2 3 1 2 3];
+
+    should "convert left to number & flip if right is vector, string"
+      3 x [1 2 3] is [1 2 3 1 2 3 1 2 3];
+      3 x "foo" is "foofoofoo";
+      "3" x "foo" is "foofoofoo";
+      [1 2 3] x "foo" is "foofoofoo";
+      [1 2 3] x [1 2] is [1 2 1 2 1 2];
+      [1 2 3] x "bazz" is "bazzbazzbazz";
+
+    should "convert to vector, number otherwise, then repeat"
+      true x false is [];
+      false x true is [false];
+
+    should "die if amount is too big"
+      0 x 2147483647 dies;
+  }
+]>;
+
+nud STUFF-TEST(symbol) = <{
+  # Make sure homoiconics evaluate.
+  ensure 12;
+  ensure "12";
+  ensure `12`;
+  ensure true;
+  ensure not false;
+
+  # Make sure vectors evaluate.
+  ensure [1, 2, 3];
+  ensure [1, "2", 3];
+  ensure [[1, 2, 3], 4, 5];
+
+  # Make sure we can access symbols.
+  # value check todo
+  ensure symbol is 12;
+
+  # Make sure we can assign to symbols.
+  a = 2;
+  b = 3;
+  ensure a is 2;
+  ensure b is 3;
+
+  # Make sure spread works.
+  ensure (|+| [1, 2, 3]) is 6;
+  ensure (|*| [1, 2, 3, 4, 5]) is 120;
+  ensure |is| 1 x 10;
+  ensure not |is| [1, 2, 3];
+  ensure (|and| [1, 2, 3]) is 3;
+  ensure (|or| [1, 2, 3]) is 1;
+  ensure (|and| [true, false, 3]) is false;
+  ensure (|and| [false, false, 3]) is false;
+  ensure (|or| [false, false, 3]) is 3;
+  ensure (|_ + 1| [2, 3, 4]) is [3, 4, 5];
+  ensure (|#_| [1, 2, 3]) is 1 x 3;
+  ensure (|&_ * _| [2, 3, 4]) is [4, 9, 16];
+  ensure (|if (&_ > 5) _ else _ - 1| [4, 9, 16]) is [3, 9, 16];
+  ensure (|_| [1 2 3]) is [1 2 3];
+  ensure (|&_| [1 2 3]) is [1 2 3];
+  ensure (|_ + 1| [1 2 3]) is [2 3 4];
+  ensure (|&_ + 1| [1 2 3]) is [2 3 4];
+  ensure (|{{{{{_ + 1}}}}}| [1 2 3]) is [2 3 4];
+  ensure (|&_ + _| [1 2 3]) is [2 4 6];
+  ensure (|&_ + &_| [1 2 3]) is [2 4 6];
+  ensure (|if &_ > 1 _| [1 2 3]) is [false 2 3];
+  ensure (||_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
+  ensure (||&_ + 1| _| [[1 2], [3 4]]) is [[2 3], [4 5]];
+  ensure (||&_ + 1| &_| [[1 2], [3 4]]) is [[2 3], [4 5]];
+  ensure (||&_ + _| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
+  ensure (||&_ + &_| &_| [[1 2], [3 4]]) is [[2 4], [6 8]];
+  ensure (||[&_ + &_, _]| &_| [[1 2], [3 4]]) is [[[2 1], [4 2]], [[6 3], [8 4]]];
+  ensure (|[|[&_ + &_, _]| &_, _]| [[1 2], [3 4]]) is [[[[2 1], [4 2]], [1 2]], [[[6 3], [8 4]], [3 4]]];
+
+  # Make sure 'if' works.
+  ensure (if 1 2 else 3) is 2;
+  ensure (if 1 2) is 2;
+  ensure (if false 2) is false;
+  ensure (if false 2 else 3) is 3;
+  ensure (if false _ else 3) dies;
+  ensure (if 1 > 2 _ else 3) is 3;
+  ensure (if 1 < 2 _ else 3) dies;
+  ensure (if 1 is 2 _ else _) dies;
+  ensure (if 1 is 1 _ else 3) is 1;
+
+  # Make sure 'dies' works.
+  ensure (1 dies) is false;
+  ensure (+"123" dies) is false;
+  ensure (+"abc" dies) is true;
+
+  true
+}>;
+
+nud INDEX = <{
+  all? = |and| UNARY-TEST() & BINARY-TEST() & STUFF-TEST(12);
+
+  if all? {
+    return say("--- ALL TESTS PASSED ---")
+  } else {
+    return say("--- SOME TESTS FAILED ---")
+  }
+}>;
+
+INDEX()

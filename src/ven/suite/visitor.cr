@@ -36,8 +36,20 @@ module Ven::Suite
 
     # Dies of transform error given *message*, which should
     # explain why the error happened.
+    #
+    # **The location of the error is a very rough estimate**,
+    # so use this method only if you have no access to a `QTag`.
+    #
+    # If you do have a `QTag`, prefer `die(tag, message)`.
     def die(message : String)
       raise TransformDeathException.new(message)
+    end
+
+    # Dies of transform error given *message*, which should
+    # explain why the error happened, and *tag*, which specifies
+    # the location of the error.
+    def die(tag : QTag, message : String)
+      raise ReadError.new(tag, message)
     end
 
     # Casts *value* to *type* safely: dies if cannot cast
@@ -47,13 +59,13 @@ module Ven::Suite
       %result.as?({{type}}) || die("expected #{{{type}}}, got #{%result.class}")
     end
 
-    # Defines a toplevel transform over the given *type*. See
+    # Defines a toplevel transform for the given *type*. See
     # `transform` to learn more.
     #
     # Yields for the body of the transform. Exposes `quote`
     # in the body of the transform, which stands for the
     # quote being transformed.
-    macro deftransform(over type = Quote)
+    macro deftransform(for type = Quote)
       def transform(quote : {{type}})
         {{yield}}
       rescue e : TransformDeathException
@@ -102,8 +114,8 @@ module Ven::Suite
         end
       {% end %}
 
-      # Apply tail transform (if there is one; otherwise,
-      # *quote* will be returned untouched).
+      # Apply tail transform (if there is one for *quote*;
+      # otherwise, *quote* will be returned untouched).
       transform!(quote).as?(Quote) || quote
     end
 

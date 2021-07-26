@@ -88,7 +88,7 @@ module Ven
     # NOTE: this transform is not a tail transform (`transform!`),
     # because patterns have their own semantics, while tail
     # transformation enforces the standard one.
-    deftransform over: QPatternEnvelope do
+    deftransform for: QPatternEnvelope do
       arg = gensym
       # 'and' the resulting clauses with `arg`, so that if
       # matched successfully, this lambda returns <arg> -

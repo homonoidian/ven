@@ -638,8 +638,7 @@ module Ven::Parselet
   # read-time interpretation. **It does not produce a quote**,
   # which implies, say, that it won't appear in `-j read`.
   class PNudMacro < Nud
-    def initialize(@params : Array(String), body : Quotes)
-      @body = QGroup.new(QTag.void, body)
+    def initialize(@params : Array(String), @body : Quotes)
     end
 
     def parse
@@ -661,7 +660,9 @@ module Ven::Parselet
       definitions.merge!(params!)
 
       # Clone: we do not want to modify the original body.
-      ReadExpansion.new(definitions).transform(@body.clone)
+      body = QBlock.new(@tag, @body.clone)
+
+      ReadExpansion.new(@parser, definitions).transform(body)
     end
 
     # Reads the parameters of this nud macro.
@@ -712,7 +713,6 @@ module Ven::Parselet
       json.object do
         json.field("tweakable", false)
         json.field("params", @params)
-        json.field("body", @body.body)
       end
     end
   end

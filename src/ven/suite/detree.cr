@@ -386,7 +386,7 @@ module Ven::Suite
     end
 
     def visit!(q : QQuoteEnvelope)
-      "quote(#{visit(q.quote)})"
+      visit(q.quote)
     end
 
     def visit!(q : QEnsureTest)
