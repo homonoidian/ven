@@ -211,12 +211,9 @@ module Ven::Suite
     def field?(name : String)
     end
 
-    # Returns the length of this model.
-    #
-    # By default, stringifies this model and returns the
-    # length of the resulting string.
+    # Returns the length of this model. Falls back to 1.
     def length : Int32
-      to_s.size
+      1
     end
 
     # Returns *index*-th item of this model.

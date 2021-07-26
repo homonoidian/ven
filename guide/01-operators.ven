@@ -45,9 +45,11 @@ ensure &[1, 2, 3] is [1, 2, 3];
 ensure #"hello" is 5;
 ensure #[1, 2, 3] is 3;
 
-# It fallbacks to type str:
+# It fallbacks to 1:
 
-ensure #123 is 3; # i.e. #123 => #~123 => #"123" => 3
+ensure #123 is 1;
+ensure #true is 1;
+ensure #false is 1;
 
 
 # Unary 'not' returns the inverse boolean of whatever it

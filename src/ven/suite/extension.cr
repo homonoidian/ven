@@ -117,6 +117,8 @@ module Ven::Suite
         {% for expression in body %}
           {% if expression.is_a?(Call) && expression.name == :defbuiltin %}
             {{expression.name}}({{*expression.args}}, in: this) {{expression.block}}
+          {% else %}
+            {{expression}}
           {% end %}
         {% end %}
       end)

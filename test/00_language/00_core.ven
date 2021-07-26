@@ -122,9 +122,9 @@ ensure "Sanity of unary operators" {
     &true is [true];
     &false is [false];
 
-    #123 is 3;
-    #true is 4;
-    #false is 5;
+    #123 is 1;
+    #true is 1;
+    #false is 1;
 
     %123 dies;
     %"123" is 123;
