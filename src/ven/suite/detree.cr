@@ -397,6 +397,13 @@ module Ven::Suite
       "should #{q.section.inspect} #{i_visit(q.pad)}"
     end
 
+    def visit!(q : QMap)
+      keys = visit(q.keys)
+      vals = visit(q.vals)
+      pairs = keys.zip(vals).join(", ", &.join " ")
+      "%{#{pairs}}"
+    end
+
     def self.detree(quote : Quote)
       new.visit(quote)
     end
