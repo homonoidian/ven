@@ -1699,15 +1699,15 @@ module Ven::Suite
   class MNative(T) < MClass
     getter value : T
 
-    def initialize(@value)
+    def initialize(@value, @desc = "object")
     end
 
     def type
-      MType.new("native object #{T}", MNative(T))
+      MType.new("native #{@desc}", MNative(T))
     end
 
     def to_s(io)
-      io << "native object"
+      io << "native " << @desc
     end
 
     forward_missing_to @value
@@ -1720,7 +1720,7 @@ module Ven::Suite
     # Yields an empty hash of `String`s to `Model`s. Makes
     # it possible to access the values of that hash using Ven
     # field access.
-    def initialize
+    def initialize(@desc : String)
       yield @fields = {} of String => Model
     end
 
@@ -1729,7 +1729,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "native code"
+      io << "native " << @desc
     end
   end
 end

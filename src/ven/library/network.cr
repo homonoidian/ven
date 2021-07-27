@@ -49,7 +49,9 @@ module Ven
         # response for an incoming request depending on the
         # return value of *callback*. See `create_server`.
         defbuiltin "new", callback : MLambda do
-          {frozen = callback.freeze(machine), create_server(frozen)}
+          frozen = callback.freeze(machine)
+          server = create_server(frozen)
+          MNative(Server).new({frozen, server}, "http server")
         end
 
         # Binds *server* to *uri*, and starts responding to

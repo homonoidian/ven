@@ -102,7 +102,7 @@ module Ven::Suite
     end
 
     # Defines a global `MInternal` under *name*.
-    macro definternal(name, &block)
+    macro definternal(name, desc = nil, &block)
       {% if block.body.is_a?(Expressions) %}
         {% body = block.body.expressions %}
       {% else %}
@@ -113,7 +113,7 @@ module Ven::Suite
         {% name = name.stringify %}
       {% end %}
 
-      defglobal({{name}}, MInternal.new do |this|
+      defglobal({{name}}, MInternal.new({{desc || name}}) do |this|
         {% for expression in body %}
           {% if expression.is_a?(Call) && expression.name == :defbuiltin %}
             {{expression.name}}({{*expression.args}}, in: this) {{expression.block}}
