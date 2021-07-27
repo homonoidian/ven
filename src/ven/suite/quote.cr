@@ -33,11 +33,6 @@ module Ven::Suite
   abstract class Quote
     include JSON::Serializable
 
-    # Returns whether this quote is `QFalse`.
-    def false?
-      is_a?(QFalse)
-    end
-
     macro finished
       # This (supposedly) makes it possible to reconstruct
       # a Quote tree from JSON. Will probably be useful in
@@ -56,20 +51,37 @@ module Ven::Suite
       # to deserialize to.
       @__quote = {{@type.name.split("::").last}}
 
+      # Returns whether this quote is a `QFalse`.
+      def false?
+        {{@type.resolve.id == :QFalse}}
+      end
+
       macro defquote!(*fields)
+        # Returns the location of this quote. See `QTag`.
         getter tag : QTag
+
         property \{{*fields.map(&.var.id)}}
 
         def initialize(@tag,
           \{% for field in fields %}
             @\{{field}},
           \{% end %})
+          # If @field is a `Quote`, we probably don't want it
+          # to be a `QGroup`. QGroups are for `Quotes`, not
+          # `Quote`. Many things will break otherwise. Same in
+          # `Parameter`, `FieldAccessor`, which are wrappers
+          # around `Quote`.
+          \{% for field in fields %}
+            \{% if field.type.resolve == Quote %}
+              if @\{{field.var}}.is_a?(QGroup)
+                raise ReadError.new(@tag, "got group where expression expected")
+              end
+            \{% end %}
+          \{% end %}
         end
 
-        # Lisp-like pretty-printing.
-        #
-        # This is more of an internal way to print Quotes. If
-        # you want to see Quotes as Ven code, use `Detree`.
+        # Internal, fallback quote pretty-printing. Consider
+        # using `Detree` instead.
         def to_s(io)
           io << "(" << {{@type.name.split("::").last}}
 
@@ -165,12 +177,12 @@ module Ven::Suite
   end
 
   defquote(QRuntimeSymbol,
-    value : _,
+    value : String,
     under: QSymbol,
     desc: "runtime symbol")
 
   defquote(QReadtimeSymbol,
-    value : _,
+    value : String,
     under: QSymbol,
     desc: "readtime symbol")
 

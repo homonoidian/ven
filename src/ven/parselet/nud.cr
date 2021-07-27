@@ -659,10 +659,46 @@ module Ven::Parselet
 
       definitions.merge!(params!)
 
-      # Clone: we do not want to modify the original body.
-      body = QBlock.new(@tag, @body.clone)
+      expansion = ReadExpansion.new(self, @parser, definitions)
 
-      ReadExpansion.new(self, @parser, definitions).transform(body)
+      # Transform the clone of the body, so as to not modify
+      # the original (remember, there is only one instance
+      # of this `PNudMacro` ever!)
+      transformed = expansion.transform(@body.clone)
+
+      # No need to nest blocks like that (this happens with
+      # queue, as example)
+      if transformed.size == 1 && (block = transformed.first.as? QBlock)
+        transformed = block.body
+      end
+
+      statements = Quotes.new
+      expressions = transformed.reject do |quote|
+        case quote
+        # Is this how good design looks like? XD
+        when QFun,
+             QBox,
+             QInfiniteLoop,
+             QBaseLoop,
+             QStepLoop,
+             QComplexLoop
+          statements << quote
+          # Do reject.
+          true
+        end
+      end
+
+      if !statements.empty? && expressions.empty?
+        # Expanded to statements.
+        QGroup.new(@tag, statements)
+      elsif statements.empty? && !expressions.empty?
+        # Expanded to expressions.
+        QBlock.new(@tag, expressions)
+      else
+        # Expanded to both, or to nothing.
+        die("macro expanded to statements & expressions at the " \
+            "same time, or to nothing")
+      end
     end
 
     # Reads the parameters of this nud macro.

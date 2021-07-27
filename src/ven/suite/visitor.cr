@@ -73,9 +73,15 @@ module Ven::Suite
       end
     end
 
-    # Maps `transform(quote)` on *quotes*.
+    # Maps `transform` onto *quotes*.
     def transform(quotes : Quotes | FieldAccessors)
       quotes.map { |quote| transform(quote) }
+    end
+
+    # Maps `transform` onto *params*. Returns the resulting
+    # `Parameters`.
+    def transform(params : Parameters)
+      Parameters.new(params.map { |param| transform(param) })
     end
 
     # If one or multiple of *quote*'s fields are of type `Quote`,
@@ -97,8 +103,10 @@ module Ven::Suite
             {% for instance_var in subclass.instance_vars %}
               {% if instance_var.type <= Quote ||
                       instance_var.type <= FieldAccessor ||
+                      instance_var.type <= Parameter ||
                       instance_var.type == Quotes ||
-                      instance_var.type == FieldAccessors %}
+                      instance_var.type == FieldAccessors ||
+                      instance_var.type == Parameters %}
                 quote.{{instance_var}} =
                   cast(transform(quote.{{instance_var}}),
                        to: {{instance_var.type}})
@@ -120,15 +128,25 @@ module Ven::Suite
     end
 
     def transform(accessor : FAImmediate)
-      accessor.class.new cast(transform(accessor.access), QSymbol)
+      FAImmediate.new cast(transform(accessor.access), QSymbol)
     end
 
     def transform(accessor : FADynamic)
-      accessor.class.new transform(accessor.access)
+      FADynamic.new transform(accessor.access)
     end
 
     def transform(accessor : FABranches)
-      accessor.class.new cast(transform(accessor.access), QVector)
+      FABranches.new cast(transform(accessor.access), QVector)
+    end
+
+    def transform(param : Parameter)
+      Parameter.new(
+        param.index,
+        param.name,
+        transform(param.given),
+        param.slurpy,
+        param.underscore,
+      )
     end
 
     # As `Transformer` finds it hard to see box namespace

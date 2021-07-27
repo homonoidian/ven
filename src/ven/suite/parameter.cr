@@ -22,6 +22,13 @@ module Ven::Suite
       @slurpy = false,
       @underscore = false
     )
+      # Same as in `Quote`, same as in `FieldAccessor`: there
+      # must be no QGroup in Quote's place. **Do not forget to
+      # add an '||' or a 'case-when' when a new Quote-typed
+      # instance variable is introduced!**.
+      if given = @given.as?(QGroup)
+        raise ReadError.new(given.tag, "got group where expression expected")
+      end
     end
 
     def clone

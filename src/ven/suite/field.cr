@@ -25,9 +25,15 @@ module Ven::Suite
     end
 
     macro takes(type)
+      # Returns the access quote.
       getter access : {{type}}
 
       def initialize(@access)
+        # Same as in `Quote`, same as in `Parameter`: there
+        # must be no QGroup in Quote's place.
+        if @access.is_a?(QGroup)
+          raise ReadError.new(@access.tag, "got group where expression expected")
+        end
       end
     end
   end
