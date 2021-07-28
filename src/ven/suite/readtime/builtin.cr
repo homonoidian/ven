@@ -28,11 +28,11 @@ struct Ven::Suite::Readtime::Builtin
     case quotes.size
     when 0
       # Some sort of @reader.tag instead of void tag?
-      QVector.new(QTag.void, [] of Quote, filter: nil)
+      QVector.new(QTag.void, [] of Quote)
     when 1
       quotes.first
     else
-      QVector.new(quotes[0].tag, quotes, filter: nil)
+      QVector.new(quotes[0].tag, quotes)
     end
   end
 
@@ -42,7 +42,7 @@ struct Ven::Suite::Readtime::Builtin
       QString.new(operand.tag, char.to_s).as(Quote)
     end
 
-    QVector.new(operand.tag, chars, filter: nil)
+    QVector.new(operand.tag, chars)
   end
 
   # :ditto:

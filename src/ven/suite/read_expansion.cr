@@ -45,11 +45,11 @@ module Ven::Suite
       QString.new(q.tag, {{value}})
     end
 
-    # A shorthand for `QVector.new(q.tag, items, filter: nil)`.
+    # A shorthand for `QVector.new(q.tag, items)`.
     #
     # Casts each item of *items* to `Quote`.
     private macro vec(from items)
-      QVector.new(q.tag, {{items}}.map &.as(Quote), filter: nil)
+      QVector.new(q.tag, {{items}}.map &.as(Quote))
     end
 
     # A shorthand for `QTrue.new(q.tag)`.

@@ -190,7 +190,12 @@ module Ven::Suite
   defquote(QRegex, value : String, desc: "regex")
   defquote(QNumber, value : BigDecimal, desc: "number")
 
-  defquote(QVector, items : Quotes, filter : MaybeQuote, desc: "vector")
+  defquote(QVector, items : Quotes, desc: "vector")
+  defquote(QFilterOver,
+    vector : Quote,
+    filter : Quote,
+    desc: "filtered vector")
+
   defquote(QMap, keys : Quotes, vals : Quotes, desc: "map")
 
   defquote(QTrue, desc: "bool true")

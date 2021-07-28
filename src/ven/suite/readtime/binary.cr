@@ -161,7 +161,7 @@ module Ven::Suite::Readtime::Binary
   # Concatenates two vectors, *left* and *right*. Returns the
   # resulting vector.
   def veccat(left : QVector, right : QVector) : QVector
-    QVector.new(left.tag, left.items + right.items, filter: nil)
+    QVector.new(left.tag, left.items + right.items)
   end
 
   # Converts *left*, *right* to vectors (see `Unary.to_vec`),
@@ -213,7 +213,7 @@ module Ven::Suite::Readtime::Binary
     # limitless BigDecimal.
     raise OverflowError.new if r >= Int32::MAX
 
-    QVector.new(left.tag, l * r, filter: nil)
+    QVector.new(left.tag, l * r)
   end
 
   # Converts *left* to number (see `Unary.to_num`), and calls

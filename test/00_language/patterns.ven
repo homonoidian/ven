@@ -1,0 +1,130 @@
+distinct ven.tests.language.patterns;
+
+ensure "Patterns produce working pattern lambdas" {
+  should "satisfy general clauses"
+    '12 is lambda;
+
+  should "recognize & match over numbers"
+    '12(12) is %{};
+    '12("12") is false;
+    '12(123) is false;
+    '12([1, 2, 3]) is false;
+
+  should "recognize & match over strings"
+    '"foo"("foo") is %{};
+    '"bar"("baz") is false;
+    '"12"(12) is false
+
+  should "recognize & match over regexes"
+    '`12`("12") is %{};
+    '`a+`("a") is %{};
+    '`a+`("aaa") is %{};
+    '`a+`("b") is false;
+
+  should "allow pattern envelope nesting escape pattern semantics"
+    ''num(12) is %{};
+    ''(2 + 2)(4) is %{};
+
+  should "assign subject to symbol & return a flat map"
+    'foo(12) is %{foo 12};
+    '[foo bar]([1 2]) is %{foo 1 bar 2};
+    '[[a b], [c d]]([[1 2]]) is false;
+    '[[a b], [c d]]([[1], [3 4]]) is false;
+    '[[a b], [c d]]([[1 2], [3]]) is false;
+    '[[a b], [c d]]([[1 2], [3 4]]) is %{a 1 b 2 c 3 d 4};
+    '[[a b], [a b]]([[1 2], [3 4]]) is %{a 3 b 4};
+
+  should "binary: assign to LHS if LHS is symbol. LHS op RHS intact"
+    '(foo is num)(12) is %{foo 12};
+    '(foo is num)("baz") is false;
+    '(foo < 15)(13) is %{foo 13};
+    '(foo < 15)(17) is false;
+    '(foo + 1)(12) is %{foo 12};
+    '(foo and bar)(12) dies; # no 'bar'
+
+  should "binary: accept nothing but and/or"
+    # It read errors on invalid binary patterns, and so it
+    # is impossible to test here :(
+    '(1 or 2);
+    '(1 and 2);
+
+  should "binary: complex works with different LHS names"
+    '(a is 1 and b is 1)(1) is %{a 1 b 1};
+    '(a is 1 and b is 1)(2) is false;
+
+  should "binary: complex works with identical LHS names"
+    '(a < 10 and a > 5)(8) is %{a 8};
+    '(a < 10 and a > 5)(4) is false;
+    '(a < 10 and a > 5)(15) is false;
+
+  should "binary: very complex works with different LHS names"
+    '(a is 1 and b is 1 or c is 2)(1) is %{a 1 b 1};
+    '(a is 1 and b is 1 or c is 2)(2) is %{c 2};
+
+  should "binary: very complex works with same LHS names"
+    '(a < 10 and a > 5 or a is 100)(4) is false;
+    '(a < 10 and a > 5 or a is 100)(8) is %{a 8};
+    '(a < 10 and a > 5 or a is 100)(15) is false;
+    '(a < 10 and a > 5 or a is 100)(100) is %{a 100};
+
+  should "assign works in patterns"
+    '(it = [a b c])([1 2 3]) is %{it [1 2 3] a 1 b 2 c 3};
+    '(it = [a 2 c])([1 2 3]) is %{it [1 2 3] a 1 c 3};
+    '(it = [a b c])([1 2]) is false;
+    '(it = [a 2 c])([1 12 3]) is false;
+    # ... etc
+
+  should "recognize & match over vectors"
+    '[]([]) is %{};
+    '[]([1]) is false;
+    '[]("") is false;
+    '[](1) is false;
+    '[1]([1]) is %{};
+    '[1](1) is false;
+    '[1, 2]([1, 2]) is %{};
+    '[1, 2, 3]([1, 2, 3]) is %{};
+    '[1, "hey"]([1, "hey"]) is %{};
+    '[1, "bye"]([1, "hey"]) is false;
+    '[["symbol", "macro"], ["name", "arg"], "body"](
+      [["symbol", "macro"], ["name", "arg"], "body"]
+    ) is %{};
+    '[["symbol", "macro"], ["name", "arg"], "body"](
+      [["symbol", "macro"], ["name", "bad"], "body"]
+    ) is false;
+    '[`a+b`, `b+a`](["aab", "bbba"]) is %{};
+    '[`a+b`, `b+a`](["b", "bbba"]) is false;
+    '[`a+b`, `b+a`](["aab", "bb"]) is false;
+    '[a b]([1 2]) is %{a 1 b 2};
+
+  should "recognize & loosely match over maps"
+    '%{}(0) is false;
+    '%{}(true) is false;
+    '%{}([]) is false;
+    '%{}(%{}) is %{};
+    '%{a 1 b 2}(%{a 1 b 2}) is %{};
+    '%{a 1 b 2}(%{a 1 b 2 c 3}) is %{};
+    '%{a 1 b 2}(%{a 1 b "wrong value"}) is false;
+    '%{a x b y}(%{a "foo" b "bar"}) is %{ x "foo" y "bar"};
+    '%{a 'num b 'num}(%{a 12 b 13}) is %{};
+    '%{a 'num b 'num}(%{a 12 b "wrong type"}) is false;
+    '%{a (foo = 'num) b (bar = 'str)}(%{a 12 b "quux"}) is %{foo 12 bar "quux"};
+    '%{a (foo = 'num) b (bar = 'str)}(%{a 12 b true}) is false;
+    '%{a (foo = 'num) b (bar = 'str)}(%{a any b "hey"}) is false;
+    '%{(`(foo|bar)$`) [a b]}(%{foo [1 2]}) is %{a 1 b 2};
+    '%{(`(foo|bar)$`) [a b]}(%{bar [3 4]}) is %{a 3 b 4};
+    '%{(`(foo|bar)$`) [a b]}(%{baz [1 2]}) is false;
+
+  should "pass on underscore"
+    '[1 _ 3]([1 2 3]) is %{};
+    '[1 _ 3]([1 "2" 3]) is %{};
+    '[_ _ _]([1 2 3]) is %{};
+    '[_ _ _]([1 2]) is false;
+    '[(_ > 10) 2 3]([100 2 3]) is %{};
+    '[(_ > 10) 2 3]([6 2 3]) is false;
+    '%{a _ }(%{a 123 b 456}) is %{};
+    '%{a _ }(%{b 567}) is false;
+    '%{a (_ in [1 2 3])}(%{a 1}) is %{};
+    '%{a (_ in [1 2 3])}(%{a 2}) is %{};
+    '%{a (_ in [1 2 3])}(%{a 3}) is %{};
+    '%{a (_ in [1 2 3])}(%{a 4}) is false;
+}

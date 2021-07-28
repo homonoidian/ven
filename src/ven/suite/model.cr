@@ -812,10 +812,6 @@ module Ven::Suite
   # If used as a compound type lead, it represents alternative:
   # `any(1, 2, str)`  means `1`, `2`, or `str`.
   struct MAny < MStruct
-    def is?(other)
-      true
-    end
-
     def weight
       MWeight::ANY
     end

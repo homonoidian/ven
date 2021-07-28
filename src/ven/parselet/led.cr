@@ -146,7 +146,8 @@ module Ven::Parselet
     # Reads a branches field access, which is essentially a
     # vector (`PVector`).
     private def branches_access
-      PVector.new.parse!(@parser, @tag, @token)
+      PVector.new.parse!(@parser, @tag, @token).as?(QVector) ||
+        die("filter in branches field access is unsupported")
     end
 
     # Reads a dynamic field access, which is essentially a

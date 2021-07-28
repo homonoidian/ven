@@ -22,6 +22,7 @@ expose ven.tests.language.return_;
 expose ven.tests.language.boxes;
 expose ven.tests.language.diamond;
 expose ven.tests.language.lambdas;
+expose ven.tests.language.patterns;
 
 expose ven.tests.std.std;
 expose ven.tests.std.str;

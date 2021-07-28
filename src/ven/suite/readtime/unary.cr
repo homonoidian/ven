@@ -56,7 +56,7 @@ module Ven::Suite::Readtime::Unary
 
   # Surrounds *operand* with a vector.
   def to_vec(operand) : QVector
-    QVector.new(operand.tag, [operand], filter: nil)
+    QVector.new(operand.tag, [operand])
   end
 
   # Returns the length of string *operand*.

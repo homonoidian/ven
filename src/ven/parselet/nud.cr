@@ -171,7 +171,15 @@ module Ven::Parselet
   # Reads a vector into `QVector`.
   class PVector < Nud
     def parse
-      QVector.new(@tag, *items!)
+      items, filter = items!
+
+      vector = QVector.new(@tag, items)
+
+      unless filter.nil?
+        return QFilterOver.new(@tag, vector, filter)
+      end
+
+      vector
     end
 
     # Reads the items. Returns a tuple of `{items, filter?}`.
@@ -730,7 +738,7 @@ module Ven::Parselet
       @params.each_with_index do |param, index|
         if param == "*"
           # It'll break right after the slice.
-          names[param] = QVector.new(@tag, args[index..], nil)
+          names[param] = QVector.new(@tag, args[index..])
         else
           names[param] = args[index]
         end
