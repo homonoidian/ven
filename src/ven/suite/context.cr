@@ -168,6 +168,11 @@ module Ven::Suite
       @scopes[-1]
     end
 
+    # Returns the active scope.
+    def current
+      local
+    end
+
     # `Superlocal#take?` under this context's supervision.
     def stake?
       @scopes.reverse_each do |scope|

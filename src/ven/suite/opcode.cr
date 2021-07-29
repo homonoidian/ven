@@ -60,6 +60,7 @@ module Ven::Suite
     TEST_SHOULD
     ACCESS
     MAP
+    MATCH
 
     # Opcodes that take a jump payload.
 

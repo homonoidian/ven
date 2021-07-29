@@ -78,7 +78,7 @@ module Ven
     # In the block, makes the chunk-of-emission be this chunk.
     # The block may receive the target chunk pointer, i.e.,
     # the chunk pointer of this chunk after compilation.
-    private macro under(name, &block)
+    private macro under(chunk name, &block)
       having @target, be: @chunks.size do
         @chunks << Chunk.new(@file, {{name}})
 
@@ -330,7 +330,7 @@ module Ven
       issue(Opcode::MAP_ITER, stop)
 
       @context.child do
-        under "<map block>" do |target|
+        under chunk: "<map block>" do |target|
           visit(q.operator.as(QBlock).body)
           issue(Opcode::RET)
         end
@@ -377,7 +377,7 @@ module Ven
 
     def visit!(q : QBlock)
       @context.child do
-        under "<block>" do |target|
+        under chunk: "<block>" do |target|
           visit(q.body)
           issue(Opcode::RET)
         end
@@ -396,61 +396,70 @@ module Ven
     end
 
     def visit!(q : QFun)
+      name = q.name.value
+      params = q.params
+
+      # Safe to use in this particular case, as we don't have
+      # the data it requires, and we don't want to deal with
+      # nils, and we want it to be bound to this scope!
       function = uninitialized VFunction
 
-      name = q.name.value
+      latter = nil
 
-      # Emit the function's given - they're a prerequisite
-      # to FUN.
-      last = nil
-      q.params.each do |param|
-        if !param.given && !last
-          issue(Opcode::ANY)
-        else
-          visit(last = (param.given || last).not_nil!)
-        end
+      # Issue bytecode for the givens. They're required to
+      # be on the stack before we execute `FUN`.
+      params.givens.each do |given|
+        next issue(Opcode::ANY) unless subject = given || latter
+        # We don't want to redefine *latter* if the 'unless'
+        # succeeds, so *subject*.
+        visit(latter = subject)
       end
 
-      # A concrete is bound to the scope where it was
-      # first created.
-      #
-      # A generic is bound to the scope of it's first
-      # ever concrete.
-      #
-      # This does that:
+      # A concrete is bound to the scope where it was first
+      # created. And, because of this, a generic is bound to
+      # the scope of its first ever concrete.
       unless @context.bound?(name)
         @context.bound(name)
       end
 
       @context.trace(q.tag, name) do
         @context.child do
-          under name do |target|
+          under chunk: name do |target|
             function = VFunction.new(
-              # Name:
               sym(name),
-              # Body chunk:
+              # Body (target) chunk:
               target,
-              # Parameter names:
-              q.params.names,
+              # Parameter names (or '?'s; used for the string
+              # representation, and nothing else!)
+              params.names,
               # How many values 'given'?
-              q.params.size,
+              params.size,
               # How many parameters required?
-              q.params.required.size,
-              # Slurpy or not?
-              !q.params.slurpies.empty?,
+              params.required.size,
+              # Is it slurpy?
+              params.slurpy?,
             )
 
-            q.params.reverse_each do |param|
-              case param.name
-              when "*"
+            params.reverse_each do |param|
+              case param
+              when .pattern
+                issue(Opcode::DUP)
+                visit(param.pattern.not_nil!)
+                issue(Opcode::SWAP)
+                issue(Opcode::CALL, 1)
+                issue(Opcode::MATCH, param.index)
+              when .slurpy
                 issue(Opcode::REST, param.index)
-              when "_"
-                # Ignore, but not really. Put on the
-                # references stack.
+              when .underscore
+                # `fun <>(_) = <>` does look like it ignores,
+                # but it doesn't. It fills a superlocal. You
+                # can *really* ignore a parameter in Ven.
                 issue(Opcode::POP_SFILL)
+              when .name
+                # If it has a name, assign in the local scope.
+                issue(Opcode::POP_ASSIGN, mksym param.name.not_nil!)
               else
-                # Assign in the local scope.
-                issue(Opcode::POP_ASSIGN, mksym param.name)
+                raise InternalError.new("unknown parameter/-property combination")
               end
             end
 
@@ -586,50 +595,61 @@ module Ven
     end
 
     def visit!(q : QBox)
-      # Boxes and functions are just too similar to
-      # make them differ under the hood.
+      name = q.name.value
+      params = q.params
+
+      # Boxes and functions are just too similar to make them
+      # different under the hood.
       box = uninitialized VFunction
 
-      name = q.name.value
+      latter = nil
 
-      # Emit the box's given; they're, too, a prerequisite
-      # to BOX.
-      last = nil
-      q.params.each do |param|
-        if !param.given && !last
-          issue(Opcode::ANY)
-        else
-          visit(last = (param.given || last).not_nil!)
-        end
+      # Issue bytecode for the givens. They're required to
+      # be on the stack before we execute `BOX`.
+      params.givens.each do |given|
+        next issue(Opcode::ANY) unless subject = given || latter
+        # We don't want to redefine *latter* if the 'unless'
+        # succeeds, so *subject*.
+        visit(latter = subject)
       end
 
-      # Much like a function, a box is bound to the scope
+      # Much like a concrete, a box is bound to the scope
       # where it was first created.
       unless @context.bound?(name)
         @context.bound(name)
       end
 
       @context.child do
-        under name do |target|
+        under chunk: name do |target|
           box = VFunction.new(
-            # Name:
             sym(name),
-            # Body chunk:
+            # Body (target) chunk:
             target,
-            # Parameter names:
-            q.params.names,
+            # Parameter names (or '?'s; used for the string
+            # representation, and nothing else!)
+            params.names,
             # How many values 'given'?
-            q.params.size,
+            params.size,
             # How many parameters required?
-            q.params.required.size,
-            # Slurpy or not?
-            false,
+            params.required.size,
+            # Is it slurpy?
+            false
           )
 
-          # Boxes do not accept *, $, etc. So just go over
-          # the names, no need to worry about meta.
-          q.params.names.reverse_each do |param|
-            issue(Opcode::POP_ASSIGN, mksym param)
+          params.reverse_each do |param|
+            case param
+            when .pattern
+              issue(Opcode::DUP)
+              visit(param.pattern.not_nil!)
+              issue(Opcode::SWAP)
+              issue(Opcode::CALL, 1)
+              issue(Opcode::MATCH, param.index)
+            when .name
+              # If it has a name, assign in the local scope.
+              issue(Opcode::POP_ASSIGN, mksym param.name.not_nil!)
+            else
+              raise InternalError.new("unknown parameter/-property combination")
+            end
           end
 
           # Unpack the box namespace - it's simply a bunch
@@ -656,21 +676,26 @@ module Ven
       slurpy = q.slurpy
       params = q.params
 
-      target = uninitialized Int32
       lambda = uninitialized VFunction
 
       aritious = params.reject("*")
       arity = aritious.size
 
       @context.child do
-        under "lambda" do |target|
+        under chunk: "lambda" do |target|
           lambda = VFunction.new(
             VSymbol.nameless,
-            target, # body chunk
-            params, # params
-            0,      # amount of 'given's
-            arity,  # minimum amount of params
-            slurpy, # slurpiness
+            # Body (target) chunk:
+            target,
+            # Parameter names (used for the string representation,
+            # and nothing else!)
+            params,
+            # How many values 'given'?
+            0,
+            # How many parameters required?
+            arity,
+            # Is it slurpy?
+            slurpy,
           )
 
           # `Opcode::REST` interprets the slurpie ('*').
@@ -701,7 +726,7 @@ module Ven
     def visit!(q : QEnsureShould)
       target = uninitialized Int32
 
-      under "[ensure test: should]" do |target|
+      under chunk: "[ensure test: should]" do |target|
         q.pad.each do |quote|
           visit(quote)
           issue(Opcode::TEST_ASSERT)

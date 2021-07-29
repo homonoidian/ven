@@ -240,6 +240,12 @@ module Ven
       word! if @word[:type].in?(types)
     end
 
+    # Returns whether the current word's type is any of the
+    # given *types*.
+    def word?(*types : String)
+      @word[:type].in?(types)
+    end
+
     # Returns the current word and consumes the next one,
     # but only if the current word is of one of the given
     # *types*. Dies of `ReadError` otherwise.

@@ -1562,11 +1562,27 @@ module Ven::Suite
     def to_s(io)
       if p = @parent.as?(MBox)
         io << p.name << "("
-        # We display only the specified params, as their order
-        # is known and won't cause any confusion.
-        p.params.join(io, ", ") do |param, io|
+
+        # First, display the parameters, rejecting the dummy
+        # NAMELESS ones.
+        params = p.params.reject(Parameter::NAMELESS)
+
+        params.join(io, ", ") do |param, io|
           io << param << "=" << @namespace[param]
         end
+
+        # Then, display the namespace entries. The order is so
+        # specific so as to not confuse the user with odd name
+        # positioning, i.e., the user probably expects parameters
+        # to come first.
+        @namespace.join(io, ", ") do |pair, io|
+          name, value = pair
+          # Exclude the parameters.
+          unless name.in?(params)
+            io << name << "=" << @namespace[name]
+          end
+        end
+
         io << ")"
       else
         io << "instance of " << @parent

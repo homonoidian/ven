@@ -95,9 +95,9 @@ struct Ven::Suite::Readtime::Builtin
   # (if the current word is '{'), a `loose_block` ('='), or a
   # `tight_block` (none of the mentioned).
   def block
-    case @reader.word[:type]
-    when "{" then curly_block
-    when "=" then loose_block
+    case @reader
+    when .word?("{") then curly_block
+    when .word?("=") then loose_block
     else
       tight_block
     end

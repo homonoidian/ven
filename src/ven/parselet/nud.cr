@@ -270,7 +270,7 @@ module Ven::Parselet
     def parse
       diamond = if? "<", diamond!
       name = symbol
-      params = if? "(", validate(params!), [] of String
+      params = if? "(", params!, Quotes.new
       givens = if? "GIVEN", given!, Quotes.new
 
       # Keep the source led for meta (for us to know it was
@@ -280,8 +280,7 @@ module Ven::Parselet
       die("empty function body illegal") if body.empty?
 
       # No need for a semicolon after a function whose
-      # body is a block. **`block` would have set this
-      # itself!**
+      # body is a block.
       @semicolon = false if equals.is_a?(QBlock)
 
       if params.empty? && !givens.empty?
@@ -290,71 +289,53 @@ module Ven::Parselet
 
       # Unpack the diamond. Thanks to this, `fun<a> foo(b, c)`
       # becomes `fun foo($, b, c) given a`.
-      if diamond && !"$".in?(params)
-        params.unshift("$")
+      if diamond
+        params.unshift(QRuntimeSymbol.new(@tag, "$"))
         givens.unshift(diamond)
       end
 
-      # Build the parameters.
-      parameters = Array(Parameter).new(params.size) do |index|
-        Parameter.new(index, param = params[index],
-          givens[index]?,
-          param == "*",
-          param == "$",
-        )
-      end
+      # `Parameters` takes care of validating the parameters,
+      # making sure there is only a single `$`, `*`, etc.
+      parameters = Parameters.new(
+        Array(Parameter).new(params.size) do |index|
+          # `Parameter` takes care of identifying whether the
+          # parameter is `$`, `*`, a pattern, etc.
+          Parameter.new(index, params[index], givens[index]?)
+        end
+      )
 
-      QFun.new(@tag, name, Parameters.new(parameters), body, !equals)
+      QFun.new(@tag, name, parameters, body, !equals)
     end
 
-    # Reads a diamond.
-    #
-    # Assumes that the diamond starter, '<', was already
-    # consumed.
+    # Reads, and consequently returns, an expression enclosed
+    # in function diamond (`<foo>`). **Assumes that the diamond
+    # starter, '<', was already consumed.**
     def diamond!
       @parser.before(">") { led(Precedence::IDENTITY) }
     end
 
-    # Reads a 'given' appendix (`given <led>, <led>, ...`).
-    #
-    # Assumes that the 'given' keyword was already consumed.
+    # Reads, and consequently returns, an array of 'given'
+    # quotes (`given <led>, <led>, ...`). **Assumes that
+    # the 'given' keyword was already consumed.**
     def given!
       @parser.repeat(sep: ",") { led(Precedence::ASSIGNMENT) }
     end
 
-    # Validates *params*, an array of raw parameters.
-    #
-    # Dies if validation failed. Otherwise, returns the parameters.
-    def validate(params : Array(String)) : Array(String)
-      if params.count("*") > 1
-        die("more than one slurpie in the parameter list")
-      elsif params.index("*").try(&.< params.size - 1)
-        die("the slurpie must be at the end of the parameter list")
-      elsif params.count("$") > 1
-        die("multiple contexts not supported")
-      end
+    # Reads, and consequently returns, zero or more comma-
+    # separated parameters, **assuming that the opening paren
+    # was already consumed**.
+    def params! : Quotes
+      @parser.repeat(")", ",") do
+        parameter = led
 
-      params
-    end
+        # This kinda looks ugly here, but nah, no way to do
+        # this otherwise.
+        if parameter.is_a?(QReadtimeSymbol) && !in_readtime_context?
+          die("readtime symbol (namely '#{parameter.value}') used " \
+              "outside of readtime evaluation context")
+        end
 
-    # Reads zero or more comma-separated parameters. Assumes
-    # that the opening paren was already consumed. The meaning
-    # of *special* is the same as in `param!`, so see `param!`.
-    #
-    # Returns raw parameter list.
-    def params!(special = true) : Array(String)
-      @parser.repeat(")", ",") { param!(special) }
-    end
-
-    # Reads a parameter.
-    #
-    # *special*, if false, forbids the usage of the special
-    # parameters '*' and '$'.
-    def param!(special = true) : String
-      if special
-        @parser.expect("*", "$", "_", "SYMBOL")[:lexeme]
-      else
-        @parser.expect("_", "SYMBOL")[:lexeme]
+        parameter
       end
     end
   end
@@ -393,13 +374,13 @@ module Ven::Parselet
 
       # Loop until the next "should". We can't use `repeat`
       # here, mainly because repeat consumes the stop & sep.
-      until @parser.word[:type].in?("SHOULD", "}")
+      until @parser.word?("SHOULD", "}")
         cases << led
         # If the current word is a semicolon, we consume it;
         # if a `should`, we leave it; if a `}`, we leave it
         # as well. In the last two cases, it'll break from
         # this loop immediately.
-        if !@parser.word!(";") && !@parser.word[:type].in?("SHOULD", "}")
+        if !@parser.word!(";") && !@parser.word?("SHOULD", "}")
           die("unexpected term")
         end
       end
@@ -485,14 +466,12 @@ module Ven::Parselet
   class PBox < PFun
     def parse
       name = symbol
-      params = if? "(", validate(params!), [] of String
+      params = if? "(", params!, Quotes.new
       givens = if? "GIVEN", given!, Quotes.new
       fields = if? "{", block(opening: false), {} of QSymbol => Quote
 
       if name.is_a?(QRuntimeSymbol) && !name.value[0].uppercase?
         die("box name must be capitalized")
-      elsif params.count('$') != 0
-        die("boxes cannot accept a '$'")
       end
 
       # Go through the block, making sure each statement is
@@ -507,16 +486,16 @@ module Ven::Parselet
         end
       end
 
-      # Build the parameters.
-      parameters = Array(Parameter).new(params.size) do |index|
-        Parameter.new(index, param = params[index],
-          givens[index]?,
-          param == "*",
-          param == "$",
-        )
-      end
+      parameters = Parameters.new(
+        Array(Parameter).new(params.size) do |index|
+          # A restricted parameter will consider valid only
+          # non-'$' & non-'*' `QRuntimeSymbol`, as well as
+          # `QPatternEnvelope`.
+          Parameter.new(index, params[index], givens[index]?, restricted: true)
+        end
+      )
 
-      QBox.new(@tag, name, Parameters.new(parameters), namespace.to_h)
+      QBox.new(@tag, name, parameters, namespace.to_h)
     end
   end
 
@@ -569,17 +548,24 @@ module Ven::Parselet
         end
       end
 
-      params = if? "(", params!, [] of String
+      params = if? "(", params!, Quotes.new
 
       # The body ('=', or blocky) is read in a readtime context.
       # Take a look at `Parselet#in_readtime_context` to see
       # how it works.
       body = in_readtime_context { if? "=", [led], block }
 
-      if params.includes?("$")
-        die("cannot use '$' as the name of a nud parameter")
-      elsif params.includes?("_")
-        die("nameless parses illegal")
+      params = params.map do |param|
+        case param
+        when QRuntimeSymbol
+          next param.value unless param.value == "$"
+
+          die("cannot use '$' as the name of a nud parameter")
+        when QSuperlocalTake
+          die("nameless parses illegal")
+        else
+          die("invalid nud parameter expression")
+        end
       end
 
       defword trigger_type, trigger
@@ -722,7 +708,7 @@ module Ven::Parselet
       # If this nud takes no parameters, make the parentheses
       # optional (parameterless nuds likely do not want to
       # look like calls).
-      return names if @params.empty? && @parser.word[:type] != "("
+      return names if @params.empty? && !@parser.word?("(")
 
       args = @parser.after("(") do
         @parser.repeat(")", ",")
@@ -785,7 +771,7 @@ module Ven::Parselet
   class PReadtimeEnvelope < Nud
     def parse
       unless in_readtime_context?
-        die("readtime envelope outside of readtime evaluation context")
+        die("readtime envelope used outside of readtime evaluation context")
       end
 
       # For convenience, do not require a semicolon.

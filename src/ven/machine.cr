@@ -496,7 +496,7 @@ module Ven
       when MLambda
         # pass to overwrite
       when MFunction
-        if existing != defee
+        unless existing == defee
           defee = MGenericFunction.new(name)
             .add!(existing)
             .add!(defee)
@@ -1167,6 +1167,26 @@ module Ven
               end
 
               put MMap.new(pairs.to_h)
+            in Opcode::MATCH
+              # Pops a value, which is assumed to be the return
+              # value of a pattern lambda, and the lambda's
+              # matchee. If the value is false, dies of pattern
+              # match error (**there is no generic recovery
+              # from a pattern match error in a variant** in
+              # Ven; `given` is well enough for variant choosing!)
+              # If the value is an MMap, makes a new scope out
+              # of it and pushes the scope onto the scope stack.
+              # Noop otherwise.
+              paramno = static(Int32) + 1
+              matchee, value = pop(2)
+
+              case value
+              when .false?
+                die("pattern for parameter no. #{paramno} could not " \
+                    "match against the given argument: #{matchee}")
+              when MMap
+                context.current.as_h.merge!(value.map)
+              end
             end
           rescue error : ModelCastException
             die(error.message.not_nil!)

@@ -81,7 +81,7 @@ module Ven::Suite
     # Maps `transform` onto *params*. Returns the resulting
     # `Parameters`.
     def transform(params : Parameters)
-      Parameters.new(params.map { |param| transform(param) })
+      Parameters.new(params.map { |param| transform(param).as(Parameter) })
     end
 
     # If one or multiple of *quote*'s fields are of type `Quote`,
@@ -140,12 +140,12 @@ module Ven::Suite
     end
 
     def transform(param : Parameter)
-      Parameter.new(
-        param.index,
-        param.name,
+      Parameter.new(param.index,
+        transform(param.source),
         transform(param.given),
-        param.slurpy,
-        param.underscore,
+        # Keep the restrictedness, so the user can't
+        # mess something up:
+        param.restricted,
       )
     end
 
