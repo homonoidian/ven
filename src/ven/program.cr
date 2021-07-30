@@ -88,11 +88,6 @@ module Ven
       self
     end
 
-    # An alias for `step`.
-    def then(*args, **options)
-      step(*args, **options)
-    end
-
     # Returns the result for the given *step*, or nil if
     # there wasn't any.
     def result_for(step : Step)
@@ -106,54 +101,37 @@ module Ven
       end
     end
 
-    # Makes chunks of *pool* precede chunks of this program,
-    # as well as be available at runtime.
+    # Runs this program: performs all steps of Ven evaluation
+    # pipeline. *pool* is an array of chunks prerequisite for
+    # this `Program`.
     #
     # Returns self.
-    def import(pool : Chunks)
+    def run(in pool = [] of Chunk)
       @chunks = pool
       @origin = pool.size
 
-      self
-    end
-
-    # Appends the chunks that (exclusively) this program
-    # produced to *destination*.
-    #
-    # Returns self.
-    #
-    # NOTE: Mutates *destination*.
-    def export(destination : Chunks)
-      destination.concat(@chunks[@origin...])
-
-      self
-    end
-
-    # Runs this program: performs all steps of Ven evaluation
-    # pipeline.
-    #
-    # *parenthood* gets `import`ed first, and then gets
-    # `export`ed. See these methods to find out about
-    # the details.
-    #
-    # Returns self.
-    def run(with parenthood = [] of Chunk)
-      {% begin %}
-        import(parenthood)
+      @duration = Time.measure do
         {% for step in Step.constants %}
-          .then(Step::{{step}})
+          step(Step::{{step}})
         {% end %}
-          .export(parenthood)
-      {% end %}
+      end
+
+      self
+    ensure
+      pool.concat(@chunks[@origin..])
     end
 
     # Appends the result of this program's evaluation of the
     # string representation for an unevaluated program to *io*.
     def to_s(io)
-      if @result.nil?
-        io << "#{@file} of (#{@distinct.try &.join(".") || "self"})"
-      else
-        io << @result.not_nil!.to_s
+      if result = @result.as?(Model)
+        io << Utils.highlight(result) << " "
+      end
+
+      if duration = @duration.as?(Time::Span)
+        Colorize.with.dark_gray.surround(io) do
+          io << "(took " << Utils.with_unit(duration).join << ")"
+        end
       end
     end
   end

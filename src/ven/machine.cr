@@ -1160,10 +1160,9 @@ module Ven
               items = pop(static Int32)
               pairs = [] of {String, Model}
 
-              items.in_groups_of(2, reuse: true) do |group|
-                key, val = group[0].not_nil!, group[1].not_nil!
+              items.in_groups_of(2, reuse: true) do |(key, val)|
                 # Convert to str so we don't have mutable keys.
-                pairs << {key.to_str.value, val}
+                pairs << {key.not_nil!.to_str.value, val.not_nil!}
               end
 
               put MMap.new(pairs.to_h)

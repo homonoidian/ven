@@ -15,37 +15,34 @@ module Ven
     def initialize(@chunks : Chunks)
     end
 
-    # Returns *instruction*'s argument.
+    # Returns the argument of *instruction*.
     #
     # Ensures the argument is not nil.
-    private macro argument(instruction)
+    private macro argument(of instruction)
       {{instruction}}.argument.not_nil!
     end
 
-    # Assumes *source* is a static payload carrying a value
-    # of type *type*.
+    # Assumes *source* is a `VStatic`; returns the value of
+    # this `VStatic` if it is of the given *type*, raises
+    # otherwise.
     #
-    # **Assumes that a variable named *chunk* is in the scope.**
-    private macro static_as(source, type)
+    # **Expects *chunk* to be in the scope.**
+    private macro static(of source, as type)
       chunk.resolve({{source}}).as(VStatic).value.as({{type}})
     end
 
-    # Returns the data offset of *value*.
+    # A shorthand for `Chunk#offset`.
     #
-    # **Assumes that a variable named *chunk* is in the scope.**
-    private macro to_offset(value)
+    # **Expects *chunk* to be in the scope.**
+    private macro offset(for value)
       chunk.offset({{value}})
     end
 
-    # Computes, if possible, a binary operator, *operator*,
-    # with *left* and *right* being known BigDecimals (thus
-    # nums in Ven).
-    #
-    # Returns nil if haven't optimized.
-    def binary2n(operator : String, left : BigDecimal, right : BigDecimal)
-      # Let the fail happen at runtime (because we have no
-      # way to err in the optimizer).
-      #
+    # If possible, applies the given binary *operator* on known
+    # `BigDecimal`s *left* and *right*. Otherwise, returns nil.
+    def binary(operator : String, left : BigDecimal, right : BigDecimal)
+      # Let the fail happen at runtime (as we cannot die in
+      # the optimizer).
       return if right == 0
 
       case operator
@@ -60,12 +57,9 @@ module Ven
       end
     end
 
-    # Computes, if possible, a binary operator, *operator*,
-    # with *left* and *right* being known Strings (thus strs
-    # in Ven).
-    #
-    # Returns nil if haven't optimized.
-    def binary2s(operator : String, left : String, right : String)
+    # If possible, applies the given binary *operator* on known
+    # `String`s *left* and *right*. Otherwise, returns nil.
+    def binary(operator : String, left : String, right : String)
       case operator
       when "~"
         left + right
@@ -76,34 +70,34 @@ module Ven
     # optimization first for threes, and then for twos of
     # instructions in each snippet.
     #
-    # This method performs what's known as **peephole optimization**.
-    # It finds blobs of redundant or readily computable instructions,
-    # and eliminates them in various ways.
+    # This method performs **peephole optimization**. It finds
+    # blobs of redundant or readily computable instructions,
+    # and eliminates or computes them.
     def optimize(chunk : Chunk)
       chunk.snippets.each do |snippet|
-        snippet.for(3) do |triplet, start|
-          case triplet.map(&.opcode)
-          when [Opcode::NUM, Opcode::NUM, Opcode::BINARY]
-            resolution =
-              binary2n(
-                static_as(triplet[2], String),
-                static_as(triplet[0], BigDecimal),
-                static_as(triplet[1], BigDecimal))
+        # Optimize top-to-bottom first for threes (triplets)
+        snippet.for(3) do |(left, right, operator), start|
+          case {left.opcode, right.opcode, operator.opcode}
+          when {Opcode::NUM, Opcode::NUM, Opcode::BINARY}
+            resolution = binary(
+              static(of: operator, as: String),
+              static(of: left, as: BigDecimal),
+              static(of: right, as: BigDecimal))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::NUM, to_offset resolution)
+              break snippet.replace(start, 3, Opcode::NUM, offset for: resolution)
             end
-          when [Opcode::STR, Opcode::STR, Opcode::BINARY]
+          when {Opcode::STR, Opcode::STR, Opcode::BINARY}
             resolution =
-              binary2s(
-                static_as(triplet[2], String),
-                static_as(triplet[0], String),
-                static_as(triplet[1], String))
+              binary(
+                static(of: operator, as: String),
+                static(of: left, as: String),
+                static(of: right, as: String))
 
             if resolution
-              break snippet.replace(start, 3, Opcode::STR, to_offset resolution)
+              break snippet.replace(start, 3, Opcode::STR, offset for: resolution)
             end
-          when [Opcode::BINARY, Opcode::STR, Opcode::BINARY]
+          when {Opcode::BINARY, Opcode::STR, Opcode::BINARY}
             # A special-case optimization to avoid creating
             # an empty string when stitching:
             #   ~> "a" ~ "b" ~ ""
@@ -117,39 +111,35 @@ module Ven
             #   ~> "hello$world"
             # => "hello" ~ world ~ ""
             #   ==> "hello" ~ world
-            if static_as(triplet[0], String) == "~" &&
-               static_as(triplet[1], String) == "" &&
-               static_as(triplet[2], String) == "~"
+            if static(of: left, as: String) == "~" &&
+               static(of: right, as: String) == "" &&
+               static(of: operator, as: String) == "~"
               break snippet.remove(start, 2)
             end
           end
         end
 
-        snippet.for(2) do |pair, start|
-          case pair.map(&.opcode)
-          when [Opcode::NUM, Opcode::TON]
-            break snippet.replace(start, 2, Opcode::NUM, argument pair[0])
-          when [Opcode::STR, Opcode::TOS]
-            break snippet.replace(start, 2, Opcode::STR, argument pair[0])
-          when [Opcode::VEC, Opcode::TOV]
-            break snippet.replace(start, 2, Opcode::VEC, argument pair[0])
-          when [Opcode::TAP_ASSIGN, Opcode::POP]
-            break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument pair[0])
-          when [Opcode::POP_SFILL, Opcode::STAKE]
+        # ... and then for twos (duplets) of instructions.
+        snippet.for(2) do |(head, tail), start|
+          case {head.opcode, tail.opcode}
+          when {Opcode::NUM, Opcode::TON}
+            break snippet.replace(start, 2, Opcode::NUM, argument of: head)
+          when {Opcode::STR, Opcode::TOS}
+            break snippet.replace(start, 2, Opcode::STR, argument of: head)
+          when {Opcode::VEC, Opcode::TOV}
+            break snippet.replace(start, 2, Opcode::VEC, argument of: head)
+          when {Opcode::TAP_ASSIGN, Opcode::POP}
+            break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument of: head)
+          when {Opcode::POP_SFILL, Opcode::STAKE}
             break snippet.remove(start, 2)
-          end
-
-          if pair.first.opcode == Opcode::J
-            # At this point we are in the snippet-world, so
-            # there are only cross-snippet jumps. In one snippet
+          when {Opcode::J, _}
+            # There are only cross-snippet jumps. In one snippet
             # therefore, everything past an absolute jump is
-            # dead code.
-            #
-            break snippet.replace(start, 2, Opcode::J, pair.first.label)
-          elsif pair.first.opcode.puts_one? && pair[1].opcode == Opcode::POP
+            # not accessible.
+            break snippet.replace(start, 2, Opcode::J, head.label)
+          when {.puts_one?, Opcode::POP}
             # First instruction of the pair produces one value,
             # and second pops it right away.
-            #
             break snippet.remove(start, 2)
           end
         end

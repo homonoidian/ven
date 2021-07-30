@@ -1575,11 +1575,10 @@ module Ven::Suite
         # specific so as to not confuse the user with odd name
         # positioning, i.e., the user probably expects parameters
         # to come first.
-        @namespace.join(io, ", ") do |pair, io|
-          name, value = pair
+        @namespace.join(io, ", ") do |(name, value), io|
           # Exclude the parameters.
           unless name.in?(params)
-            io << name << "=" << @namespace[name]
+            io << name << "=" << value
           end
         end
 

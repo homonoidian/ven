@@ -4,162 +4,111 @@ require "inquirer/client"
 require "inquirer/protocol"
 
 module Ven
-  # Ven Orchestra is the communication layer between the Ven
-  # interpreter infrastructure and the Inquirer infrastructure.
-  #
-  # It is the highest abstraction of those currently provided
-  # by Ven.
-  #
-  # Simply speaking, it interprets `expose` and `distinct`
-  # statements (although `distinct`s are also interpreted
-  # by Inquirer, but in a way that is a bit different).
-  #
-  # A *composer program* is the program that stands in place
-  # of `X` in the following question:
-  #
-  # > What, and in what order, should I run before `X` so as
-  # > to get `X` up and running.
-  #
-  # Their order, as well as files themselves, are managed
-  # entirely by Inquirer.
-  #
-  # ```
-  # orchestra = Ven::Orchestra.new
-  #
-  # puts orchestra.from("1 + 1") # 2
-  # ```
+  # `Orchestra` is the higher-level abstraction of the Ven
+  # infrastructure. It handles the communication between several
+  # `Program`s, between Ven and Inquirer, and between Ven and
+  # Ven language server implementation.
   class Orchestra
     include Inquirer::Protocol
 
-    # Inquirer port number.
-    getter port : Int32
     # Returns the context hub of this orchestra.
     getter hub = Suite::CxHub.new
+    # Returns Inquirer port number this orchestra is
+    # connected to (unless `isolated`).
+    getter port : Int32
     # Returns the chunk pool of this orchestra.
     getter pool = Suite::Chunks.new
-    # Returns whether this orchestra is running isolated from
-    # an Inquirer server.
+    # Returns whether this orchestra is isolated from an
+    # Inquirer server.
     getter isolated : Bool
 
+    # The cache of `expose`s.
     @cache = Set(String).new
+
+    # The Inquirer client of this Orchestra.
     @client : Inquirer::Client
 
-    # Enquiry with all defaults; we don't want to create a new
-    # Enquiry every time we do `expose`/`from`, considering all
-    # stuff is identical.
+    # An `Enquiry` with all defaults; we don't want to make
+    # a new Enquiry every time we `expose`.
     @enquiry = Enquiry.new
 
-    delegate :test_mode, :test_mode=, to: @enquiry
-
-    # Makes an Orchestra for an Inquirer server running at
-    # the given *port*.
+    # Makes an Orchestra. *port* is the port on which the
+    # desired Inquirer server is running.
     def initialize(@port = 12879)
-      @client = client_from(port)
+      config = Inquirer::Config.new
+      config.port = @port
+      @client = Inquirer::Client.from(config)
       @isolated = !@client.running?
-      # Load the built-in libraries.
+
+      # Automatically load `Extension`s.
       {% for library in Suite::Extension.all_subclasses %}
         @hub.extend({{library}}.new)
       {% end %}
     end
 
-    # Makes a client given the *port* of an Inquirer server
-    # it will try to connect to.
-    private def client_from(port : Int32)
-      config = Inquirer::Config.new
-      config.port = port
-      Inquirer::Client.from(config)
-    end
-
-    # Asks the Inquirer server which files are required to
-    # build the given *distinct*.
-    #
-    # Returns an array of filepaths (empty if failed).
-    def files_for?(distinct : Distinct)
-      request = Request.new Command::FilesFor, distinct.join('.')
-      response = @client.send(request)
-      response.result.as?(Array) || [] of String
-    end
-
-    # Asks the Inquirer server which files are required to
-    # build the given *distinct*.
-    #
-    # Returns an array of filepaths.
+    # Returns an array of files required to expose the
+    # given *distinct*.
     #
     # Raises `ExposeError` if failed.
     def files_for(distinct : Distinct)
-      files = files_for?(distinct)
+      dotted = distinct.join('.')
+      request = Request.new(Command::FilesFor, dotted)
+      response = @client.send(request)
 
-      if files.empty?
-        raise Suite::ExposeError.new("could not expose '#{distinct.join('.')}'")
+      unless files = response.result.as?(Array)
+        raise Suite::ExposeError.new("could not expose '#{dotted}'")
       end
 
       files
     end
 
-    # Exposes the program found at *filepath*, and containing
-    # the given *source*.
-    private def expose(filepath : String, source : String, legate = @enquiry, run = true)
-      program = Program.new(source, filepath, @hub, legate)
+    # Yields files required to expose the given *distinct*.
+    #
+    # Raises `ExposeError` if failed.
+    def files_for(distinct : Distinct)
+      files_for(distinct).each do |filename|
+        yield filename
+      end
+    end
+
+    # Builds a `Program` from *source* and *filename*, recurses
+    # on its exposes, and runs it if *run* is true, otherwise,
+    # returns it.
+    private def expose(filename : String, source : String, run = true)
+      @cache << filename
+
+      program = Program.new(source, filename, @hub, @enquiry)
 
       if @isolated && !program.exposes.empty?
         raise Suite::ExposeError.new(
           "you cannot use 'expose', as the referent Inquirer " \
           "server is not running")
-      elsif !@isolated
-        if distinct = program.distinct
-          # foo.ven (composer):
-          #
-          # ```ven
-          #   distinct foo.bar;
-          #
-          #   # expose foo.bar <<<------ done here, automatically
-          #
-          #   ensure add(1, 2) is 3;
-          # ```
-          #
-          # bar.ven:
-          #
-          # ```ven
-          #   distinct foo.bar;
-          #
-          #   # expose foo.bar <<<------ done here, automatically
-          #
-          #   fun add(a, b) = a + b;
-          # ```
-          files_for?(distinct).each do |umbrelloid|
-            expose(umbrelloid) unless umbrelloid.in?(@cache)
-          end
-        end
+      end
 
-        program.exposes.uniq.each do |expose|
-          files_for(expose).each do |dependency|
-            expose(dependency) unless dependency.in?(@cache)
+      exposes = program.exposes
+      # Expose members of own distinct.
+      exposes = [program.distinct.not_nil!] + exposes if program.distinct
+
+      exposes.uniq.each do |expose|
+        files_for(expose) do |dependency|
+          unless dependency.in?(@cache)
+            # Expose the dependency unless in cache.
+            expose(dependency, File.read(dependency))
           end
         end
+      rescue error : Suite::ExposeError
+        # Re-raise unless it was trying to include itself,
+        # but got out of recursion thanks to cache.
+        raise error unless program.distinct == expose
       end
 
       run ? program.run(@pool) : program
     end
 
-    # Exposes the program found at *filepath*.
-    private def expose(filepath : String)
-      return if filepath.in?(@cache)
-
-      # WARNING: do not remove this and the guard clause, as
-      # doing so will provoke infinite expose.
-      @cache << filepath
-
-      expose(filepath, File.read filepath)
-    end
-
-    # Runs the given *source* code, which can be found in *file*,
-    # as a composer program.
-    def from(source : String, file = "composer", legate = Enquiry.new, run = true)
-      # WARNING: do not remove this, as doing so will provoke
-      # infinite expose (in some cases).
-      @cache << file
-
-      expose(file, source, legate, run)
+    # Runs the given *source* code, which can be found in
+    # *file*, as a composer program.
+    def from(source : String, filename = "unknown", @enquiry = Enquiry.new, run = true)
+      expose(filename, source, run)
     end
   end
 end

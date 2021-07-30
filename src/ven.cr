@@ -105,17 +105,18 @@ module Ven
               amount.colorize.red
             end
 
-          # Choose the correct unit. Use color to show hotspots.
-          duration, unit =
-            if (ns = duration.total_nanoseconds) < 1000
-              {ns.colorize.green, "ns"}
-            elsif (us = duration.total_microseconds) < 1000
-              {us.colorize.yellow, "us"}
-            elsif (ms = duration.total_milliseconds) < 1000
-              {ms.colorize.light_red, "ms"}
-            else
-              {duration.total_seconds.colorize.cyan, "sec"}
-            end
+          duration, unit = Utils.with_unit(duration)
+
+          case unit
+          when "ns"
+            unit = unit.colorize.green
+          when "us"
+            unit = unit.colorize.yellow
+          when "ms"
+            unit = unit.colorize.light_red
+          else
+            unit = unit.colorize.red.bright
+          end
 
           puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration} #{unit}]"
         end
@@ -152,15 +153,15 @@ module Ven
             # ```
             # when "compile"
             #   program
-            #     .then(Program::Step::Read)
-            #     .then(Program::Step::Transform)
-            #     .then(Program::Step::Compile)
+            #     .step(Program::Step::Read)
+            #     .step(Program::Step::Transform)
+            #     .step(Program::Step::Compile)
             # ```
             when {{step.stringify.downcase}}
               program
                 # Including *step*!
                 {% for predecessor in Program::Step.constants[0..order] %}
-                  .then(Program::Step::{{predecessor}})
+                  .step(Program::Step::{{predecessor}})
                 {% end %}
               # `result_for` will return the result of the
               # given step, if it ever was performed.
@@ -280,13 +281,13 @@ module Ven
           # starts with one.
           yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
         else
-          yielder.call ctx, highlight(line)
+          yielder.call ctx, Suite::Utils.highlight(line)
         end
       end
 
       # Moves to the beginning of a word.
       fancy.actions.set Fancyline::Key::Control::CtrlLeft do |ctx|
-        bounds = word_boundaries(ctx.editor.line)
+        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           underneath = bounds[bound]
           if ctx.editor.cursor == underneath.begin
@@ -302,7 +303,7 @@ module Ven
 
       # Moves to the end of a word.
       fancy.actions.set Fancyline::Key::Control::CtrlRight do |ctx|
-        bounds = word_boundaries(ctx.editor.line)
+        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           underneath = bounds[bound]
           if ctx.editor.cursor == underneath.end
@@ -318,7 +319,7 @@ module Ven
 
       # Deletes the word under the cursor.
       fancy.actions.set Fancyline::Key::Control::ShiftDown do |ctx|
-        bounds = word_boundaries(ctx.editor.line)
+        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           underneath = bounds[bound]
           # Clean up the line, and make sure position matches.
@@ -329,7 +330,7 @@ module Ven
 
       # Deletes the word before cursor.
       fancy.actions.set Fancyline::Key::Control::ShiftLeft do |ctx|
-        bounds = word_boundaries(ctx.editor.line)
+        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           if before = bounds[bound - 1]?
             # Clean up the line, and make sure position matches.
@@ -341,7 +342,7 @@ module Ven
 
       # Deletes the word after cursor.
       fancy.actions.set Fancyline::Key::Control::ShiftRight do |ctx|
-        bounds = word_boundaries(ctx.editor.line)
+        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
         if bound = bounds.index &.covers?(ctx.editor.cursor)
           if after = bounds[bound + 1]?
             ctx.editor.line = ctx.editor.line.delete_at(after)
@@ -414,78 +415,6 @@ module Ven
 
       puts "Bye bye!"
       exit(0)
-    end
-
-    # Highlights a *snippet* of Ven code.
-    private def highlight(snippet)
-      words_in(snippet).map do |word|
-        type, lexeme, _ = word
-        case type
-        when :STRING
-          lexeme.colorize.yellow.to_s
-        when :SYMBOL
-          lexeme.colorize.bold.toggle(@orchestra.hub[lexeme]?).to_s
-        when :KEYWORD
-          lexeme.colorize.blue.to_s
-        when :REGEX
-          lexeme.colorize.yellow.to_s
-        when :NUMBER
-          lexeme.colorize.magenta.to_s
-        when :IGNORE
-          lexeme.colorize.dark_gray.to_s
-        else
-          lexeme
-        end
-      end.join
-    end
-
-    # Returns the word boundaries in *snippet*, excluding
-    # the boundaries of the words of IGNORE type.
-    private def word_boundaries(snippet : String)
-      operant = words_in(snippet).reject(&.[0].== :IGNORE)
-      operant.map do |word|
-        lexeme = word[1]
-        offset = word[2]
-        offset..(offset + lexeme.size)
-      end
-    end
-
-    # Returns the words of *snippet* in form of an array of
-    # `{Symbol, String}`. First is the word type and second
-    # is the word lexeme.
-    private def words_in(snippet : String)
-      words = [] of {Symbol, String, Int32}
-      offset = 0
-
-      loop do
-        case pad = snippet[offset..]
-        when .starts_with? Ven.regex_for(:STRING)
-          words << {:STRING, $0, offset}
-        when .starts_with? Ven.regex_for(:SYMBOL)
-          if Reader::KEYWORDS.any?($0)
-            words << {:KEYWORD, $0, offset}
-          else
-            words << {:SYMBOL, $0, offset}
-          end
-        when .starts_with? Ven.regex_for(:REGEX)
-          words << {:REGEX, $0, offset}
-        when .starts_with? Ven.regex_for(:NUMBER)
-          words << {:NUMBER, $0, offset}
-        when .starts_with? Ven.regex_for(:IGNORE)
-          words << {:IGNORE, $0, offset}
-        when .empty?
-          break
-        else
-          # Pass over unknown characters.
-          words << {:UNKNOWN, snippet[offset].to_s, offset}
-          offset += 1
-          next
-        end
-
-        offset += $0.size
-      end
-
-      words
     end
 
     # Returns the Commander command line interface for Ven.
@@ -572,7 +501,6 @@ module Ven
           port = options.int["port"].as Int32
 
           @orchestra = Orchestra.new(port)
-          @orchestra.test_mode = options.bool["test-mode"]
 
           @final = options.string["final"]
           @result = options.bool["result"]
@@ -587,11 +515,7 @@ module Ven
 
           # Bake the boot file (peek to learn more) into
           # the binary.
-          begin
-            @orchestra.from({{read_file("#{__DIR__}/ven/library/basis.ven")}}, "(basis)")
-          rescue e : VenError
-            die(e)
-          end
+          @orchestra.from({{read_file("#{__DIR__}/ven/library/basis.ven")}}, "(basis)")
 
           if arguments.empty?
             # Do not quit after errors:
@@ -616,7 +540,7 @@ module Ven
             elsif !@orchestra.isolated && file =~ /^(\w[\.\w]*[^\.])$/
               # If there is no such file, try to look if it's
               # a distinct.
-              candidates = @orchestra.files_for? file.split('.')
+              candidates = @orchestra.files_for file.split('.')
 
               if candidates.empty?
                 die("no such distinct: '#{file}'")
@@ -631,6 +555,8 @@ module Ven
               die("there is no readable file or distinct named '#{file}'")
             end
           end
+        rescue e : VenError
+          die(e)
         end
       end
     end
