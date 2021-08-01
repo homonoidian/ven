@@ -52,9 +52,6 @@ module Ven::Suite
     # Assigns *name* to *value* in the global scope. Notifies
     # the compiler.
     macro defglobal(name, value)
-      {% if !name.is_a?(StringLiteral) %}
-        {% name = name.stringify %}
-      {% end %}
       c_context.bound({{name}})
       m_context[{{name}}] = {{value}}
     end
@@ -64,10 +61,6 @@ module Ven::Suite
     # If *ns* is nil, the global scope is assumed, and the
     # compiler is notified accordingly.
     macro defbuiltin(name, *argtypes, in ns = nil)
-      {% if !name.is_a?(StringLiteral) %}
-        {% name = name.stringify %}
-      {% end %}
-
       {% if ns == nil %}
         # If not passed *ns*, assume it to be *m_context*. In
         # this case, also declare in the compiler context.
@@ -88,10 +81,6 @@ module Ven::Suite
     # the generic is not created, and *name* is bound to the
     # variant itself.**
     macro defgeneric(name, variants, in ns = nil)
-      {% if !name.is_a?(StringLiteral) %}
-        {% name = name.stringify %}
-      {% end %}
-
       {% if ns == nil %}
         # If not passed *ns*, assume it to be *m_context*. In
         # this case, also declare in the compiler context.
@@ -120,10 +109,6 @@ module Ven::Suite
         {% body = block.body.expressions %}
       {% else %}
         {% body = [block.body] %}
-      {% end %}
-
-      {% if !name.is_a?(StringLiteral) %}
-        {% name = name.stringify %}
       {% end %}
 
       defglobal({{name}}, MInternal.new({{desc || name}}) do |this|

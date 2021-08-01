@@ -498,20 +498,16 @@ module Ven
         end
 
         # Generate flags for each `BaseAction` subclasses'
-        # category. Automake the description (pretty hard
-        # to pass by other means).
-        {% begin %}
-          {% categories = BaseAction.subclasses.map(&.annotation(Action).[:category].id) %}
-          {% categories = categories.reject { |category| category == :screen }.uniq %}
+        # category. Automake the description.
+        {% for action in BaseAction.subclasses %}
+          %category = {{action}}.category
 
-          {% for category in categories %}
-            cmd.flags.add do |flag|
-              flag.name = "with-{{category}}"
-              flag.long = "--with-{{category}}"
-              flag.default = false
-              flag.description = "enable {{category}} actions"
-            end
-          {% end %}
+          cmd.flags.add do |flag|
+            flag.name = "with-#{%category}"
+            flag.long = "--with-#{%category}"
+            flag.default = false
+            flag.description = "enable #{%category} actions"
+          end
         {% end %}
 
         cmd.run do |options, arguments|
@@ -519,15 +515,10 @@ module Ven
           # a static property `.enabled`, which we set depending
           # on the presence of the appropriate flag.
           {% for action in BaseAction.subclasses %}
-            {% category = action.annotation(Action)[:category] %}
-
-            {% if category == :screen %}
-              {{action}}.enabled = true
-            {% else %}
-              # Note how we depend on the category flags
-              # generating correctly.
-              {{action}}.enabled = options.bool["with-{{category.id}}"]
-            {% end %}
+            %category = {{action}}.category
+            # Note how we depend on the category flags
+            # generating correctly.
+            {{action}}.enabled = %category == "screen" || options.bool["with-#{%category}"]
           {% end %}
 
           port = options.int["port"].as Int32

@@ -7,17 +7,16 @@ module Ven::Library
       # `initialize`s.
       definternal "actions" do
         {% for action in BaseAction.subclasses %}
-          {% name = action.annotation(Action)[:name].id.stringify %}
           {% news = action.methods.select(&.name.== :initialize) %}
 
           {% if news.size >= 1 %}
             %variants = [
-              {% for new in news.uniq(&.args.size) %}
+              {% for new in news %}
                 {% arity = new.args.size %}
                 # Returns an `MNative(BaseAction)`, calling
                 # `<action>#initialize` with the arguments
                 # it received.
-                MBuiltinFunction.new({{name}}, {{arity}}) do |machine, args|
+                MBuiltinFunction.new({{action}}.name, {{arity}}) do |machine, args|
                   MNative(BaseAction).new(
                     {{action}}.new(
                       {% for argno in 0...arity %}
@@ -27,9 +26,9 @@ module Ven::Library
                   )
                 end,
               {% end %}
-            ]
+            ].uniq!(&.arity)
 
-            defgeneric {{name}}, %variants, in: this
+            defgeneric {{action}}.name, %variants, in: this
           {% end %}
         {% end %}
 
@@ -54,6 +53,11 @@ module Ven::Library
         action.submit
       rescue error : ActionError
         machine.die(error.message || "action error")
+      end
+
+      # Returns whether an I/O action is allowed (i.e., enabled)
+      defbuiltin "allowed?", action : MNative(BaseAction) do
+        action.value.class.enabled
       end
     end
   end

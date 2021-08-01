@@ -1,24 +1,11 @@
 module Ven
-  # An annotation used to specify some meta about a subclass
-  # of `BaseAction`.
-  #
-  # Conventionally, accepts two named arguments: *name* (of
-  # String), the name of the action (your action will be in
-  # builtin internal `actions.<name>`), and *category* (of
-  # Symbol, used to generate the permission CLI flag).
-  #
-  # The only category for which there is no permission flag,
-  # i.e., which is always enabled, is `:screen`.
-  annotation Action
-  end
-
   # An internal exception raised when there is an error performing
   # some action.
   class ActionError < Exception
   end
 
   # The base class of all actions Ven knows about.
-  abstract class BaseAction
+  abstract struct BaseAction
     class_property enabled = false
 
     macro finished
@@ -27,33 +14,40 @@ module Ven
       include Suite
     end
 
-    macro inherited
-      # Submits (evaluates, enacts) this action. This method
-      # provides the permission mechanism, so do not override
-      # it. Override `submit!` instead.
-      def submit
-        unless @@enabled
-          # Get the category, and name, from the **inherited's**
-          # `@type` annotation.
-          {% name = @type.annotation(Action)[:name].downcase %}
-          {% category = @type.annotation(Action)[:category].id.stringify %}
-
-          raise ActionError.new(
-            "#{{{name}}} not allowed: try with '--with-#{{{category}}}'")
-        end
-
-        submit!
+    # Submits (evaluates, enacts) this action. This method
+    # provides the permission mechanism, so do not override
+    # it. Override `submit!` instead.
+    def submit
+      unless @@enabled
+        name, category = self.class.name, self.class.category
+        raise ActionError.new("#{name} not allowed: try passing '--with-#{category}'")
       end
+
+      submit!
     end
 
     # Submits (evaluates, enacts) this action, if allowed.
     abstract def submit!
+
+    # Returns the name of this action.
+    def self.name
+      raise "unimplemented"
+    end
+
+    # Returns the category of this action.
+    def self.category
+      raise "unimplemented"
+    end
+
+    # Returns `self`.
+    def clone
+      self
+    end
   end
 
   module Actions
     # Prints to STDOUT.
-    @[Action(category: :screen, name: "Say")]
-    class Say < BaseAction
+    struct Say < BaseAction
       @payload : String
 
       def initialize(payload : Str)
@@ -68,11 +62,18 @@ module Ven
       def submit! : Nil
         puts @payload
       end
+
+      def self.name
+        "Say"
+      end
+
+      def self.category
+        "screen"
+      end
     end
 
-    # Asks for input.
-    @[Action(category: :screen, name: "Ask")]
-    class Ask < BaseAction
+    # Asks for user input.
+    struct Ask < BaseAction
       # Everyone's Fancyline to use for asking about stuff.
       #
       # More functionality is coming, of course. If Ven uses
@@ -97,10 +98,18 @@ module Ven
       rescue Fancyline::Interrupt
         raise ActionError.new("interrupted")
       end
+
+      def self.name
+        "Ask"
+      end
+
+      def self.category
+        "screen"
+      end
     end
 
-    @[Action(category: :disk, name: "Slurp")]
-    class Slurp < BaseAction
+    # Reads a file from the disk.
+    struct Slurp < BaseAction
       @filename : String
 
       def initialize(filename : Str)
@@ -114,11 +123,18 @@ module Ven
           raise ActionError.new("file not found: #{@filename}")
         end
       end
+
+      def self.name
+        "Slurp"
+      end
+
+      def self.category
+        "disk"
+      end
     end
 
     {% for name in ["Burp", "Write"] %}
-      @[Action(category: :disk, name: {{name}})]
-      class {{name.id}} < BaseAction
+      struct {{name.id}} < BaseAction
         @filename : String
         @content : String
 
@@ -129,6 +145,14 @@ module Ven
 
         def submit!
           File.write(@filename, @content, {% if name == "Burp" %} mode: "a" {% end %})
+        end
+
+        def self.name
+          {{name}}
+        end
+
+        def self.category
+          "disk"
         end
       end
     {% end %}
