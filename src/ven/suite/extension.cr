@@ -4,10 +4,11 @@ module Ven::Suite
     # Casts `args[argno]` to *type*.
     #
     # Dies if unsuccessful.
-    private macro as_type(argno, type)
+    macro as_type(argno, type)
       args[{{argno}}].as?({{type}}) || machine.die(
-        "type mismatch for argument #{{{argno + 1}}}: " \
-        "expected #{MType[{{type.resolve == Model ? MAny : type}}]}"
+        "type mismatch for argument #{{{argno + 1}}}: expected " \
+        "#{MType[{{type.resolve == Model ? MAny : type}}]? || {{type}}}, " \
+        "got #{args[{{argno}}]}"
       )
     end
 
@@ -27,8 +28,8 @@ module Ven::Suite
       {{yield}}
     end
 
-    # Yields a consesus builtin Proc. See `with_args` to see
-    # what *argtypes* are.
+    # Yields a consesus builtin Proc. See `with_args` for info
+    # on *argtypes*.
     #
     # Converts block result to Model using `Adapter.to_model`.
     private macro in_builtin_proc(argtypes)
@@ -82,7 +83,11 @@ module Ven::Suite
     # Defines a generic named *name*. Each variant of *variants*
     # must be an `MFunction`. If *ns* is nil, the global scope
     # is assumed, and the compiler is notified accordingly.
-    macro defgeneric(name, *variants, in ns = nil)
+    #
+    # **Note that if there is but one variant in *variants*,
+    # the generic is not created, and *name* is bound to the
+    # variant itself.**
+    macro defgeneric(name, variants, in ns = nil)
       {% if !name.is_a?(StringLiteral) %}
         {% name = name.stringify %}
       {% end %}
@@ -94,11 +99,19 @@ module Ven::Suite
         c_context.bound({{name}})
       {% end %}
 
-      {{ns}}[{{name}}] =
-        MGenericFunction.new({{ name }})
-          {% for variant in variants %}
-            .add({{variant}})
-          {% end %}
+      %variants = {{variants}}
+
+      if %variants.size == 1
+        %addee = %variants.first
+      else
+        %addee = MGenericFunction.new({{ name }})
+
+        {{variants}}.each do |variant|
+          %addee.add(variant)
+        end
+      end
+
+      {{ns}}[{{name}}] = %addee
     end
 
     # Defines a global `MInternal` under *name*.

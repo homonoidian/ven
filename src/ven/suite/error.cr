@@ -28,21 +28,6 @@ module Ven::Suite
       @line = tag.line
       @file = tag.file
     end
-
-    # Returns a JSON object that represents this error.
-    #
-    # Note that it is purely representative. There is no way
-    # to restore the original error from it.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("Type", "ReadError")
-        json.field("Payload", {
-          "Line"   => @line,
-          "File"   => @file,
-          "Lexeme" => @lexeme,
-        })
-      end
-    end
   end
 
   # Raised when the compiler encounters a semantic error.
@@ -51,20 +36,6 @@ module Ven::Suite
     getter traces : Traces
 
     def initialize(@traces, @message)
-    end
-
-    # Returns a JSON object that represents this error.
-    #
-    # Note that it is purely representative. There is no way
-    # to restore the original error from it.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("Type", "CompileError")
-        json.field("Payload", {
-          "Traces"  => @traces,
-          "Message" => @message,
-        })
-      end
     end
   end
 
@@ -79,22 +50,6 @@ module Ven::Suite
 
     def initialize(@traces, @file, @line, @message)
     end
-
-    # Returns a JSON object that represents this error.
-    #
-    # Note that it is purely representative. There is no way
-    # to restore the original error from it.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("Type", "RuntimeError")
-        json.field("Payload", {
-          "File"    => @file,
-          "Line"    => @line,
-          "Traces"  => @traces,
-          "Message" => @message,
-        })
-      end
-    end
   end
 
   # Raised when there is an error in the interpreter implementation
@@ -106,34 +61,10 @@ module Ven::Suite
   # associated with them, so make sure to raise with unique/
   # searchable error messages.
   class InternalError < VenError
-    # Returns a JSON object that represents this error.
-    #
-    # Note that it is purely representative. There is no way
-    # to restore the original error from it.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("Type", "InternalError")
-        json.field("Payload", {
-          "Message" => @message,
-        })
-      end
-    end
   end
 
   # Raised when there is an error in the process of exposing
   # a distinct.
   class ExposeError < VenError
-    # Returns a JSON object that represents this error.
-    #
-    # Note that it is purely representative. There is no way
-    # to restore the original error from it.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("Type", "ExposeError")
-        json.field("Payload", {
-          "Message" => @message,
-        })
-      end
-    end
   end
 end

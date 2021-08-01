@@ -93,3 +93,34 @@ fun<vec> __filter_call(fn) given function {
   # Force-return the queue, even if it is empty.
   return queue
 }
+
+# Prints the argument to `STDOUT`. Submits `actions.Say` with
+# the argument it received.
+fun say(_) =
+  return &_ and actions.Say(_).submit();
+
+# Prints each argument to `STDOUT`. See `say(_)`.
+fun say(*) =
+  |say(_)| *;
+
+# Prints the argument to `STDOUT`, and blocks, waiting for
+# user input. Returns the user input as string. Dies if got
+# EOF, or if interrupted by CTRL-C.
+fun ask(_) =
+  actions.Ask(_ ~ " ").submit();
+
+# Maps `ask` over the arguments. Returns a vector of anwsers.
+fun ask(*) =
+  |ask(_)| *;
+
+# Returns the contents of *filename*.
+fun slurp(filename) given str =
+  actions.Slurp(filename).submit();
+
+# Appends *content* to *filename*.
+fun burp(filename, content) given str =
+  actions.Burp(filename, content).submit();
+
+# Writes *content* to *filename*.
+fun write(filename, content) given str =
+  actions.Write(filename, content).submit();

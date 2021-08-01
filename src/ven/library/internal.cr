@@ -21,6 +21,7 @@ module Ven::Library
       defglobal("generic", MType.new "generic", MGenericFunction)
       defglobal("concrete", MType.new "concrete", MConcreteFunction)
       defglobal("function", MType.new "function", MFunction)
+      defglobal("internal", MType.new "internal", MInternal)
 
       # Dies with *message*.
       defbuiltin "die", message : Str do

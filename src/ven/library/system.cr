@@ -1,54 +1,59 @@
 module Ven::Library
   class System < Extension
     on_load do
-      fancy = Fancyline.new
+      # Contains the available actions' `initialize` methods
+      # wrapped in Ven builtins. Use `actions.dir()` to display
+      # the available actions. Supports actions having generic
+      # `initialize`s.
+      definternal "actions" do
+        {% for action in BaseAction.subclasses %}
+          {% name = action.annotation(Action)[:name].id.stringify %}
+          {% news = action.methods.select(&.name.== :initialize) %}
 
-      # Prints *model* to `STDOUT`.
-      defbuiltin "say", model : Model do
-        # We cannot use `to_str` here, as some models override
-        # it to do a bit different thing.
-        puts model.is_a?(Str) ? model.value : model
+          {% if news.size >= 1 %}
+            %variants = [
+              {% for new in news.uniq(&.args.size) %}
+                {% arity = new.args.size %}
+                # Returns an `MNative(BaseAction)`, calling
+                # `<action>#initialize` with the arguments
+                # it received.
+                MBuiltinFunction.new({{name}}, {{arity}}) do |machine, args|
+                  MNative(BaseAction).new(
+                    {{action}}.new(
+                      {% for argno in 0...arity %}
+                        as_type({{argno}}, {{new.args[argno].restriction}}),
+                      {% end %}
+                    )
+                  )
+                end,
+              {% end %}
+            ]
 
-        model
+            defgeneric {{name}}, %variants, in: this
+          {% end %}
+        {% end %}
+
+        # Returns **all** actions. As currently, there is no
+        # way to check whether an action is enabled Ven-time.
+        this["dir"] = builtin "dir", [] of Nop do
+          # At this point, there are already going to
+          # be 'actions' in the context.
+          actions = machine.context["actions"].as(MInternal)
+
+          actions.fields.values.reject do |action|
+            # Reject self: no need to have 'dir' in the output.
+            action.as?(MBuiltinFunction).try(&.name.== "dir")
+          end
+        end
       end
 
-      # Prompts *model* followed by a space, and waits for user
-      # input (which it consequently returns). If got EOF, dies
-      # with `"end-of-input"`. If got CTRL+C, dies with
-      # `"interrupted"`.
-      defbuiltin "ask", model : Model do
-        prompt = "#{model.is_a?(Str) ? model.value : model} "
-
-        # I hate to use fancyline here (it's too heavyweight,
-        # plus the overflow problem!), but with `gets` you
-        # can't die of CTRL+C properly, and we want 'ask' to
-        # die of CTRL+C properly.
-        fancy.readline(prompt, history: false) || machine.die("end-of-input")
-      rescue Fancyline::Interrupt
-        machine.die("interrupted")
-      end
-
-      # Returns the content of *filename*.
-      defbuiltin "slurp", filename : Str do
-        File.read(filename.value)
-      end
-
-      # **Appends** *content* to *filename*.
-      #
-      # Creates *filename* if it does not exist.
-      defbuiltin "burp", filename : Str, content : Model do
-        raw = content.is_a?(Str) ? content.value : content
-
-        File.write(filename.value, raw, mode: "a")
-      end
-
-      # **Writes** *content* to *filename*.
-      #
-      # Creates *filename* if it does not exist.
-      defbuiltin "write", filename : Str, content : Model do
-        raw = content.is_a?(Str) ? content.value : content
-
-        File.write(filename.value, raw)
+      # Submits an I/O action. See `BaseAction`, its subclasses,
+      # and `BaseAction#submit`. This builtin is a wrapper for
+      # `action.submit`). Rescues & dies of `ActionError`.
+      defbuiltin "submit", action : MNative(BaseAction) do
+        action.submit
+      rescue error : ActionError
+        machine.die(error.message || "action error")
       end
     end
   end

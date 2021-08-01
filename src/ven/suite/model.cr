@@ -311,7 +311,7 @@ module Ven::Suite
   end
 
   # The parent of all Class `Model`s (those that are stored
-  # on the heap and referred by reference).
+  # on the heap and referred).
   abstract class MClass
     Suite.model_template?
 
@@ -883,7 +883,7 @@ module Ven::Suite
     # Returns the `MType` instance for *model* if there is one,
     # otherwise raises.
     def self.[](for model : ModelClass)
-      self.[model]? || raise "type not found"
+      self.[model]? || raise "type not found: #{model}"
     end
   end
 
@@ -1576,7 +1576,7 @@ module Ven::Suite
         # positioning, i.e., the user probably expects parameters
         # to come first.
         @namespace.join(io, ", ") do |(name, value), io|
-          # Exclude the parameters.
+          # Exclude the parameters, we've already shown them.
           unless name.in?(params)
             io << name << "=" << value
           end
@@ -1704,10 +1704,9 @@ module Ven::Suite
 
   # A kind of model that wraps around a Crystal object of
   # type *T*. It provides an in-Ven way to pass native Crystal
-  # values around. Note that many things in here are done
-  # statically, so you'll have to recompile Ven to add new
-  # `MNative` types.
+  # values around.
   class MNative(T) < MClass
+    # Returns the value of this MNative.
     getter value : T
 
     def initialize(@value, @desc = "object")
@@ -1728,6 +1727,9 @@ module Ven::Suite
   # a parent (actually, it doesn't have one), and can be created
   # from Crystal only. For Ven, MInternal is read-only.
   class MInternal < MClass
+    # Returns the fields of this MInternal.
+    getter fields : Hash(String, Model)
+
     # Yields an empty hash of `String`s to `Model`s. Makes
     # it possible to access the values of that hash using Ven
     # field access.
@@ -1740,7 +1742,7 @@ module Ven::Suite
     end
 
     def to_s(io)
-      io << "native " << @desc
+      io << "internal " << @desc
     end
   end
 end
