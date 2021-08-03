@@ -499,16 +499,16 @@ module Ven
 
         # Generate flags for each `BaseAction` subclasses'
         # category. Automake the description.
-        {% for action in BaseAction.subclasses %}
-          %category = {{action}}.category
+        categories = {{BaseAction.subclasses}}.map(&.category).uniq.reject("screen")
 
+        categories.each do |category|
           cmd.flags.add do |flag|
-            flag.name = "with-#{%category}"
-            flag.long = "--with-#{%category}"
+            flag.name = "with-#{category}"
+            flag.long = "--with-#{category}"
             flag.default = false
-            flag.description = "enable #{%category} actions"
+            flag.description = "enable #{category} actions"
           end
-        {% end %}
+        end
 
         cmd.run do |options, arguments|
           # Enable the actions the user wants. Each action has

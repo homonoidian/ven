@@ -97,7 +97,7 @@ fun<vec> __filter_call(fn) given function {
 # Prints the argument to `STDOUT`. Submits `actions.Say` with
 # the argument it received.
 fun say(_) =
-  return &_ and actions.Say(_).submit();
+  return &_ and actions.Say(~_).submit();
 
 # Prints each argument to `STDOUT`. See `say(_)`.
 fun say(*) =
