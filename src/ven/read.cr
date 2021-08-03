@@ -100,16 +100,15 @@ module Ven
 
   # The Ven reader.
   #
-  # This is a vital part of the Ven programming language.
-  # Without it, well, Ven would not have a syntax.
+  # This is a vital part of the Ven programming language. Without
+  # it, well, Ven would just not have a syntax.
   #
-  # Internally, this reader is a Pratt parser with parselets
-  # on top (see Bob Nystrom). It's an intricate and powerful
-  # combo, allowing for read-time evaluation & self-parsing
-  # (read macros). If done well, of course.
+  # Internally, Ven reader is a Pratt parser with parselets on top
+  # (see Bob Nystrom). An intricate and powerful combo, in other
+  # words, and one that allows, say, read-time evaluation, as well
+  # as self-parsing (read macros).
   #
-  # **Instances of Reader should be disposed after the
-  # first use.**
+  # **Instances of Reader should be disposed after the first use.**
   class Reader
     include Suite
 
@@ -127,20 +126,29 @@ module Ven
       distinct box and or return dies to
       should from immediate true false)
 
+    # Consensus invalid character word type. Issued exclusively in
+    # the verbal mode (see `word!`).
+    INVALID_PSEUDOWORD = "__INVALID__"
+
     # Returns the current word.
     getter word : Word = Word.dummy
-
     # Returns this reader's context.
     getter context : CxReader
 
+    # Current line number (incremented by one each line).
+    #
+    # You can change this value if you want to, but only
+    # if you know what you're doing.
+    property lineno = 1
+
     # Whether this reader's state is dirty.
     @dirty = false
-    # Current line number (counts from 1 on).
-    @lineno = 1
     # Current column (counts from 1 on).
     @column = 1
     # Current character offset.
     @offset = 0
+    # Whether the verbal lexical analysis mode is enabled.
+    @verbal = false
 
     # Makes a new reader.
     #
@@ -155,10 +163,7 @@ module Ven
     #
     # *enquiry* is the Enquiry object used to send/read global
     # signals, properties, configurations et al.
-    def initialize(@source : String,
-                   @file = "untitled",
-                   @context = Context::Reader.new,
-                   @enquiry = Enquiry.new)
+    def initialize(@source : String, @file = "untitled", @context = CxReader.new, @enquiry = Enquiry.new)
       # Read the first word:
       word!
 
@@ -166,6 +171,22 @@ module Ven
       @nud = {} of String => Parselet::Nud
       @stmt = {} of String => Parselet::Nud
       prepare
+    end
+
+    # Performs an extremely lightweight initialization routine.
+    # Useful for doing *verbal*-only passovers. Raises if given
+    # falsey *verbal*.
+    def initialize(@source : String, @verbal : Bool, @context = CxReader.new)
+      raise "call the other initialize() then" unless @verbal
+
+      @led = uninitialized Hash(String, Parselet::Led)
+      @nud = uninitialized Hash(String, Parselet::Nud)
+      @stmt = uninitialized Hash(String, Parselet::Nud)
+      @file = uninitialized String
+      @enquiry = uninitialized Enquiry
+
+      # Read the first word.
+      word!
     end
 
     # Given an explanation message, *message*, dies of `ReadError`.
@@ -248,6 +269,19 @@ module Ven
     end
 
     # Returns the current word and consumes the next one.
+    #
+    # If in *verbal* lexical analysis mode (see `initialize(source, verbal)`),
+    #
+    # - Issues `INVALID_PSEUDOWORD`-typed `Word` instead of
+    #   dying of "malformed input";
+    #
+    # - Makes words for characters matching `RX_IGNORE`, as
+    #   opposed to ignoring them;
+    #
+    # - Does not omit the quotes of regexes and strings, the
+    #   dollar in readtime symbols, etc.
+    #
+    # - Assigns type `KEYWORD` to keyword words
     def word!
       return @word if @word.type == "EOF"
 
@@ -256,30 +290,49 @@ module Ven
           break case
           when match(RX_IGNORE)
             @lineno += newlines = $0.count('\n')
-            @column = newlines.zero? ? @column + $0.size - 1 : $0.split("\n").last.size + 1
-            next
+
+            if newlines.zero?
+              # There were no newlines. Just append the amount
+              # of ignored characters.
+              @column += $0.size - 1
+            else
+              # There were newlines. No matter how many of them,
+              # since all characters in-between are ignored?
+              @column = 1
+            end
+
+            @verbal ? word("IGNORE", $0) : next
           when pair = @context.triggers.find { |_, lead| match(lead) }
             word(pair[0], $0, $~.named_captures)
           when match(RX_SYMBOL)
             if keyword?($0)
-              word($0.upcase, $0)
+              word(@verbal ? "KEYWORD" : $0.upcase, $0)
             elsif $0.size > 1 && $0.starts_with?("$")
-              word("$SYMBOL", $0[1..])
+              word("$SYMBOL", @verbal ? $0 : $0[1..])
             else
               word("SYMBOL", $0)
             end
           when match(RX_NUMBER)
             word("NUMBER", $0)
           when match(RX_STRING)
-            word("STRING", $1)
+            # In $0, the quotes are present.
+            word("STRING", @verbal ? $0 : $1)
           when match(RX_REGEX)
-            word("REGEX", $1)
+            # In $0, the quotes are present.
+            word("REGEX", @verbal ? $0 : $1)
           when match(RX_SPECIAL)
             word($0.upcase, $0)
           when @offset == @source.size
             word("EOF", "")
           else
-            raise ReadError.new(@source[@offset].to_s, @lineno, @file, "malformed input")
+            if @verbal
+              @offset += 1
+              # An INVALID_PSEUDOWORD is issued when an invalid
+              # character is met.
+              word(INVALID_PSEUDOWORD, @source[@offset - 1].to_s)
+            else
+              raise ReadError.new(@source[@offset].to_s, @lineno, @file, "malformed input")
+            end
           end
         end
 
@@ -486,6 +539,26 @@ module Ven
       quotes
     end
 
+    # Yields the words in the source string. Raises if this
+    # reader is dirty.
+    def words
+      raise "words(): dirty" if @dirty
+
+      @dirty = true
+
+      until @word.type == "EOF"
+        yield word!
+      end
+    end
+
+    # Returns an array of words in the source string. Raises
+    # if this reader is dirty.
+    def words
+      ary = [] of Word
+      words { |it| ary << it }
+      ary
+    end
+
     # Returns whether the current word is a nud parselet of
     # type *pick*.
     def is_nud?(only pick : Parselet::Nud.class) : Bool
@@ -655,10 +728,7 @@ module Ven
 
     # A shorthand for `Reader#read`. **Ignores `expose` and
     # `distinct` statements.**
-    def self.read(source : String,
-                  file = "untitled",
-                  context = Context::Reader.new,
-                  enquiry = Enquiry.new)
+    def self.read(source : String, file = "untitled", context = CxReader.new, enquiry = Enquiry.new)
       reader = new(source, file, context, enquiry)
       reader.distinct?
       reader.exposes
@@ -666,16 +736,26 @@ module Ven
     end
 
     # :ditto:
-    def self.read(source : String,
-                  file = "untitled",
-                  context = Context::Reader.new,
-                  enquiry = Enquiry.new)
+    def self.read(source : String, file = "untitled", context = CxReader.new, enquiry = Enquiry.new)
       reader = new(source, file, context, enquiry)
       reader.distinct?
       reader.exposes?
       reader.read do |quote|
         yield quote
       end
+    end
+
+    # A shorthand for `Reader#words`. Initializes the reader in
+    # verbal mode (see `Reader#word!`).
+    def self.words(source : String, context = CxReader.new)
+      new(source, verbal: true, context: context).words do |word|
+        yield word
+      end
+    end
+
+    # :ditto:
+    def self.words(source : String, context = CxReader.new)
+      new(source, verbal: true, context: context).words
     end
   end
 end

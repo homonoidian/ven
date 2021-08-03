@@ -6,19 +6,22 @@ module Ven::Suite::Utils
   # - Keywords are blue.
   # - Numbers are magenta.
   # - Strings, regexes are yellow.
-  def highlight(snippet : String)
-    words_in(snippet).map do |(type, lexeme)|
-      case type
-      when :STRING, :REGEX
+  def highlight(snippet : String, context : CxReader)
+    Reader.words(snippet, context).map do |word|
+      type = word.type
+      lexeme = word.lexeme
+
+      case word.type
+      when "STRING", "REGEX"
         lexeme.colorize.yellow
-      when :KEYWORD
-        lexeme.colorize.blue
-      when :NUMBER
+      when "NUMBER"
         lexeme.colorize.magenta
-      when :SPECIAL
-        lexeme.colorize.light_gray
-      when :IGNORE
+      when "IGNORE"
         lexeme.colorize.dark_gray
+      when "$SYMBOL"
+        lexeme.colorize.green
+      when "KEYWORD"
+        lexeme.colorize.blue
       else
         lexeme
       end
@@ -47,54 +50,6 @@ module Ven::Suite::Utils
     else
       str
     end.to_s
-  end
-
-  # Returns the word boundaries in *snippet*, excluding
-  # the boundaries of the words of IGNORE type.
-  def word_boundaries(snippet : String)
-    words_in(snippet).compact_map do |(type, lexeme, offset)|
-      unless type == :IGNORE
-        offset..(offset + lexeme.size)
-      end
-    end
-  end
-
-  # Returns the words of *snippet* in form of an array of
-  # `{Symbol, String}`. First is the word type and second
-  # is the word lexeme.
-  def words_in(snippet : String)
-    words = [] of {Symbol, String, Int32}
-    offset = 0
-
-    loop do
-      case pad = snippet[offset..]
-      when .starts_with? Ven.regex_for(:STRING)
-        words << {:STRING, $0, offset}
-      when .starts_with? Ven.regex_for(:SYMBOL)
-        if Reader::KEYWORDS.any?($0)
-          words << {:KEYWORD, $0, offset}
-        else
-          words << {:SYMBOL, $0, offset}
-        end
-      when .starts_with? Ven.regex_for(:REGEX)
-        words << {:REGEX, $0, offset}
-      when .starts_with? Ven.regex_for(:NUMBER)
-        words << {:NUMBER, $0, offset}
-      when .starts_with? Ven.regex_for(:IGNORE)
-        words << {:IGNORE, $0, offset}
-      when .empty?
-        break
-      else
-        # Pass over unknown characters.
-        words << {:UNKNOWN, snippet[offset].to_s, offset}
-        offset += 1
-        next
-      end
-
-      offset += $0.size
-    end
-
-    words
   end
 
   # Returns `{span.total_<unit>, <unit>}`, choosing the most

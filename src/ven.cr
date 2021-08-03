@@ -58,7 +58,8 @@ module Ven
     # to underline.
     private def code(line : String, lineno : Int32, underline : Range(Int32?, Int32?) = ..)
       String.build do |io|
-        io << " " * CODE_INDENT_LEVEL << lineno << CODE_LINE_BAR << Utils.highlight(line)
+        io << " " * CODE_INDENT_LEVEL << lineno << CODE_LINE_BAR
+        io << Utils.highlight(line, @orchestra.hub.reader)
 
         if b = underline.begin
           # Compute the padding. The '- 1' is from, er, "observation". I
@@ -291,23 +292,12 @@ module Ven
 
         COMMAND:
           \\help                show this
-          \\keys                show available key combos
           \\context             show context (TAIL = reader, compiler, machine)
           \\serialize           serialize TAIL
           \\deserialize         deserialize TAIL
           \\deserialize_detree  deserialize & detree TAIL
           \\lserq               deserialize & detree file TAIL
           \\run_serq            deserialize & run file TAIL
-          \n
-        END
-      when {"keys", _}
-        puts <<-END.gsub /\w+\-\w+/ { |combo| combo.colorize.bold }
-
-          Ctrl-Left     move to the beginning of the word under the cursor
-          Ctrl-Right    move to the end of the word under the cursor
-          Shift-Down    remove the word under the cursor
-          Shift-Left    remove the word before the cursor
-          Shift-Right   remove the word after the cursor
           \n
         END
       when {"serialize", _}
@@ -341,72 +331,7 @@ module Ven
           # starts with one.
           yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
         else
-          yielder.call ctx, Suite::Utils.highlight(line)
-        end
-      end
-
-      # Moves to the beginning of a word.
-      fancy.actions.set Fancyline::Key::Control::CtrlLeft do |ctx|
-        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
-        if bound = bounds.index &.covers?(ctx.editor.cursor)
-          underneath = bounds[bound]
-          if ctx.editor.cursor == underneath.begin
-            # If at the beginning of the word underneath, move
-            # to the beginning of the previous one. Note how
-            # this automatically cycles.
-            ctx.editor.cursor = bounds[bound - 1].begin
-          else
-            ctx.editor.cursor = underneath.begin
-          end
-        end
-      end
-
-      # Moves to the end of a word.
-      fancy.actions.set Fancyline::Key::Control::CtrlRight do |ctx|
-        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
-        if bound = bounds.index &.covers?(ctx.editor.cursor)
-          underneath = bounds[bound]
-          if ctx.editor.cursor == underneath.end
-            # If at the end of the word underneath, move to
-            # the end of the next one. If there is no next
-            # one, cycle to the start of the line.
-            ctx.editor.cursor = bounds[bound + 1]?.try(&.end) || 0
-          else
-            ctx.editor.cursor = underneath.end
-          end
-        end
-      end
-
-      # Deletes the word under the cursor.
-      fancy.actions.set Fancyline::Key::Control::ShiftDown do |ctx|
-        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
-        if bound = bounds.index &.covers?(ctx.editor.cursor)
-          underneath = bounds[bound]
-          # Clean up the line, and make sure position matches.
-          ctx.editor.line = ctx.editor.line.delete_at(underneath)
-          ctx.editor.cursor = underneath.begin
-        end
-      end
-
-      # Deletes the word before cursor.
-      fancy.actions.set Fancyline::Key::Control::ShiftLeft do |ctx|
-        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
-        if bound = bounds.index &.covers?(ctx.editor.cursor)
-          if before = bounds[bound - 1]?
-            # Clean up the line, and make sure position matches.
-            ctx.editor.line = ctx.editor.line.delete_at(before)
-            ctx.editor.cursor = before.begin
-          end
-        end
-      end
-
-      # Deletes the word after cursor.
-      fancy.actions.set Fancyline::Key::Control::ShiftRight do |ctx|
-        bounds = Suite::Utils.word_boundaries(ctx.editor.line)
-        if bound = bounds.index &.covers?(ctx.editor.cursor)
-          if after = bounds[bound + 1]?
-            ctx.editor.line = ctx.editor.line.delete_at(after)
-          end
+          yielder.call ctx, Utils.highlight(line, @orchestra.hub.reader)
         end
       end
 
@@ -425,7 +350,6 @@ module Ven
         #{"Hit CTRL+D to exit.".colorize.bold}
 
         #{hint} Type \\help to see what REPL commands are available.
-        #{hint} Type \\keys to see what key combos are available.
         \n
       END
 
