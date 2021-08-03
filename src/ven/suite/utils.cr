@@ -10,13 +10,15 @@ module Ven::Suite::Utils
     words_in(snippet).map do |(type, lexeme)|
       case type
       when :STRING, :REGEX
-        lexeme.colorize.yellow.to_s
+        lexeme.colorize.yellow
       when :KEYWORD
-        lexeme.colorize.blue.to_s
+        lexeme.colorize.blue
       when :NUMBER
-        lexeme.colorize.magenta.to_s
+        lexeme.colorize.magenta
+      when :SPECIAL
+        lexeme.colorize.light_gray
       when :IGNORE
-        lexeme.colorize.dark_gray.to_s
+        lexeme.colorize.dark_gray
       else
         lexeme
       end
@@ -29,22 +31,22 @@ module Ven::Suite::Utils
   # - `MMap` keys are highlighted yellow, values recursively.
   # - Unsupported models are left unhighlighted.
   def highlight(model : Model) : String
-    s = model.to_s
+    str = model.to_s
 
     case model
     when Num
-      s.colorize.magenta.to_s
+      str.colorize.magenta
     when Str, MRegex
-      s.colorize.yellow.to_s
+      str.colorize.yellow
     when Vec
       "[#{model.items.join(", ") { |item| highlight(item) }}]"
     when MBool
-      s.colorize.blue.to_s
+      str.colorize.blue
     when MMap
       "%{#{model.map.join(", ") { |(k, v)| "#{k.colorize.yellow} #{highlight(v)}" }}}"
     else
-      s
-    end
+      str
+    end.to_s
   end
 
   # Returns the word boundaries in *snippet*, excluding
