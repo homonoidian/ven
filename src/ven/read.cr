@@ -1,8 +1,6 @@
 module Ven
   # In terms of Ven, a word is a tagged lexeme.
   struct Word
-    # Returns the line number of the line this word was found on.
-    getter line : Int32
     # Returns the type of this word. Note that by convention, Word
     # types should be all-uppercase.
     getter type : String
@@ -12,13 +10,38 @@ module Ven
     # Returns a hash of named captures the regex for this word made.
     getter! matches : Hash(String, String?)
 
-    def initialize(@type, @lexeme, @line, @matches = nil)
+    # Returns the start offset of this word.
+    getter begin : Int32
+    # Returns the end offset of this word.
+    getter end : Int32
+    # Returns the line number of the line this word was found on.
+    getter line : Int32
+    # Returns the visual end column of this word. It points to the
+    # character after this word's last character (or 1).
+    getter end_column : Int32
+    # Returns the visual begin column of this word. It points to
+    # the character before this word's first character (or 1).
+    getter begin_column : Int32
+
+    def initialize(@type, @lexeme, @line, @begin, @end_column, @matches = nil)
+      @end = @begin + @lexeme.size
+      # Compute from the end column and lexeme size.
+      # puts @lexeme
+      # puts @end_column
+      @begin_column = @end_column - @lexeme.size
     end
 
-    # Returns a dummy word. The *type* of the word is `DUMMY`, *lexeme*
-    # is `<dummy>`, and *line* number is 1.
+    def to_s(io)
+      io << "'" << @type << "' at " << @line << ":" << @begin_column << ".." << @end_column
+
+      @matches.try &.each do |capture, match|
+        io << "  " << capture << " = " << match
+      end
+    end
+
+    # Returns a Word with sane dummy values.
     def self.dummy
-      Word.new("DUMMY", "<dummy>", 1)
+      Word.new("DUMMY", "", line: 1, begin: 0, end_column: 1)
     end
   end
 
@@ -112,8 +135,10 @@ module Ven
 
     # Whether this reader's state is dirty.
     @dirty = false
-    # Current line number.
+    # Current line number (counts from 1 on).
     @lineno = 1
+    # Current column (counts from 1 on).
+    @column = 1
     # Current character offset.
     @offset = 0
 
@@ -148,9 +173,14 @@ module Ven
       raise ReadError.new(@word, @file, message)
     end
 
-    # Makes a `QTag`.
+    # Makes a `QTag`. Extracts the data about the location from the
+    # current word.
     private macro tag
-      QTag.new(@file, @lineno)
+      QTag.new(@file, @word.line, @word.begin_column,
+        # I am still not sure about this: should the tag
+        # be end_column'ed by the quote, or should the
+        # reader do this instead?
+        @word.end_column)
     end
 
     # Makes a `Word` from the given *type* and *lexeme*.
@@ -158,7 +188,11 @@ module Ven
     # *matches* is the optional `MatchData` of the word
     # (see `Word#matches`).
     private macro word(type, lexeme, matches = nil)
-      Word.new({{type}}, {{lexeme}}, @lineno, {{matches}})
+      %lexeme = {{lexeme}}
+      # We have to compute *begin* for `Word`, as `word` is
+      # called after the word is read, and after the *offset*
+      # is incremented by word's size.
+      Word.new({{type}}, %lexeme, @lineno, @offset - %lexeme.size, @column, {{matches}})
     end
 
     # Returns whether *lexeme* is a keyword.
@@ -207,16 +241,23 @@ module Ven
     # Matches offset source against a regex *pattern*. If
     # successful, increments the offset by matches' length.
     private macro match(pattern)
-      @offset += $0.size if @source[@offset..].starts_with?({{pattern}})
+      if @source[@offset..].starts_with?({{pattern}})
+        @offset += $0.size
+        @column += $0.size
+      end
     end
 
     # Returns the current word and consumes the next one.
     def word!
+      return @word if @word.type == "EOF"
+
       fresh =
         loop do
           break case
           when match(RX_IGNORE)
-            next @lineno += $0.count("\n")
+            @lineno += newlines = $0.count('\n')
+            @column = newlines.zero? ? @column + $0.size - 1 : $0.split("\n").last.size + 1
+            next
           when pair = @context.triggers.find { |_, lead| match(lead) }
             word(pair[0], $0, $~.named_captures)
           when match(RX_SYMBOL)
@@ -236,7 +277,7 @@ module Ven
           when match(RX_SPECIAL)
             word($0.upcase, $0)
           when @offset == @source.size
-            word("EOF", "end-of-input")
+            word("EOF", "")
           else
             raise ReadError.new(@source[@offset].to_s, @lineno, @file, "malformed input")
           end

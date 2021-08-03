@@ -8,6 +8,11 @@ module Ven::Suite
   class ReadError < VenError
     # Returns the line where this error happened.
     getter line : Int32
+    # Returns the estimated end column.
+    getter end_column : Int32?
+    # Returns the estimated begin column.
+    getter begin_column : Int32?
+
     # Returns the file where this error happened.
     getter file : String
     # Returns the lexeme nearest to the place-of-interest.
@@ -21,12 +26,16 @@ module Ven::Suite
     def initialize(word : Word, @file, @message)
       @line = word.line
       @lexeme = word.lexeme
+      @end_column = word.end_column
+      @begin_column = word.begin_column
     end
 
     # Initializes from a readtime error.
     def initialize(tag : QTag, @message)
       @line = tag.line
       @file = tag.file
+      @end_column = tag.end_column
+      @begin_column = tag.begin_column
     end
   end
 

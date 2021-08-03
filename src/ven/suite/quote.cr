@@ -5,10 +5,21 @@ module Ven::Suite
   struct QTag
     include JSON::Serializable
 
+    # Returns the begin column of this quote. Currently, it
+    # is set to the begin column of the word that initiated
+    # this quote.
+    getter begin_column : Int32?
+    # Returns the end column of this quote. Currently, it is
+    # set to the end column of the word that initiated this
+    # quote.
+    getter end_column : Int32?
+
+    # Returns the name of the file this quote was read from.
     getter file : String
+    # Returns the line number of the beginning of this quote.
     getter line : Int32
 
-    def initialize(@file, @line)
+    def initialize(@file, @line, @begin_column = nil, @end_column = nil)
     end
 
     # Returns a void tag.

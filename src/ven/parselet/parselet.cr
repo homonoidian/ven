@@ -29,12 +29,27 @@ module Ven::Parselet
     #
     # Although it's not abstract, all subclasses must implement
     # this method.
-    def parse!(*args)
+    def parse!(@parser, @tag, @token)
       raise "not implemented"
     end
 
-    # Dies of `ReadError` with the given *message*.
+    # Dies of `ReadError` with the given *message*. **The location of
+    # the error is extracted from the tag of this parselet.**
     macro die(message)
+      raise ReadError.new(@tag, {{message}})
+    end
+
+    # Dies of `ReadError` with the given *message*. **The location of
+    # the error is extracted from *word*.**
+    macro die(message, on word)
+      raise ReadError.new({{word}}, {{message}})
+    end
+
+    # Dies of `ReadError` with the given *message*. This is the most
+    # unhelpful death, as it may point to a location that is irrelevant
+    # to the error; please avoid it if you can. **The location of the
+    # error is extracted from the current word.**
+    macro die!(message)
       @parser.die({{message}})
     end
 

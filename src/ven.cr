@@ -18,6 +18,14 @@ module Ven
     # begin a REPL command (see `command`).
     COMMAND_WORD = /\\\w+/
 
+    # How many spaces `code`, which draws code excerpts
+    # for errors, should prepend before the code.
+    CODE_INDENT_LEVEL = 2
+
+    # The string `code` uses to separate line number from
+    # the line itself.
+    CODE_LINE_BAR = "| "
+
     # These represent the flags. Look into their corresponding
     # helps in the Commander scaffold to know what they're for.
     @quit = true
@@ -41,13 +49,58 @@ module Ven
     # `[*embraced*] *message*`. If `@quit` is true, quits
     # with status 1 afterwards.
     private def err(embraced : String, message : String)
-      puts "#{"[#{embraced}]".colorize(:red)} #{message}"
+      puts "#{"[#{embraced}]".colorize.light_red} #{message}"
       exit(1) if @quit
     end
 
+    # Stylizes a *line* of code. Highlights *line*. *lineno* is the
+    # line number, and *underline* may specify the character range
+    # to underline.
+    private def code(line : String, lineno : Int32, underline : Range(Int32?, Int32?) = ..)
+      String.build do |io|
+        io << " " * CODE_INDENT_LEVEL << lineno << CODE_LINE_BAR << Utils.highlight(line)
+
+        if b = underline.begin
+          # Compute the padding. The '- 1' is from, er, "observation". I
+          # truly am lost in all that column math.
+          padding = {{CODE_INDENT_LEVEL + CODE_LINE_BAR.size}} + lineno.to_s.size + b - 1
+
+          # Compute the length (the amount of underline characters). If
+          # there is no definite end, let it be 1.
+          length = underline.end ? underline.size : 1
+
+          # Pick the right symbol. There is no point in '-'ing
+          # one character, it doesn't look good.
+          symbol = length <= 1 ? "^" : ("-" * length)
+
+          io << "\n" << " " * padding << symbol.colorize.green
+        end
+      end
+    end
+
     # Dies of an *error* (see `err`).
-    private def die(error e : ReadError)
-      err("read error", "#{e.message} (in #{e.file}:#{e.line}, near '#{e.lexeme}')")
+    private def die(error e : ReadError, lines : Array(String))
+      message = String.build do |io|
+        io << e.message << " (in " << e.file << ":" << e.line
+
+        # If there is no begin_column, but is `.lexeme`, show the
+        # lexeme instead. If there is no `.lexeme` too, close off.
+        if b = e.begin_column
+          io << ":" << b
+        elsif lexeme = e.lexeme
+          io << ", near " << lexeme
+        end
+
+        io << ")"
+
+        # If there are lines to display, pick the right line
+        # and pass it to `code`, which will do the job.
+        unless lines.empty?
+          io << "\n" << code(lines[e.line - 1], e.line, b...e.end_column)
+        end
+      end
+
+      err("read error", message)
     end
 
     # :ditto:
@@ -217,6 +270,13 @@ module Ven
       if @measure
         puts "[took #{duration.total_microseconds}us]".colorize.bold
       end
+    rescue e : ReadError
+      # Currently, it is not possible to display the excerpt in
+      # REPL (properly, at least). It may be, though, if we add
+      # some sort of virtual lines (by changing Reader's line
+      # offset?) Then we can just place the REPL buffer in the
+      # else case.
+      die(e, File.file?(e.file) ? File.read_lines(e.file) : [] of String)
     rescue e : VenError
       die(e)
     end
