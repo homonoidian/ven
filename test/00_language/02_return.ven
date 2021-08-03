@@ -23,7 +23,7 @@ fun break-from-infinity {
 }
 
 fun eighty-from-hudred {
-  loop (i = 0; i < 100; i += 1) {
+  loop i = 0, i < 100, i += 1 {
     if i is 80 {
       return i;
     }
@@ -51,7 +51,7 @@ fun block_break-from-infinity = {
 
 fun block_eighty-from-hudred = {
   if true {
-    loop (i = 0; i < 100; i += 1) {
+    loop i = 0, i < 100, i += 1 {
       if i is 80 {
         return { i };
       }
@@ -155,7 +155,7 @@ ensure block_return-overwrites-if-true(false) is "noverwrites";
 
 
 fun set-not-break {
-  loop (i = 0; i < 100; i += 1)
+  loop i = 0, i < 100, i += 1
     if (i is 34)
       return i;
 

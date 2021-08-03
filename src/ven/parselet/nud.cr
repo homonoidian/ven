@@ -392,44 +392,60 @@ module Ven::Parselet
   # Reads a 'loop' statement into either `QInfiniteLoop`,
   # `QBaseLoop`, `QStepLoop`, or `QComplexLoop`.
   class PLoop < Nud
-    def parse
+    # Given a *base* quote (the first quote in the loop head), enacts the
+    # decision to read a finite (`QBaseLoop`, `QStepLoop`, `QComplexLoop`)
+    # loop. If *closing_paren* is true, expects a closing paren after the
+    # loop head.
+    protected def finite(base : Quote, closing_paren = false)
       start : Quote?
-      base : Quote?
       step : Quote?
-      body : QBlock
 
-      if @parser.word!("(")
-        head = @parser.repeat(")", sep: ";")
-
-        case head.size
-        when 0
-          # (pass)
-        when 1
-          base = head[0]
-        when 2
-          base, step = head[0], head[1]
-        when 3
-          start, base, step = head[0], head[1], head[2]
-        else
-          die("malformed loop setup")
-        end
+      # loop <led>,
+      #           ^---- here
+      if @parser.word!(",")
+        step = led
       end
 
-      repeatee = led
-
-      if repeatee.is_a?(QBlock)
-        @semicolon = false
+      # loop <led>, <led>,
+      #                  ^--- here
+      if @parser.word!(",")
+        start = base
+        base = step.not_nil!
+        step = led
       end
 
-      if start && base && step
-        QComplexLoop.new(@tag, start, base, step, repeatee)
-      elsif base && step
-        QStepLoop.new(@tag, base, step, repeatee)
-      elsif base
-        QBaseLoop.new(@tag, base, repeatee)
+      @parser.expect(")") if closing_paren
+
+      body = led
+
+      @semicolon = !body.is_a?(QBlock)
+
+      if start && step
+        QComplexLoop.new(@tag, start, base, step, body)
+      elsif step
+        QStepLoop.new(@tag, base, step, body)
       else
-        QInfiniteLoop.new(@tag, repeatee)
+        QBaseLoop.new(@tag, base, body)
       end
+    end
+
+    # Given the *body* quote, enacts the decision to read an infinite loop.
+    protected def infinite(body : Quote)
+      @semicolon = !body.is_a?(QBlock)
+
+      QInfiniteLoop.new(@tag, body)
+    end
+
+    def parse
+      return finite(led, closing_paren: true) if @parser.word!("(")
+
+      # Read the first quote. We don't know yet if it's the body
+      # or the base of a condition.
+      leader = led
+
+      # Make sure we know what the user is talking about, and
+      # switch to the appropriate branch.
+      @parser.word?(",") || @parser.is_nud? ? finite(leader) : infinite(leader)
     end
   end
 

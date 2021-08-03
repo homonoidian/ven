@@ -2,17 +2,34 @@
 
 
 # There are two general kinds of `loop` statements: headless
-# (unconditional) loop and conditional loop. A loop's condition
-# is put inside parentheses:
+# (unconditional) loop and head loop. A loop's head is optionally
+# enclosed in parentheses:
 #  --> loop <loop body>
-#  --> loop (<condition>) <loop body>
+#  --> loop (<head>) <loop body>
+#
+# ... but most of the time, Ven correctly reads it even if it isn't:
+#  --> loop <head> <loop body>
 #
 # There are two ways to form a loop's body: with an expression,
-# or with a block (which is itself an expression):
-#   --> loop <condition?> say("Hi!")
-#   --> loop <condition?> { say("Hi!"); ... }
+# or with a block. Which is, too, an expression, so there is
+# really only one way:
+#   --> loop <head?> say("Hi!")
+#   --> loop <head?> { say("Hi!"); ... }
 #
-
+# Members of the loop's head are separated by ','s:
+#   --> loop <member>, <member>, ... <body>
+# I.e.,
+#   --> loop (<member>, <member>, ...) <body>
+#
+# At maximum, there can be exactly *three* head members. Depending on
+# the number of members, each member is assigned a different meaning:
+#
+# - `loop <base> <body>`, where **base** is an expression that is
+#   evaluated each iteration, exactly **before the body**.
+# - `loop <base>, <step> <body>`, where **step** is an expression that is
+#   evaluated each iteration, exactly **after the body**.
+# - `loop <setup>, <base>, <step> <body>`, where **setup** is an expression
+#   evaluated once, exactly **before the loop**.
 
 # HEADLESS (UNCONDITIONAL) LOOP:
 
@@ -27,19 +44,19 @@
 
 i = 0;
 
-loop (i++ < 10)
+loop i++ < 10
   say("i = " ~ i);
 
 
 # [2] Check if condition is true, evaluate the body, evaluate
 #     a step expression, repeat.
 
-loop (i < 10; i += 1)
+loop i < 10, i += 1
   say("i = " ~ i);
 
 
 # [3] Initialize a variable, check if a condition is true,
 #     evaluate the body, evaluate a step expression, repeat.
 
-loop (i = 0; i < 10; i++)
+loop i = 0, i < 10, i++
   say("i = " ~ i);
