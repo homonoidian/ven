@@ -144,7 +144,7 @@ module Ven::Parselet
       # a lambda.
       if @parser.word!(",")
         params = @parser.repeat(")", ",") do
-          @parser.expect("SYMBOL", "*")[:lexeme]
+          @parser.expect("SYMBOL", "*").lexeme
         end
 
         return lambda!([subordinate.value] + params)
@@ -241,7 +241,7 @@ module Ven::Parselet
     def parse
       if @parser.is_led?(only: PBinary)
         return QReduceSpread.new(@tag,
-          @parser.word![:lexeme],
+          @parser.word!.lexeme,
           @parser.after("|"),
         )
       end
@@ -385,7 +385,7 @@ module Ven::Parselet
         end
       end
 
-      QEnsureShould.new(@tag, title[:lexeme], cases).as(Quote)
+      QEnsureShould.new(@tag, title.lexeme, cases).as(Quote)
     end
   end
 
@@ -469,7 +469,7 @@ module Ven::Parselet
     def parse
       scope = @parser.word!("FUN") || @parser.word!("LOOP")
 
-      QNext.new(@tag, scope.try(&.[:lexeme]),
+      QNext.new(@tag, scope.try(&.lexeme),
         # In case the next word is a nud, read the next
         # expressions: `next <fun|loop>? foo, bar, baz`.
         @parser.is_nud? ? @parser.repeat(sep: ",") : Quotes.new)
@@ -602,19 +602,19 @@ module Ven::Parselet
     #
     # Returns a tuple of `{trigger_type, trigger}`.
     def trigger!
-      type, lexeme = @parser.word[:type], @parser.word[:lexeme]
+      type, lexeme = @parser.word.type, @parser.word.lexeme
 
       # If *type* is a user-defined keyword, consume & return
       # out immediately.
       if @parser.context.keyword?(lexeme)
-        return type, @parser.word![:lexeme]
+        return type, @parser.word!.lexeme
       end
 
       case type
       when "REGEX"
-        {gentype, Regex.new(@parser.word![:lexeme])}
+        {gentype, Regex.new(@parser.word!.lexeme)}
       when "SYMBOL"
-        {lexeme.upcase, @parser.word![:lexeme]}
+        {lexeme.upcase, @parser.word!.lexeme}
       else
         die("'nud': bad trigger: expected regex or symbol")
       end
@@ -655,15 +655,10 @@ module Ven::Parselet
       definitions = {} of String => Quote
 
       # Regex triggers export their named captures into
-      # readtime scope.
-      if exports = @token[:exports]
-        exports.each do |capture, match|
-          if match
-            definitions[capture] = QString.new(@tag, match)
-          else
-            # If unmatched, store as `QFalse`.
-            definitions[capture] = QFalse.new(@tag)
-          end
+      # their nud's definitions.
+      if matches = @token.matches?
+        matches.each do |capture, match|
+          definitions[capture] = match ? QString.new(@tag, match) : QFalse.new(@tag)
         end
       end
 
@@ -816,7 +811,7 @@ module Ven::Parselet
         # The key can be string/symbol (normalized into string),
         # or a led **in parens**.
         if key = @parser.word!("STRING", "SYMBOL")
-          keys << QString.new(@tag, key[:lexeme])
+          keys << QString.new(@tag, key.lexeme)
         elsif @parser.expect("(")
           keys << @parser.before(")")
         end

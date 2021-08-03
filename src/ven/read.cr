@@ -1,7 +1,26 @@
 module Ven
-  # In terms of Ven, a word is a tagged lexeme. A lexeme is a
-  # verbatim citation of the source code.
-  alias Word = {type: String, lexeme: String, line: Int32, exports: Hash(String, String?)?}
+  # In terms of Ven, a word is a tagged lexeme.
+  struct Word
+    # Returns the line number of the line this word was found on.
+    getter line : Int32
+    # Returns the type of this word. Note that by convention, Word
+    # types should be all-uppercase.
+    getter type : String
+    # Returns the lexeme of this word. A lexeme is a verbatim citation
+    # of the source code.
+    getter lexeme : String
+    # Returns a hash of named captures the regex for this word made.
+    getter! matches : Hash(String, String?)
+
+    def initialize(@type, @lexeme, @line, @matches = nil)
+    end
+
+    # Returns a dummy word. The *type* of the word is `DUMMY`, *lexeme*
+    # is `<dummy>`, and *line* number is 1.
+    def self.dummy
+      Word.new("DUMMY", "<dummy>", 1)
+    end
+  end
 
   # The type that represents a Ven distinct.
   alias Distinct = Array(String)
@@ -86,12 +105,8 @@ module Ven
       should from immediate true false)
 
     # Returns the current word.
-    getter word = {
-      type:    "START",
-      lexeme:  "<start>",
-      line:    1,
-      exports: nil.as(Hash(String, String?)?),
-    }
+    getter word : Word = Word.dummy
+
     # Returns this reader's context.
     getter context : CxReader
 
@@ -140,13 +155,10 @@ module Ven
 
     # Makes a `Word` from the given *type* and *lexeme*.
     #
-    # *match* is the optional `MatchData` of the word. It is
-    # provided only by the custom words (triggers).
-    private macro word(type, lexeme, match = nil.as(Hash(String, String?)?))
-      { type: {{type}},
-        lexeme: {{lexeme}},
-        line: @lineno,
-        exports: {{match}} }
+    # *matches* is the optional `MatchData` of the word
+    # (see `Word#matches`).
+    private macro word(type, lexeme, matches = nil)
+      Word.new({{type}}, {{lexeme}}, @lineno, {{matches}})
     end
 
     # Returns whether *lexeme* is a keyword.
@@ -189,7 +201,7 @@ module Ven
     #
     # Returns `Precedence::ZERO` if it has no precedence.
     private macro precedence
-      @led[(@word[:type])]?.try(&.precedence) || Precedence::ZERO
+      @led[@word.type]?.try(&.precedence) || Precedence::ZERO
     end
 
     # Matches offset source against a regex *pattern*. If
@@ -237,20 +249,20 @@ module Ven
     # only if the current word is one of the given *types*.
     # Returns nil otherwise.
     def word!(*types : String)
-      word! if @word[:type].in?(types)
+      word! if @word.type.in?(types)
     end
 
     # Returns whether the current word's type is any of the
     # given *types*.
     def word?(*types : String)
-      @word[:type].in?(types)
+      @word.type.in?(types)
     end
 
     # Returns the current word and consumes the next one,
     # but only if the current word is of one of the given
     # *types*. Dies of `ReadError` otherwise.
     def expect(*types : String)
-      return word! if @word[:type].in?(types)
+      return word! if @word.type.in?(types)
 
       die("expected #{types.map(&.dump).join(", ")}")
     end
@@ -318,16 +330,16 @@ module Ven
     def led(level = Precedence::ZERO) : Quote
       die("expected an expression") unless is_nud?
 
-      left = nud_for(@word[:type]).parse!(self, tag, word!)
+      left = nud_for(@word.type).parse!(self, tag, word!)
 
       # 'x' is special. If met in nud position, it's a symbol;
       # if met in operator position, it's a keyword operator.
-      if @word[:lexeme] == "x"
+      if @word.lexeme == "x"
         @word = word("X", "x")
       end
 
       while level.value < precedence.value
-        left = led_for(@word[:type]).parse!(self, tag, left, word!)
+        left = led_for(@word.type).parse!(self, tag, left, word!)
       end
 
       left
@@ -336,18 +348,18 @@ module Ven
     # Returns whether the current word is one of the end-of-input
     # words (currently EOF, '}', ';').
     def eoi? : Bool
-      word[:type].in?("EOF", "}", ";")
+      word.type.in?("EOF", "}", ";")
     end
 
     # Reads a statement followed by a semicolon (if requested).
     #
     # Semicolons are always optional before `eoi?` words.
     def statement : Quote
-      if stmt = @stmt[(@word[:type])]?
+      if stmt = @stmt[@word.type]?
         this = stmt.parse!(self, tag, word!)
         semi = stmt.semicolon
       else
-        nud = nud_for?(@word[:type])
+        nud = nud_for?(@word.type)
         this = led
         # XXX: the decision made by *nud* remains with it
         # even after it finished reading. Doing a bit hairy
@@ -366,7 +378,7 @@ module Ven
     #
     # SYMBOL {"." SYMBOL}
     private macro path
-      repeat sep: "." { expect("SYMBOL")[:lexeme] }
+      repeat sep: "." { expect("SYMBOL").lexeme }
     end
 
     # Tries to read a 'distinct' statement.
@@ -436,34 +448,34 @@ module Ven
     # Returns whether the current word is a nud parselet of
     # type *pick*.
     def is_nud?(only pick : Parselet::Nud.class) : Bool
-      !!nud_for?(@word[:type]).try(&.class.== pick)
+      !!nud_for?(@word.type).try(&.class.== pick)
     end
 
     # Returns whether the current word is a nud parselet of
     # any type except *pick*.
     def is_nud?(but pick : Parselet::Nud.class) : Bool
-      !!nud_for?(@word[:type]).try(&.class.!= pick)
+      !!nud_for?(@word.type).try(&.class.!= pick)
     end
 
     # Returns whether the current word is a nud parselet.
     def is_nud?
-      !!nud_for?(@word[:type])
+      !!nud_for?(@word.type)
     end
 
     # Returns whether the current word is a led parselet of
     # type *pick*.
     def is_led?(only pick : Parselet::Led.class) : Bool
-      !!led_for?(@word[:type]).try(&.class.== pick)
+      !!led_for?(@word.type).try(&.class.== pick)
     end
 
     # Returns whether the current word is a led parselet.
     def is_led?
-      !!led_for?(@word[:type])
+      !!led_for?(@word.type)
     end
 
     # Returns whether the current word is a statement parselet.
     def is_stmt?
-      @stmt.has_key?(@word[:type])
+      @stmt.has_key?(@word.type)
     end
 
     # Declares a nud parselet.

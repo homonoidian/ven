@@ -38,14 +38,14 @@ module Ven::Parselet
       @parser.die({{message}})
     end
 
-    # A shorthand for `@token[:type]`.
+    # A shorthand for `@token.type`.
     macro type
-      @token[:type]
+      @token.type
     end
 
-    # A shorthand for `@token[:lexeme]`
+    # A shorthand for `@token.lexeme`
     macro lexeme
-      @token[:lexeme]
+      @token.lexeme
     end
 
     # Enables readtime context in the block. Returns the
@@ -73,16 +73,16 @@ module Ven::Parselet
     def symbol(token = nil) : QSymbol
       token ||= @parser.expect("$SYMBOL", "SYMBOL", "*")
 
-      case token[:type]
+      case token.type
       when "$SYMBOL"
         unless in_readtime_context?
-          die("readtime symbol (namely '#{token[:lexeme]}') used " \
+          die("readtime symbol (namely '#{token.lexeme}') used " \
               "outside of readtime evaluation context")
         end
 
-        QReadtimeSymbol.new(@tag, token[:lexeme])
+        QReadtimeSymbol.new(@tag, token.lexeme)
       when "SYMBOL", "*"
-        QRuntimeSymbol.new(@tag, token[:lexeme])
+        QRuntimeSymbol.new(@tag, token.lexeme)
       else
         raise "unknown symbol type"
       end

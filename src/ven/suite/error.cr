@@ -19,8 +19,8 @@ module Ven::Suite
 
     # Initializes from a reader error.
     def initialize(word : Word, @file, @message)
-      @line = word[:line]
-      @lexeme = word[:lexeme]
+      @line = word.line
+      @lexeme = word.lexeme
     end
 
     # Initializes from a readtime error.
