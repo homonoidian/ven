@@ -164,6 +164,8 @@ module Ven
     # *enquiry* is the Enquiry object used to send/read global
     # signals, properties, configurations et al.
     def initialize(@source : String, @file = "untitled", @context = CxReader.new, @enquiry = Enquiry.new)
+      @lineno = @enquiry.reader_lineno # temporary
+
       # Read the first word:
       word!
 

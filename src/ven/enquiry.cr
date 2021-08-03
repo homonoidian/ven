@@ -7,6 +7,9 @@ module Ven
   #
   # The recipient can also send some data back to the top.
   class Enquiry
+    # TO `Reader`: lineno offset (*temporary*)
+    property reader_lineno = 1
+
     # TO `Machine`: whether to run the inspector.
     property inspect = false
     # TO `Machine`: whether to build the timetable.

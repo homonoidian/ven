@@ -26,6 +26,11 @@ module Ven
     # the line itself.
     CODE_LINE_BAR = "| "
 
+    # Consensus value for filename in REPL. If we see it as
+    # the filename of an error, we assume it is reliable to
+    # search in the interactive buffer for the error's cause.
+    INTERACTIVE = "interactive"
+
     # These represent the flags. Look into their corresponding
     # helps in the Commander scaffold to know what they're for.
     @quit = true
@@ -40,6 +45,10 @@ module Ven
     # are they?)
     @enquiry = uninitialized Enquiry
     @orchestra = uninitialized Orchestra
+
+    # The buffer of lines (used by the REPL to show
+    # error code excerpts).
+    @lines = [] of String
 
     def initialize
       Colorize.on_tty_only!
@@ -96,8 +105,8 @@ module Ven
 
         # If there are lines to display, pick the right line
         # and pass it to `code`, which will do the job.
-        unless lines.empty?
-          io << "\n" << code(lines[e.line - 1], e.line, b...e.end_column)
+        if !lines.empty? && (line = lines[e.line - 1]?)
+          io << "\n" << code(line, e.line, b...e.end_column)
         end
       end
 
@@ -190,6 +199,14 @@ module Ven
     # Respects the chosen final step. Returns the result that
     # this step produced.
     def eval(file : String, source : String)
+      # Set for meaningful error messages.
+      unless @lines.empty?
+        # Temporary, hopefully will be replaced by the less invasive
+        #
+        # program.before_read { |reader| reader.lineno = @buffer.size }
+        @enquiry.reader_lineno = @lines.size
+      end
+
       program = @orchestra.from(source, file, @enquiry, run: false)
 
       {% begin %}
@@ -272,12 +289,13 @@ module Ven
         puts "[took #{duration.total_microseconds}us]".colorize.bold
       end
     rescue e : ReadError
-      # Currently, it is not possible to display the excerpt in
-      # REPL (properly, at least). It may be, though, if we add
-      # some sort of virtual lines (by changing Reader's line
-      # offset?) Then we can just place the REPL buffer in the
-      # else case.
-      die(e, File.file?(e.file) ? File.read_lines(e.file) : [] of String)
+      if e.file == INTERACTIVE
+        die(e, @lines)
+      elsif File.file?(e.file)
+        die(e, File.read_lines(e.file))
+      else
+        die(e, [] of String)
+      end
     rescue e : VenError
       die(e)
     end
@@ -327,7 +345,7 @@ module Ven
 
       fancy.display.add do |ctx, line, yielder|
         if line.starts_with?(COMMAND_WORD)
-          # Highlight the REPL instruction, given a line that
+          # Highlight the REPL instruction, given the line
           # starts with one.
           yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
         else
@@ -353,9 +371,13 @@ module Ven
         \n
       END
 
+      prompt = " #{"~>".colorize.dark_gray} "
+
       loop do
+        rprompt = " [#{@lines.size + 1}]".colorize.dark_gray
+
         begin
-          source = fancy.readline(" #{"~>".colorize(:dark_gray)} ").try(&.strip)
+          source = fancy.readline(prompt, rprompt.to_s).try(&.strip)
         rescue Fancyline::Interrupt
           next puts
         end
@@ -389,7 +411,10 @@ module Ven
         end
 
         fancy.grab_output do
-          run("interactive", source)
+          # Store the input in the line buffer.
+          @lines.concat source.split('\n')
+
+          run(INTERACTIVE, source)
         end
       end
 
