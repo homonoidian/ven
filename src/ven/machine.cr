@@ -2,7 +2,7 @@ require "fancyline"
 require "./suite/*"
 
 module Ven
-  struct Machine
+  class Machine
     include Suite
 
     alias Timetable = Hash(Int32, IStatistics)
@@ -17,25 +17,28 @@ module Ven
     # Fancyline used by the debugger.
     @@fancy = Fancyline.new
 
+    # Origin chunk. It only makes sense to set it just before
+    # evaluation, otherwise it is ignored.
+    property origin = 0
+    # Whether to enable inspector functionality (see `inspector`)
+    property inspect = false
+    # Whether to take the appropriate measurements, and write
+    # them to the timetable.
+    property measure = false
+    # The target `Timetable` Hash.
+    property timetable = Timetable.new
+    # Returns the current frame stack of this machine.
+    property frames = Array(Frame).new
+
     # Returns the chunks this machine is aware of.
     getter chunks : Chunks
     # Returns the context of this machine.
     getter context : CxMachine
-    # Returns the current frame stack of this machine.
-    getter frames : Array(Frame)
-    # Returns the `Enquiry` object this machine writes to
-    # and reads from.
-    getter enquiry : Enquiry
-
-    @timetable : Timetable
 
     # Makes a `Machine` which is aware of *chunks*. Upon `start`,
-    # the machine will execute the *origin*-th chunk.
-    def initialize(@chunks, @context = CxMachine.new, origin = 0, @enquiry = Enquiry.new, frames : Array(Frame)? = nil)
-      @frames = frames ? frames.not_nil! : [Frame.new(cp: origin)]
-      @inspect = @enquiry.inspect.as Bool
-      @measure = @enquiry.measure.as Bool
-      @timetable = @enquiry.timetable = Timetable.new
+    # the machine will execute the `origin`-th chunk.
+    def initialize(@chunks, @context = CxMachine.new)
+      @frames = [Frame.new(cp: @origin)]
     end
 
     # Dies of runtime error with *message*, which should explain

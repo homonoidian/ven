@@ -2,9 +2,6 @@ module Ven::Suite
   # Represents an individual trace entry in an error's
   # traceback.
   struct Trace
-    # The amount of whitespace characters before a trace.
-    TRACE_PADDING = 2
-
     # Returns the line that this trace points to.
     getter line : Int32
     # Returns the file that this trace points to.
@@ -32,22 +29,6 @@ module Ven::Suite
     # as the *other* trace.
     def ==(other : Trace)
       @file == other.file && @line == other.line && @desc == other.desc
-    end
-
-    # Returns the string representation of this trace.
-    #
-    # Reads `file` for an excerpt, unless it isn't a file or
-    # doesn't exist. **Colorizes.**
-    def to_s(io)
-      io << " " * TRACE_PADDING << @desc.colorize.bold
-      io << " (" << @file << ":" << @line << ")"
-
-      # If *file* exists, is a file, and is able to provide
-      # *line*, append the line preview.
-      if File.file?(@file) && (excerpt = File.read_lines(@file)[@line - 1]?)
-        io << "\n" << " " * (TRACE_PADDING + 2)
-        io << @line << "| " << excerpt.lstrip
-      end
     end
 
     def_clone

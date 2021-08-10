@@ -1661,21 +1661,25 @@ module Ven::Suite
     def initialize(parent : Machine, @lambda : MLambda)
       @scope = @lambda.scope.clone.as(Hash(String, Model))
       @chunks = parent.chunks.as(Chunks)
-      @enquiry = parent.enquiry.as(Enquiry)
     end
 
     delegate :variant?, :specificity, to: @lambda
 
     # Calls this lambda with *args*.
     def call(args : Models) : Model
-      machine = Machine.new(@chunks, CxMachine.new, 1, @enquiry, [
+      machine = Machine.new(@chunks, CxMachine.new)
+
+      machine.frames = [
         # Suicide frame. If the interpreter hits it, it will
         # immediately return.
         Frame.new(ip: Int32::MAX - 1),
         # This lambda's frame of execution. It is initialized
         # with the lambda's arguments and the target chunk.
+        #
+        # Since this is the topmost frame on the frame stack,
+        # it will start executing first.
         Frame.new(Frame::Label::Function, args, @lambda.target),
-      ])
+      ]
 
       # Put the lambda scope clone onto the scopes stack.
       machine.context.push(isolated: true, initial: @scope.clone)

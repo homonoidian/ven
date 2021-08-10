@@ -131,18 +131,17 @@ module Ven
     INVALID_PSEUDOWORD = "__INVALID__"
 
     # Returns the current word.
-    getter word : Word = Word.dummy
+    getter word = Word.dummy
+    # Returns whether this reader is dirty.
+    getter dirty = false
     # Returns this reader's context.
     getter context : CxReader
 
     # Current line number (incremented by one each line).
     #
-    # You can change this value if you want to, but only
-    # if you know what you're doing.
-    property lineno = 1
+    # You can change this using `lineno=`.
+    getter lineno = 1
 
-    # Whether this reader's state is dirty.
-    @dirty = false
     # Current column (counts from 1 on).
     @column = 1
     # Current character offset.
@@ -158,15 +157,8 @@ module Ven
     # *file* is the name by which this source code will be
     # identified; normally it's filename.
     #
-    # *context* is the context for this Reader (see
-    # `Context::Reader`).
-    #
-    # *enquiry* is the Enquiry object used to send/read global
-    # signals, properties, configurations et al.
-    def initialize(@source : String, @file = "untitled", @context = CxReader.new, @enquiry = Enquiry.new)
-      @lineno = @enquiry.reader_lineno # temporary
-
-      # Read the first word:
+    # *context* is the context for this Reader (see `CxReader`).
+    def initialize(@source : String, @file = "untitled", @context = CxReader.new)
       word!
 
       @led = {} of String => Parselet::Led
@@ -185,10 +177,24 @@ module Ven
       @nud = uninitialized Hash(String, Parselet::Nud)
       @stmt = uninitialized Hash(String, Parselet::Nud)
       @file = uninitialized String
-      @enquiry = uninitialized Enquiry
 
-      # Read the first word.
       word!
+    end
+
+    # Sets the `lineno` to *lineno*, and recomputes the current
+    # word so it uses the *lineno*.
+    #
+    # It is recommended to call this before reading, not during,
+    # and not, of course, after.
+    def lineno=(@lineno)
+      @word = Word.new(
+        @word.type,
+        @word.lexeme,
+        @lineno,
+        @word.begin,
+        @word.end_column,
+        @word.matches?
+      )
     end
 
     # Given an explanation message, *message*, dies of `ReadError`.
@@ -196,8 +202,8 @@ module Ven
       raise ReadError.new(@word, @file, message)
     end
 
-    # Makes a `QTag`. Extracts the data about the location from the
-    # current word.
+    # Makes a `QTag`. Extracts the data about the location
+    # from the current word.
     private macro tag
       QTag.new(@file, @word.line, @word.begin_column,
         # I am still not sure about this: should the tag

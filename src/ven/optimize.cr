@@ -10,6 +10,12 @@ module Ven
   class Optimizer
     include Suite
 
+    # Returns the chunks of this optimizer.
+    getter chunks : Chunks
+
+    # The amount of optimization passes to do.
+    property passes = 8
+
     # Makes an Optimizer from *chunks*, an array of
     # unstitched chunks.
     def initialize(@chunks : Chunks)
@@ -147,20 +153,12 @@ module Ven
     end
 
     # Optimizes the chunks of this Optimizer in several *passes*.
-    def optimize(passes)
-      passes.times do
+    def optimize
+      @passes.times do
         @chunks.each do |chunk|
           optimize(chunk)
         end
       end
-    end
-
-    # Given an array of unstitched chunks, *chunks*, optimizes
-    # them in *passes* passes. Stitches the optimized chunks
-    # and returns them.
-    def self.optimize(chunks, passes = 1)
-      new(chunks).optimize(passes)
-      chunks.map(&.complete!)
     end
   end
 end

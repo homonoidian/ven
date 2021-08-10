@@ -1,83 +1,189 @@
-require "http"
 require "fancyline"
 require "commander"
+
+require "inquirer/error"
+require "inquirer/config"
+require "inquirer/client"
+require "inquirer/protocol"
 
 require "./lib"
 
 module Ven
-  # Ven command line interface builds an `Orchestra` and an
-  # `Enquiry`, and uses them to run a program from a file,
-  # interactive prompt, or distinct.
+  # Ven command line interface makes it easy to run Ven programs
+  # interactively, from a file, or from a Ven distinct. It also
+  # provides a set of helpful debugging & statistics middlewares,
+  # plus a nice way to show Ven errors and program results.
   class CLI
     include Suite
 
+    # The source code of the basis file. It is embedded into
+    # the executable.
+    #
+    # The basis file contains the most primitive Ven code you
+    # can find. It defines the defaults for protocol hooks &
+    # useful action shorthands like `say`, `slurp`, etc.
+    BASIS = {{read_file("#{__DIR__}/ven/library/basis.ven")}}
+
+    # Consensus filename for the basis file.
+    BASIS_NAME = "basis"
+
     # The path where the REPL history file can be found.
     HISTORY = ENV["VEN_HISTORY"]? || Path.home / ".ven_history"
+
+    # Consensus filename of input from the REPL. If we see it
+    # as the filename in an error, we assume it is reliable to
+    # search in the interactive line buffer (`@lines`) for the
+    # associated source code.
+    INTERACTIVE = "interactive"
 
     # The regex matching a REPL command word. Command words
     # begin a REPL command (see `command`).
     COMMAND_WORD = /\\\w+/
 
-    # How many spaces `code`, which draws code excerpts
-    # for errors, should prepend before the code.
-    CODE_INDENT_LEVEL = 2
-
     # The string `code` uses to separate line number from
     # the line itself.
-    CODE_LINE_BAR = "| "
+    CODE_BARRIER = "| "
 
-    # Consensus value for filename in REPL. If we see it as
-    # the filename of an error, we assume it is reliable to
-    # search in the interactive buffer for the error's cause.
-    INTERACTIVE = "interactive"
+    # The indentation level before an excerpt of `code`.
+    CODE_PREDENT = 2
 
-    # These represent the flags. Look into their corresponding
-    # helps in the Commander scaffold to know what they're for.
-    @quit = true
-    @final = "evaluate"
-    @result = false
-    @measure = false
-    @serialize = false
+    # Represents the CLI configuration.
+    #
+    # This might have been just a bunch of instance variables,
+    # I don't know why it's an object...
+    private class Config
+      # Whether to quit after the program is executed.
+      property quit = true
+      # Consider the program executed when the execution
+      # reaches this step.
+      property final : Program::Step.class = Program::Step::Eval
+      # Whether to print the result of the program after it
+      # is executed.
+      property result = false
+      # Whether to enable the step-by-step inspector (scheduled
+      # for removal).
+      property inspect = false
+      # The amount of octets of optimize passes.
+      property optimize = 1
+      # Whether to take overall (step) measurements, and
+      # print them after the program is executed.
+      property measure = false
+      # The referent Inquirer client.
+      property! inquirer : Inquirer::Client
+      # Whether to apply this config to the children (exposed)
+      # programs as well. Bloaty if you don't know what you're
+      # doing.
+      property propagate = false
+      # Whether to record the timetable.
+      property timetable = false
+      # Whether to enable test mode.
+      property test_mode = false
+    end
 
-    # The orchestra and Enquiry cannot be initialized at this
-    # point; they are never used before they've been initialized
-    # anyways. That's why these `uninitialized`s are safe (but
-    # are they?)
-    @enquiry = uninitialized Enquiry
-    @orchestra = uninitialized Orchestra
-
-    # The buffer of lines (used by the REPL to show
-    # error code excerpts).
+    # The buffer of lines (used by the REPL to show excerpts
+    # of code in error messages).
     @lines = [] of String
 
     def initialize
       Colorize.on_tty_only!
+
+      @hub = CxHub.new
+
+      # Create the config object with all defaults. The
+      # CLI machinery will fill it in.
+      @config = Config.new
+
+      # Extend with all builtin libraries. This might need
+      # some control later on. Some libraries, like `http`
+      # right now, should be `expose`d by the user, not
+      # imported automatically.
+      {% for library in Extension.subclasses %}
+        @hub.extend({{library}}.new)
+      {% end %}
+
+      @orchestra = Orchestra.new(@hub,
+        Orchestra::Pull.new { |distinct| pull(distinct) },
+        Orchestra::Read.new { |readable| read(readable) },
+      )
     end
 
-    # Prints an error according to the following template:
-    # `[*embraced*] *message*`. If `@quit` is true, quits
-    # with status 1 afterwards.
-    private def err(embraced : String, message : String)
-      puts "#{"[#{embraced}]".colorize.light_red} #{message}"
-      exit(1) if @quit
+    # Implements the pull function for the Orchestra.
+    #
+    # If isolated, prints a warning and returns nil. Otherwise,
+    # makes a FilesFor request to Inquirer, and returns the
+    # array of filenames (or nil).
+    def pull(distinct : Distinct)
+      unless @config.inquirer.running?
+        return warn("this instance of Ven is not connected to Inquirer")
+      end
+
+      response = @config.inquirer.send(
+        Inquirer::Protocol::Request.new(
+          # Request an array of files for the given distinct.
+          Inquirer::Protocol::Command::FilesFor,
+          distinct.join('.')
+        )
+      )
+
+      # As per the Protocol, this is either the array, or nil.
+      response.result.as?(Array(String))
     end
 
-    # Stylizes a *line* of code. Highlights *line*. *lineno* is the
-    # line number, and *underline* may specify the character range
-    # to underline.
-    private def code(line : String, lineno : Int32, underline : Range(Int32?, Int32?) = ..)
+    # Implements the read function for the Orchestra. Currently,
+    # just a safety wrapper around `File.read`.
+    def read(readable : String)
+      if File.file?(readable) && File.readable?(readable)
+        File.read(readable)
+      end
+    end
+
+    # Returns the *line*-th line in *filename*. **lineno
+    # counts from 1 on.**
+    #
+    # If filename is `INTERACTIVE`, returns the line from
+    # the interactive line buffer.
+    def getline?(filename : String, lineno : Int32) : String?
+      return @lines[lineno - 1]? if filename == INTERACTIVE
+
+      index = 0
+
+      if File.file?(filename) && File.readable?(filename)
+        File.each_line(filename) do |line|
+          return line.strip if index + 1 == lineno
+
+          index += 1
+        end
+      end
+    end
+
+    # Prints a yellow warning message.
+    def warn(comment : String) : Nil
+      puts "[#{"warning".colorize.yellow}] #{comment}"
+    end
+
+    # Prints an error with the given *category* and *comment*.
+    # If `Config#quit` is set to true, quits with status 1.
+    def err(category : String, comment : String) : Nil
+      puts "[#{category.colorize.light_red}] #{comment}"
+
+      exit(1) if @config.quit
+    end
+
+    # Stylizes a *line* of code. Syntax highlights *line*.
+    # *lineno* is the line number, and *underline* may specify
+    # the character range to underline.
+    def code(line : String, lineno : Int32, underline : Range(Int32?, Int32?) = .., indent = 2)
       String.build do |io|
-        io << " " * CODE_INDENT_LEVEL << lineno << CODE_LINE_BAR
-        io << Utils.highlight(line, @orchestra.hub.reader)
+        io << " " * indent << lineno << CODE_BARRIER
+        io << Utils.highlight(line, @hub.reader)
 
         if b = underline.begin
-          # Compute the padding. The '- 1' is from, er, "observation". I
-          # truly am lost in all that column math.
-          padding = {{CODE_INDENT_LEVEL + CODE_LINE_BAR.size}} + lineno.to_s.size + b - 1
+          padding = indent + {{CODE_BARRIER.size}} + lineno.to_s.size + b - 1
 
-          # Compute the length (the amount of underline characters). If
-          # there is no definite end, let it be 1.
-          length = underline.end ? underline.size : 1
+          # Compute the length (the amount of underline characters).
+          #
+          # If the end is undefined, default to 1.
+          length = underline.end ? underline.end.not_nil! - b : 1
 
           # Pick the right symbol. There is no point in '-'ing
           # one character, it doesn't look good.
@@ -88,13 +194,31 @@ module Ven
       end
     end
 
-    # Dies of an *error* (see `err`).
-    private def die(error e : ReadError, lines : Array(String))
-      message = String.build do |io|
+    # Prints the given traces. Uses `code` to stylize the
+    # matching line of code, if any.
+    #
+    # **A newline is prepended before the traces.**
+    def traces(traces : Traces, indent = 2)
+      String.build do |io|
+        traces.each do |trace|
+          io << "\n"
+          io << " " * indent << "in " << trace.desc.colorize.bold
+          io << " (" << trace.file << ":" << trace.line << ")"
+          if line = getline?(trace.file, trace.line)
+            io << "\n" << code(line, trace.line, indent: indent + 2)
+          end
+        end
+      end
+    end
+
+    # Dies of a `ReadError`. *lines* is a reference to an Array
+    # of strings with the lines of the corresponding source code.
+    def die(error e : ReadError)
+      comment = String.build do |io|
         io << e.message << " (in " << e.file << ":" << e.line
 
-        # If there is no begin_column, but is `.lexeme`, show the
-        # lexeme instead. If there is no `.lexeme` too, close off.
+        # If there is no begin_column, but is `.lexeme`, show
+        # the lexeme. If there is no `.lexeme` too, close off.
         if b = e.begin_column
           io << ":" << b
         elsif lexeme = e.lexeme
@@ -103,53 +227,59 @@ module Ven
 
         io << ")"
 
-        # If there are lines to display, pick the right line
-        # and pass it to `code`, which will do the job.
-        if !lines.empty? && (line = lines[e.line - 1]?)
+        # If there is a line to display, pass it to `code`,
+        # which will do the job.
+        if line = getline?(e.file, e.line)
           io << "\n" << code(line, e.line, b...e.end_column)
         end
       end
 
-      err("read error", message)
+      err("read error", comment)
     end
 
-    # :ditto:
-    private def die(error e : CompileError)
-      err("compile error", "#{e.message}\n#{e.traces.join("\n")}")
+    # Dies of a `CompileError` with traceback.
+    def die(error e : CompileError)
+      err("compile error", "#{e.message}#{traces(e.traces)}")
     end
 
-    # :ditto:
-    private def die(error e : RuntimeError)
-      err("runtime error", "#{e.message}\n#{e.traces.join("\n")}")
+    # Dies of a `RuntimeError` with traceback.
+    def die(error e : RuntimeError)
+      err("runtime error", "#{e.message}#{traces(e.traces)}")
     end
 
-    # :ditto:
-    private def die(error e : InternalError)
+    # Dies of an `InternalError`.
+    def die(error e : InternalError)
       err("internal error", e.message.not_nil!)
     end
 
-    # :ditto:
-    private def die(error e : ExposeError)
+    # Dies of an `ExposeError`.
+    def die(error e : ExposeError)
       err("expose error", e.message || "bad expose")
     end
 
-    # :ditto:
-    private def die(error)
+    # Dies of a generic (unknown) error.
+    def die(error)
       err("error", error.to_s)
     end
 
-    # Displays the *quotes*. Returns nothing.
-    def display(quotes : Quotes)
+    # Detrees, and consequently prints, the given *quotes*.
+    #
+    # Returns nothing.
+    def show(quotes : Quotes)
       puts Detree.detree(quotes)
     end
 
-    # Displays the *chunks*. Returns nothing.
-    def display(chunks : Chunks)
+    # Disassembles, and consequently prints, the given *chunks*.
+    #
+    # Returns nothing.
+    def show(chunks : Chunks)
       puts chunks.join("\n\n")
     end
 
-    # Displays the *timetable*. Returns nothing.
-    def display(timetable : Machine::Timetable)
+    # Formats, and consequently prints, the given *timetable*.
+    #
+    # Returns nothing.
+    def show(timetable : Machine::Timetable)
       timetable.each do |cidx, stats|
         puts "chunk #{cidx}".colorize.underline
 
@@ -186,157 +316,138 @@ module Ven
       end
     end
 
-    # Displays the *value*. Returns nothing.
-    def display(value)
-      puts value if @result && value
-    end
-
-    # Evaluates the *source* using the active orchestra.
-    #
-    # *file* is the filename by which the source will
-    # be identified.
-    #
-    # Respects the chosen final step. Returns the result that
-    # this step produced.
-    def eval(file : String, source : String)
-      # Set for meaningful error messages.
-      unless @lines.empty?
-        # Temporary, hopefully will be replaced by the less invasive
-        #
-        # program.before_read { |reader| reader.lineno = @buffer.size }
-        @enquiry.reader_lineno = @lines.size
-      end
-
-      program = @orchestra.from(source, file, @enquiry, run: false)
-
-      {% begin %}
-        case @final
-        # Evaluate is an edge-case because it needs COOP not
-        # only with Program, but with runtime Orchestra too.
-        # Nothing else does.
-        when "evaluate"
-          program.run(@orchestra.pool)
-        {% for step, order in Program::Step.constants %}
-          {% unless step.stringify == "Evaluate" %}
-            # To illustrate this, let's look what this will
-            # expand into given `step = Program::Step::Compile`.
-            #
-            # ```
-            # when "compile"
-            #   program
-            #     .step(Program::Step::Read)
-            #     .step(Program::Step::Transform)
-            #     .step(Program::Step::Compile)
-            # ```
-            when {{step.stringify.downcase}}
-              program
-                # Including *step*!
-                {% for predecessor in Program::Step.constants[0..order] %}
-                  .step(Program::Step::{{predecessor}})
-                {% end %}
-              # `result_for` will return the result of the
-              # given step, if it ever was performed.
-              program.result_for(Program::Step::{{step}})
-          {% end %}
-        {% end %}
-        else
-          die("invalid final step: #{@final}")
-        end
-      {% end %}
-    end
-
-    # Evaluates the *source* using the active orchestra.
-    #
-    # *file* is the filename by which the source will
-    # be identified.
-    #
-    # `run` is a front-end to `eval`, in that it beautifies
-    # the errors and implements various supplement features
-    # (measurements, timetable display, etc.)
+    # Prints *value* if `Config#result` is set to true, and
+    # *value* is not nil.
     #
     # Returns nothing.
-    def run(file : String, source : String)
-      result = nil
+    def show(value)
+      puts value if @config.result && value
+    end
 
-      # Measure the duration of full `eval`. This duration
-      # is what is shown by '-m'.
-      duration = Time.measure do
-        result = eval(file, source)
+    # Injects step measurement middleware to *program*, and
+    # returns the hash of the measurements. Make sure to
+    # wait until the program executes before reading from
+    # this hash.
+    def measure(program : Program) : Hash(String, Time::Span)
+      measurements = {} of String => Time::Span
+
+      {% for step in Program::Step::NAMES %}
+         program.before_{{step.id}} do
+           measurements[{{step}}] = Time.monotonic
+         end
+
+         program.after_{{step.id}} do
+           measurements[{{step}}] = Time.monotonic - measurements[{{step}}]
+         end
+      {% end %}
+
+      measurements
+    end
+
+    # Builds the master callback for Orchestra according to
+    # the configuration of this CLI. `show`s everything that
+    # is expected to be shown, including, if necessary, the
+    # result of the program.
+    def master(program : Program)
+      timetable = Machine::Timetable.new
+
+      program.before_compile do |compiler|
+        compiler.ensure_tests = @config.test_mode
       end
 
-      # Although they have very similar names, `@enquiry.measure`
-      # is much more thorough (it's per-instruction) than
-      # `@measure`. They can be combined.
-      if @enquiry.measure
-        # We're sure timetable's there at this point.
-        display(@enquiry.timetable)
+      program.before_optimize do |optimizer|
+        optimizer.passes = @config.optimize * 8
       end
 
-      if @serialize
-        unless @final.in?("read", "transform")
-          die("the result of the final step is not serializable yet")
-          # Die does not break us out of the function!
-          return
+      program.before_eval do |machine|
+        if @config.timetable
+          machine.measure = true
+          machine.timetable = timetable
         end
-        # TODO: serialize all possible results: chunks,
-        # models, etc.
-        puts result.as(Quotes).to_pretty_json
-      else
-        display(result)
+
+        machine.inspect = @config.inspect
       end
 
-      if @measure
-        puts "[took #{duration.total_microseconds}us]".colorize.bold
+      # The measurement middleware should be the closest
+      # to the program evaluation.
+      measurements = @config.measure && measure(program)
+
+      result = program.result(@config.final)
+
+      show timetable
+
+      if measurements.is_a?(Hash) && !measurements.empty?
+        puts (
+          String.build do |io|
+            io << "Measurements for " << program.filename.colorize.underline << "\n"
+
+            measurements.each do |step, span|
+              duration, unit = Utils.with_unit(span)
+
+              io << "[" << step.colorize.bold << "] "
+              io << duration << unit << "\n"
+            end
+          end
+        )
       end
-    rescue e : ReadError
-      if e.file == INTERACTIVE
-        die(e, @lines)
-      elsif File.file?(e.file)
-        die(e, File.read_lines(e.file))
-      else
-        die(e, [] of String)
+
+      show result
+    end
+
+    # Builds the children callback for Orchestra according
+    # to the configuration of this CLI.
+    def children(program : Program)
+      # Test mode propagates even with propagation disabled.
+      program.before_compile do |compiler|
+        compiler.ensure_tests = @config.test_mode
       end
+
+      program.result(@config.final)
+    end
+
+    # Plays the given program, *respecting the propagate
+    # flag from the configuration.*
+    def play(program : Program | Distinct)
+      @orchestra.play(program,
+        ->master(Program),
+        if @config.propagate
+          ->master(Program)
+        else
+          ->children(Program)
+        end
+      )
+    end
+
+    # Evaluates the given *program*: injects the `master`, `children`
+    # middlewares necessary to fulfil the configuration object, and
+    # plays it in the orchestra.
+    def eval(program : Program)
+      if program.filename == INTERACTIVE
+        # Capture the current line number. Don't subtract 1,
+        # since we count from 1.
+        lineno = @lines.size
+
+        program.before_read do |reader|
+          reader.lineno = lineno
+        end
+      end
+
+      play(program)
+    end
+
+    # Makes a program from the given *source* and *filename*,
+    # and `show`s the result of `eval`uating it.
+    def run(filename : String, source : String)
+      program = Program.new(source, filename, hub: @hub)
+
+      eval(program)
     rescue e : VenError
       die(e)
     end
 
     # Processes a REPL command.
     def command(head : String, tail : String)
-      case {head, tail}
-      when {"help", _}
-        puts <<-END.gsub(/\\\w+/) { |cmd| cmd.colorize.yellow }
-
-        Usage: COMMAND [TAIL]
-
-        COMMAND:
-          \\help                show this
-          \\context             show context (TAIL = reader, compiler, machine)
-          \\serialize           serialize TAIL
-          \\deserialize         deserialize TAIL
-          \\deserialize_detree  deserialize & detree TAIL
-          \\lserq               deserialize & detree file TAIL
-          \\run_serq            deserialize & run file TAIL
-          \n
-        END
-      when {"serialize", _}
-        puts Program.new(tail).step(Program::Step::Read).quotes.to_json
-      when {"deserialize", _}
-        puts Quotes.from_json(tail)
-      when {"deserialize_detree", _}
-        puts Detree.detree(Quotes.from_json(tail))
-      when {"lserq", _}
-        puts Detree.detree(Quotes.from_json(File.read(tail)))
-      when {"run_lserq", _}
-        puts run(tail, Detree.detree(Quotes.from_json(File.read(tail))))
-      when {"context", "reader"}
-        puts @orchestra.hub.reader.to_pretty_json
-      when {"context", "compiler"}
-        puts "compiler context TODO"
-      when {"context", "machine"}
-        puts "machine context TODO"
-      else
-        die("Invalid REPL command: '#{head}'.")
-      end
+      die("REPL commands are temporarily disabled")
     end
 
     # Launches the read-eval-print loop.
@@ -349,15 +460,13 @@ module Ven
           # starts with one.
           yielder.call ctx, line.sub(COMMAND_WORD) { $0.colorize.yellow }
         else
-          yielder.call ctx, Utils.highlight(line, @orchestra.hub.reader)
+          yielder.call ctx, Utils.highlight(line, @hub.reader)
         end
       end
 
       # Load the REPL history.
-      if File.exists?(HISTORY) && File.file?(HISTORY) && File.readable?(HISTORY)
-        File.open(HISTORY, "r") do |io|
-          fancy.history.load(io)
-        end
+      if File.file?(HISTORY) && File.readable?(HISTORY)
+        File.open(HISTORY, "r") { |io| fancy.history.load(io) }
       end
 
       hint = "Hint:".colorize.blue
@@ -436,16 +545,16 @@ module Ven
         cmd.ignore_unmapped_flags = true
 
         cmd.flags.add do |flag|
-          flag.name = "port"
-          flag.short = "-p"
-          flag.long = "--port"
+          flag.name = "inquirer"
+          flag.short = "-i"
+          flag.long = "--inquirer"
           flag.default = 12879
           flag.description = "Set the referent Inquirer port."
         end
 
         cmd.flags.add do |flag|
           flag.name = "inspect"
-          flag.short = "-i"
+          flag.short = "-s"
           flag.long = "--inspect"
           flag.default = false
           flag.description = "Enable instruction-by-instruction inspector."
@@ -456,22 +565,22 @@ module Ven
           flag.short = "-m"
           flag.long = "--measure"
           flag.default = false
-          flag.description = "Show total execution time."
+          flag.description = "Measure, and consequently show, the time each step took."
         end
 
         cmd.flags.add do |flag|
           flag.name = "timetable"
           flag.short = "-M"
           flag.default = false
-          flag.description = "Show per-instruction execution time (timetable)."
+          flag.description = "Measure, and consequently show, the time each instruction took."
         end
 
         cmd.flags.add do |flag|
           flag.name = "final"
           flag.short = "-j"
           flag.long = "--just"
-          flag.default = "evaluate"
-          flag.description = "Can be: read, transform, optimize, compile, evaluate."
+          flag.default = "eval"
+          flag.description = "Can be: read, transform, optimize, compile, eval."
         end
 
         cmd.flags.add do |flag|
@@ -487,7 +596,7 @@ module Ven
           flag.short = "-O"
           flag.long = "--optimize"
           flag.default = 1
-          flag.description = "Set the amount of optimization passes."
+          flag.description = "The number of octets of optimization passes."
         end
 
         cmd.flags.add do |flag|
@@ -499,92 +608,89 @@ module Ven
         end
 
         cmd.flags.add do |flag|
-          flag.name = "serialize"
-          flag.short = "-s"
-          flag.long = "--serialize"
+          flag.name = "propagate"
+          flag.long = "--propagate"
           flag.default = false
-          flag.description = "Serialize final step."
+          flag.description = "(bloaty!) Propagate these flags to exposed programs"
         end
 
         # Generate flags for each `BaseAction` subclasses'
         # category. Automake the description.
         categories = {{BaseAction.subclasses}}.map(&.category).uniq.reject("screen")
-
         categories.each do |category|
           cmd.flags.add do |flag|
             flag.name = "with-#{category}"
             flag.long = "--with-#{category}"
             flag.default = false
-            flag.description = "enable #{category} actions"
+            flag.description = "enable #{category} category actions"
           end
         end
 
         cmd.run do |options, arguments|
-          # Enable the actions the user wants. Each action has
-          # a static property `.enabled`, which we set depending
-          # on the presence of the appropriate flag.
+          # Enable the actions the user chose to enable. Each
+          # action has a static property, `.enabled`, which we
+          # set depending on the presence of the category flag.
           {% for action in BaseAction.subclasses %}
             %category = {{action}}.category
-            # Note how we depend on the category flags
-            # generating correctly.
-            {{action}}.enabled = %category == "screen" || options.bool["with-#{%category}"]
+            {{action}}.enabled =
+              # Screen category is always enabled.
+              %category == "screen" \
+                || options.bool["with-#{%category}"]
           {% end %}
 
-          port = options.int["port"].as Int32
+          # Try to connect to Inquirer. The pull function
+          # will use it.
+          @config.inquirer = Inquirer::Client.new(
+            begin
+              config = Inquirer::Config.new
+              config.port = options.int["inquirer"].as(Int32)
+              config
+            end
+          )
 
-          @orchestra = Orchestra.new(port)
+          @config.inspect = options.bool["inspect"]
+          @config.measure = options.bool["measure"]
+          @config.timetable = options.bool["timetable"]
+          @config.result = options.bool["result"]
+          @config.optimize = options.int["optimize"].as(Int32)
+          @config.test_mode = options.bool["test-mode"]
+          @config.propagate = options.bool["propagate"]
 
-          @final = options.string["final"]
-          @result = options.bool["result"]
-          @measure = options.bool["measure"]
-          @serialize = options.bool["serialize"]
+          if step = Program::Step.parse?(final = options.string["final"])
+            @config.final = step
+          else
+            die("no such step: #{final}")
+          end
 
-          @enquiry = Enquiry.new
-          @enquiry.measure = options.bool["timetable"]
-          @enquiry.inspect = options.bool["inspect"]
-          @enquiry.optimize = options.int["optimize"].to_i * 8
-          @enquiry.test_mode = options.bool["test-mode"]
-
-          # Bake the boot file (peek to learn more) into
-          # the binary.
-          @orchestra.from({{read_file("#{__DIR__}/ven/library/basis.ven")}}, "(basis)")
+          # Load the basis file. Note how it does not respect
+          # the propagate flag.
+          @orchestra.play Program.new(BASIS, BASIS_NAME, hub: @hub)
 
           if arguments.empty?
-            # Do not quit after errors:
-            @quit = false
-            # Do print the result:
-            @result = true
-            # Fly!
-            repl()
+            # If we are going to run the REPL, do not quit
+            # after errors, and do print the result.
+            @config.quit = false
+            @config.result = true
+
+            repl
           else
             file = arguments.first
 
             # Provide the unmapped flags/remaining arguments
-            # to the orchestra. It's a bit risky, as some user-
-            # defined flags may interfere with this CLI's.
+            # to the orchestra. It's a bit risky, as some
+            # user-defined flags may interfere with this CLI's.
             #
-            # Note that **all** programs of the orchestra will
-            # have access to ARGS, including any side library.
-            @orchestra.hub.machine["ARGS"] = Vec.from(arguments[1...], Str)
+            # Also note that **all** programs of the orchestra
+            # will have access to ARGS, including any side
+            # library.
+            @hub.machine["ARGS"] = Vec.from(arguments[1...], Str)
 
-            if File.exists?(file) && File.file?(file) && File.readable?(file)
+            if File.file?(file) && File.readable?(file)
               run File.expand_path(file), File.read(file)
-            elsif !@orchestra.isolated && file =~ /^(\w[\.\w]*[^\.])$/
-              # If there is no such file, try to look if it's
-              # a distinct.
-              candidates = @orchestra.files_for file.split('.')
-
-              if candidates.empty?
-                die("no such distinct: '#{file}'")
-              elsif candidates.size > 1
-                die("too many (#{candidates.size}) candidates for '#{file}'")
-              end
-
-              # Trust Inquirer that *candidate* is readable,
-              # is a file, is an absolute path, etc.
-              run candidate = candidates.first, File.read(candidate)
+            elsif file =~ /^(\w[\.\w]*[^\.])$/
+              play file.split('.')
             else
-              die("there is no readable file or distinct named '#{file}'")
+              die("no such file: '#{file}'")
             end
           end
         rescue e : VenError

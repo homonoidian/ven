@@ -18,22 +18,22 @@ module Ven
   class Compiler < Suite::Visitor(Nil)
     include Suite
 
+    # The chunks of this compiler.
+    property chunks = Chunks.new
+    # Whether or not to compile ensure tests.
+    property ensure_tests = false
+
     # A label that points to the body of the nearest surrounding
     # loop (if any).
     @loop : Label?
-    # Points to the chunk this compiler is emitting into (chunk-
-    # of-emission).
+    # Offset of the target chunk (i.e., chunk-of-emission).
     @target = 0
     # Nearest surrounding function (if any).
     @function : VFunction?
 
-    # Makes a compiler.
-    #
-    # No arguments are required, but *file* (for a file name),
-    # *context* (for a compiler context) and *origin* (for the
-    # point of origin of chunk emission) can be provided.
-    def initialize(@file = "untitled", @context = CxCompiler.new, @origin = 0, @enquiry = Enquiry.new)
-      @chunks = [Chunk.new(@file, "<unit>")]
+    def initialize(@file = "untitled", @context = CxCompiler.new)
+      @target = @chunks.size
+      @chunks << Chunk.new(@file, "<unit>")
     end
 
     # Given an explanation message, *message*, dies of `CompileError`.
@@ -44,7 +44,7 @@ module Ven
       # entity that had actually caused the death, insert
       # one.
       unless traces.last? == @last.tag
-        traces << Trace.new(@last.tag, "<unit>")
+        traces << Trace.new(@last.tag, "unit")
       end
 
       raise CompileError.new(traces, message)
@@ -67,23 +67,22 @@ module Ven
       end
     end
 
-    # Returns the chunk at *cursor*. Defaults to the chunk-
-    # of-emission.
+    # Returns the chunk at *cursor*. Defaults to the target chunk.
     private macro chunk(at cursor = @target)
       @chunks[{{cursor}}]
     end
 
-    # Introduces a chunk named *name*.
+    # Introduces a chunk named *name*. Makes the target chunk
+    # be this new chunk for the duration of the block.
     #
-    # In the block, makes the chunk-of-emission be this chunk.
-    # The block may receive the target chunk pointer, i.e.,
-    # the chunk pointer of this chunk after compilation.
+    # The block may choose to receive the target chunk offset
+    # as an argument.
     private macro under(chunk name, &block)
       having @target, be: @chunks.size do
         @chunks << Chunk.new(@file, {{name}})
 
         {% if block.args %}
-          {{*block.args}} = @origin + @target
+          {{*block.args}} = @target
         {% end %}
 
         {{yield}}
@@ -714,7 +713,7 @@ module Ven
     end
 
     def visit!(q : QEnsureTest)
-      if @enquiry.test_mode
+      if @ensure_tests
         visit(q.comment)
         issue(Opcode::TEST_TITLE)
         visit(q.shoulds)
