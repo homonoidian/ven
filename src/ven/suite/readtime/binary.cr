@@ -13,13 +13,18 @@ module Ven::Suite::Readtime::Binary
     left.false? ? right : left
   end
 
-  # Returns whether the given two quotes, *left* and *right*,
+  # Returns whether the two given quotes, *left* and *right*,
   # are equal, by serializing them into JSON and comparing
   # the resulting strings. Returns *left* if they are equal,
   # and `QFalse` if they aren't.
   def is?(left : Quote, right : Quote) : Quote
     return QFalse.new(left.tag) unless left.class == right.class
-    return QFalse.new(left.tag) unless left.to_json == right.to_json
+
+    # We cannot compare by JSON representations, because JSON
+    # representations contain tags. Tags change a lot, but they
+    # should not influence (deep) equality. Default string
+    # serialization seems to offer exactly what we need.
+    return QFalse.new(left.tag) unless left.to_s == right.to_s
 
     left
   end

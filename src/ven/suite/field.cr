@@ -35,6 +35,10 @@ module Ven::Suite
           raise ReadError.new(@access.tag, "got group where expression expected")
         end
       end
+
+      def to_s(io)
+        io << @access
+      end
     end
   end
 

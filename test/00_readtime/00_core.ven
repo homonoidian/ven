@@ -285,6 +285,11 @@ nud BINARY-TEST = <[
 ]>;
 
 nud STUFF-TEST(symbol) = <{
+  # Make sure ensure works
+  ensure true;
+  if (not (ensure false dies))
+    <1>; # die() not supported at readtime, make it fail
+
   # Make sure homoiconics evaluate.
   ensure 12;
   ensure "12";

@@ -64,7 +64,7 @@ module Ven::Suite
 
       # Returns whether this quote is a `QFalse`.
       def false?
-        {{@type.resolve.id == :QFalse}}
+        {{@type.resolve.id.ends_with?("QFalse")}}
       end
 
       macro defquote!(*fields)
