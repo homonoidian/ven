@@ -42,7 +42,7 @@ module Ven::Parselet
     # Dies of `ReadError` with the given *message*. **The location of
     # the error is extracted from *word*.**
     macro die(message, on word)
-      raise ReadError.new({{word}}, {{message}})
+      raise ReadError.new({{word}}, @tag.file, {{message}})
     end
 
     # Dies of `ReadError` with the given *message*. This is the most

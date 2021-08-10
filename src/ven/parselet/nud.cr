@@ -729,7 +729,7 @@ module Ven::Parselet
       # to check for that too.
       unless @params.size == args.size || "*".in?(@params) && args.size >= @params.size
         die("malformed nud: expected #{@params.size}, " \
-            "got #{args.size} argument(s)")
+            "got #{args.size} argument(s)", on: @token)
       end
 
       @params.each_with_index do |param, index|
