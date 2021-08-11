@@ -137,7 +137,7 @@ module Ven
         compiler.chunks = @chunks
       end
 
-      b = program.after_compile.add do |chunks, compiler, yielder|
+      b = program.after_compile.add do |_, compiler, yielder|
         # Slice to lighten the load for the optimizer.
         #
         # The chunks themselves are changed inplace, and we

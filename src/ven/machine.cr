@@ -1204,10 +1204,6 @@ module Ven
             raise error
           end
 
-          # I do not know why this is required here, but without
-          # it, if interrupted, it rescues infinitely.
-          interupt = false
-
           jump(dies)
         ensure
           if @measure && began

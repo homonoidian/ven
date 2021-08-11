@@ -52,7 +52,7 @@ module Ven::Suite
     # Removes a range of instructions starting at *start* and
     # of size *count*.
     def remove(start, count : Int32)
-      unless first = @code[start]?
+      unless @code[start]?
         raise "Snippet.remove(): snippet not long enough"
       end
 

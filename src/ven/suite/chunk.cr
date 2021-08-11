@@ -181,7 +181,7 @@ module Ven::Suite
     def to_s(io : IO, deepen = 2)
       io << @name << " {\n"
 
-      unless @seamless.empty?
+      if !@seamless.empty?
         @seamless.each_with_index do |instruction, index|
           io << " " * deepen; to_s(io, instruction, index); io << "\n"
         end

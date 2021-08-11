@@ -44,7 +44,7 @@ module Ven
     end
 
     on_load do
-      definternal "http" do |this|
+      definternal "http" do
         # Creates an HTTP server. The server will produce a
         # response for an incoming request depending on the
         # return value of *callback*. See `create_server`.

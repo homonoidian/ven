@@ -8,7 +8,6 @@ module Ven::Suite::Utils
   # - Strings, regexes are yellow.
   def highlight(snippet : String, context : CxReader)
     Reader.words(snippet, context).map do |word|
-      type = word.type
       lexeme = word.lexeme
 
       case word.type

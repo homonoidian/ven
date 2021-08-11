@@ -253,7 +253,7 @@ module Ven::Suite
     def eval(state, q : QQueue)
       # Queue values are **outside** of readtime envelope, but
       # still inside expansion (hence the use of `transform`).
-      unless @holes.empty?
+      if !@holes.empty?
         # If there are unfilled holes, we eject the first one,
         # and mutate its value with this queue's expression.
         @holes.shift.value = transform(q.value)
