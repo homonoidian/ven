@@ -407,31 +407,31 @@ module Ven
         # matching *left* kept.
         MMap.new right.select { |_, v| v.is?(left) }
       when {"<", Num, Num}
-        bool left.value < right.value
+        left < right
       when {">", Num, Num}
-        bool left.value > right.value
+        left > right
       when {"<=", Num, Num}
-        bool left.value <= right.value
+        left <= right
       when {">=", Num, Num}
-        bool left.value >= right.value
+        left >= right
       when {"+", Num, Num}
-        num left.value + right.value
+        left + right
       when {"-", Num, Num}
-        num left.value - right.value
+        left - right
       when {"*", Num, Num}
-        num left.value * right.value
+        left * right
       when {"/", Num, Num}
-        num left.value / right.value
+        left / right
       when {"&", Vec, Vec}
-        vec left.items + right.items
+        left + right
       when {"~", Str, Str}
-        str left.value + right.value
+        left + right
       when {"%", MMap, MMap}
         MMap.new(left.merge(right.map))
       when {"x", Vec, Num}
-        vec left.items * right.value.to_big_i
+        left * right
       when {"x", Str, Num}
-        str left.value * right.value.to_big_i
+        left * right
       else
         binary operator, *normalize(operator, left, right)
       end

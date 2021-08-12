@@ -320,14 +320,38 @@ module Ven::Suite
     end
   end
 
-  # A model that holds a `value` of type *T*.
+  # A model that holds a *value* of type *T*.
   #
-  # Forwards missing to `value`.
+  # Forwards missing to *value*.
+  #
+  # Forwards operators `+`, `-`, `*`, `/` to *value*, and
+  # wraps the result in `MValue(T)`.
+  #
+  # Forwards operators `<`, `>`, `<=`, `>=` to *value*, and
+  # wraps the result in `MBool`.
   abstract struct MValue(T) < MStruct
     getter value : T
 
     def initialize(@value : T)
     end
+
+    {% for operator in ["<", ">", "<=", ">="] %}
+      # Applies `{{operator.id}}` to the value of this `MValue`,
+      # and the value of the *other* `MValue`. Wraps the result
+      # in `MBool`.
+      def {{operator.id}}(other : MValue(T))
+        MBool.new(@value {{operator.id}} other.value)
+      end
+    {% end %}
+
+    {% for operator in ["+", "-", "*", "/"] %}
+      # Applies `{{operator.id}}` to the value of this `MValue`,
+      # and the value of the *other* `MValue`. Wraps the result
+      # into the same `MValue` type as this `MValue`.
+      def {{operator.id}}(other : MValue(T))
+        \{{@type}}.new(@value {{operator.id}} other.value)
+      end
+    {% end %}
 
     def is?(other : MValue)
       @value == other.value
@@ -408,6 +432,12 @@ module Ven::Suite
   # Ven strings are immutable.
   struct MString < MValue(String)
     delegate :size, to: @value
+
+    # Repeats the value of this string *n* times. Converts
+    # *n* to Int32 (see `MNumber#to_i`).
+    def *(n : Num)
+      Str.new(@value * n.to_i)
+    end
 
     # Converts this string into a `Num`.
     #
@@ -547,6 +577,17 @@ module Ven::Suite
     # :nodoc:
     def initialize(raw_items : Array)
       @items = raw_items.map &.as(Model)
+    end
+
+    # Concatenates this vector with the *other* vector.
+    def +(other : Vec)
+      Vec.new(@items + other.items)
+    end
+
+    # Repeats the items of this vector *n* times. Converts
+    # *n* to Int32 (see `MNumber#to_i`).
+    def *(n : Num)
+      Vec.new(@items * n.to_i)
     end
 
     # Returns the length of this vector.
