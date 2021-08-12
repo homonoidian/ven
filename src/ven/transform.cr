@@ -433,14 +433,5 @@ module Ven
       QCall.new(q.tag, QRuntimeSymbol.new(q.tag, ACCESS_ASSIGN_HOOK),
         [target.head, QBinary.new(q.tag, q.operator, target, q.value)] + target.args)
     end
-
-    # Makes an instance of this class, uses it to transform
-    # *quotes* **in-place**, and disposes the instance.
-    #
-    # Returns the transformed quotes (although **they are
-    # mutated in-place** anyways).
-    def self.transform(quotes : Quotes)
-      new.transform(quotes)
-    end
   end
 end

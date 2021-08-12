@@ -751,19 +751,5 @@ module Ven
       end
       issue(Opcode::MAP, q.keys.size + q.vals.size)
     end
-
-    # Makes a compiler, compiles *quotes* with it and disposes
-    # the compiler.
-    #
-    # *quotes* are the quotes to-be-compiled; *file* is the
-    # filename under which they will be compiled; *context*
-    # is the compiler context of the compilation.
-    #
-    # Returns unstitched chunks.
-    def self.compile(quotes, file = "untitled", context = Context::Compiler.new, origin = 0, legate = Enquiry.new)
-      compiler = new(file, context, origin, legate)
-      compiler.visit(quotes)
-      compiler.@chunks
-    end
   end
 end

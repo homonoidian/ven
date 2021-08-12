@@ -734,25 +734,6 @@ module Ven
       io << "<reader for '#{@file}'>"
     end
 
-    # A shorthand for `Reader#read`. **Ignores `expose` and
-    # `distinct` statements.**
-    def self.read(source : String, file = "untitled", context = CxReader.new, enquiry = Enquiry.new)
-      reader = new(source, file, context, enquiry)
-      reader.distinct?
-      reader.exposes
-      reader.read
-    end
-
-    # :ditto:
-    def self.read(source : String, file = "untitled", context = CxReader.new, enquiry = Enquiry.new)
-      reader = new(source, file, context, enquiry)
-      reader.distinct?
-      reader.exposes?
-      reader.read do |quote|
-        yield quote
-      end
-    end
-
     # A shorthand for `Reader#words`. Initializes the reader in
     # verbal mode (see `Reader#word!`).
     def self.words(source : String, context = CxReader.new)

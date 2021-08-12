@@ -920,7 +920,7 @@ module Ven
                 # to make nested generics, and there is really
                 # no need to).
                 while found.is_a?(MPartial) || found.is_a?(MGenericFunction)
-                  found = callee.variant?(args)
+                  found = found.variant?(args)
                   if found.is_a?(MPartial)
                     found, args = found.function, found.args + args
                   end
@@ -1227,12 +1227,6 @@ module Ven
     # Returns the last value on the operand stack, if any.
     def return!
       stack.last?
-    end
-
-    # Initializes the machine, starts it, and returns
-    # the result (as per `Machine#return!`).
-    def self.run(chunks, context = CxMachine.new, origin = 0, enquiry = Enquiry.new)
-      new(chunks, context, origin, enquiry).start.return!
     end
   end
 end

@@ -1742,7 +1742,12 @@ module Ven::Suite
     end
 
     def field?(name)
-      @fields[name]?
+      case name
+      when .in?(@fields.keys)
+        @fields[name]
+      else
+        super
+      end
     end
 
     def to_s(io)
