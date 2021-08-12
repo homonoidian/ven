@@ -247,9 +247,9 @@ module Ven::Suite
     # :ditto:
     def []?(range : MPartialRange) : Model?
       if begin_ = range.begin
-        self[begin_.to_i...]?
+        self[begin_.to_i..]?
       elsif end_ = range.end
-        self[...end_.to_i]?
+        self[..end_.to_i]?
       end
     end
 
@@ -611,7 +611,28 @@ module Ven::Suite
     end
 
     def []?(range : Range)
-      @items[range]?.try { |subset| Vec.new(subset) }
+      b = range.begin
+      e = range.end
+
+      # Crystal's range semantics differs a bit from Ven's,
+      # so we even have to use `.reverse` in some cases (in
+      # almost all negative ones, to be precise).
+      #
+      # But overall, it is safe to default to Crystal's,
+      # and we do it in case we can't recognize the range.
+      if b && e
+        if (b.negative? && e.negative?) || b.negative?
+          subset = @items.reverse[(-b - 1)..(-e - 1)]?
+        end
+      elsif b
+        if b.abs > length - b.positive?.to_unsafe
+          subset = Models.new
+        elsif b.negative?
+          subset = @items.reverse[(-b - 1)..]?
+        end
+      end
+
+      Vec.new(subset || @items[range]? || return)
     end
 
     def []=(index : Num, value : Model)

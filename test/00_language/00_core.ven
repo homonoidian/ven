@@ -274,3 +274,78 @@ ensure "Sanity of binary operators" {
     (||[&_ + &_, _]| &_| [[1 2], [3 4]]) is [[[2 1], [4 2]], [[6 3], [8 4]]];
     (|[|[&_ + &_, _]| &_, _]| [[1 2], [3 4]]) is [[[[2 1], [4 2]], [1 2]], [[[6 3], [8 4]], [3 4]]];
 }
+
+ensure "vec indexing works" {
+  should "support basic positive indices"
+    [1 2 3][0] is 1;
+    [1 2 3][1] is 2;
+    [1 2 3][2] is 3;
+    [1 2 3][3] dies;
+
+  should "support basic negative indices"
+    [1 2 3][-1] is 3;
+    [1 2 3][-2] is 2;
+    [1 2 3][-3] is 1;
+    [1 2 3][-4] dies;
+
+  should "support positive to positive ranges"
+    [1 2 3][0 to 0] is [1];
+    [1 2 3][1 to 1] is [2];
+    [1 2 3][2 to 2] is [3];
+    [1 2 3][1 to 2] is [2 3];
+    [1 2 3][0 to 1] is [1 2];
+    [1 2 3][0 to 2] is [1 2 3];
+    [1 2 3][0 to 3] is [1 2 3];
+    [1 2 3][0 to 100000] is [1 2 3];
+
+  should "support negative to negative ranges"
+    [1 2 3][-1 to -1] is [3];
+    [1 2 3][-2 to -2] is [2];
+    [1 2 3][-3 to -3] is [1];
+    [1 2 3][-1 to -2] is [3 2];
+    [1 2 3][-2 to -3] is [2 1];
+    [1 2 3][-1 to -3] is [3 2 1];
+    [1 2 3][-1 to -4] is [3 2 1];
+    [1 2 3][-1 to -100000] is [3 2 1];
+
+  should "support positive to negative ranges"
+    [1 2 3][0 to -1] is [1 2 3];
+    [1 2 3][0 to -2] is [1 2];
+    [1 2 3][0 to -3] is [1];
+    [1 2 3][1 to -1] is [2 3];
+    [1 2 3][2 to -1] is [3];
+    # [1 2 3][2 to -2] is [3 2];
+    [1 2 3][2 to -2] is [];
+    # [1 2 3][2 to -3] is [3 2 1];
+    [1 2 3][2 to -3] is [];
+
+  should "support negative to positive ranges"
+    [1 2 3][-1 to 0] is [3 2 1];
+    [1 2 3][-2 to 0] is [2 1];
+    [1 2 3][-3 to 0] is [1];
+    [1 2 3][-1 to 1] is [3 2];
+    [1 2 3][-1 to 2] is [3];
+
+  should "support 'from'"
+    [1 2 3][from 0] is [1 2 3];
+    [1 2 3][from 1] is [2 3];
+    [1 2 3][from 2] is [3];
+    [1 2 3][from 3] is [];
+    [1 2 3][from 100000] is [];
+    [1 2 3][from -1] is [3 2 1];
+    [1 2 3][from -2] is [2 1];
+    [1 2 3][from -3] is [1];
+    [1 2 3][from -100000] is [];
+
+  should "support 'to'"
+    [1 2 3][to 0] is [1];
+    [1 2 3][to 1] is [1 2];
+    [1 2 3][to 2] is [1 2 3];
+    [1 2 3][to 3] is [1 2 3];
+    [1 2 3][to 100000] is [1 2 3];
+    [1 2 3][to -1] is [1 2 3];
+    [1 2 3][to -2] is [1 2];
+    [1 2 3][to -3] is [1];
+    [1 2 3][to -4] is [];
+    [1 2 3][to -100000] is [];
+}
