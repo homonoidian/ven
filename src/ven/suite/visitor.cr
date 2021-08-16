@@ -90,7 +90,7 @@ module Ven::Suite
     #
     # Can be concretized to transform a particular kind of quote
     # with **high degree of control**. Note that in this case,
-    # you will have to transform all subsequent fields yourself.
+    # you will have to transform all subordinate fields yourself.
     #
     # However, **you almost certainly want a tail transform**
     # concretization instead (see `transform!`). A tail transform
