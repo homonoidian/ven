@@ -542,111 +542,150 @@ module Ven::Parselet
     end
   end
 
-  # Reads and defines a nud. Properly handles redefinition of
-  # subordinate nuds.
+  # Reads a nud definition, and defines an appropriate `PNudMacro`.
+  # Handles redefinition of subordinate nuds.
   #
-  # This parselet is abstract, and serves the purposes of
-  # read-time interpretation. **It does not produce a quote**,
-  # which implies, say, that it won't appear in `-j read`.
+  # This parselet is abstract, and serves the purposes of read-
+  # time interpretation. **It does not produce a quote**, which
+  # implies, first and foremost, that it won't appear in `-j read`.
   class PDefineNud < PFun
-    # A counter for unique symbol names.
-    @@unique = 0
-
     def parse
       trigger_type, trigger = trigger!
 
-      # If there's an identical Regex trigger in the reader
-      # context already, update *word_type* to be that existing
-      # trigger.
-      if trigger.is_a?(Regex)
-        if identical = @parser.context.trigger?(trigger)
-          trigger_type = identical
-        end
-      end
-
+      # As in `fun`s and `box`es, the parentheses are not
+      # required in case the nud has no parameters.
       params = if? "(", params!, Quotes.new
 
       # The body ('=', or blocky) is read in a readtime context.
       # Take a look at `Parselet#in_readtime_context` to see
-      # how it works.
+      # how (badly) it all works.
       body = in_readtime_context { if? "=", [led], block }
 
-      params = params.map do |param|
-        case param
-        when QRuntimeSymbol
-          next param.value unless param.value == "$"
+      defword(trigger_type, trigger)
+      defnud(trigger_type, sound(params), body)
 
-          die("cannot use '$' as the name of a nud parameter")
-        when QSuperlocalTake
-          die("nameless parses illegal")
-        else
-          die("invalid nud parameter expression")
-        end
-      end
-
-      defword trigger_type, trigger
-
-      @parser.context[trigger_type] = PNudMacro.new(params, body)
-
-      # The reader pre-reads a word. Therefore for safety, we
-      # need at least one word between the nud definition and
-      # the word that it defines. Force a semicolon.
+      # The reader pre-reads a word (this is a big problem
+      # in itself). Therefore for safety, we need at least
+      # one word between the nud definition, and the word
+      # that it defines. Semicolon works good for that.
       @semicolon = true
 
       QVoid.new
     end
 
-    # Reads the trigger of this nud definition. There are
-    # two types of triggers: a regex pattern (word REGEX),
-    # or a keyword (SYMBOL).
+    # Reads the trigger of this nud definition, and returns
+    # a tuple of the following form: `{trigger type, trigger}`
     #
-    # Returns a tuple of `{trigger_type, trigger}`.
-    def trigger!
+    # The trigger (aka lead) of a parselet is the word that
+    # begins it. It can be either a keyword (see, for example,
+    # `loop`, `fun`, `ensure`, etc.), or a regex (string, symbol,
+    # and others).
+    #
+    # Apart from the body, its trigger is the only required
+    # element of a nud definition.
+    #
+    # ```ven
+    # nud foo = <...>;
+    # #   --- keyword trigger
+    #
+    # nud `ba+r` = <...>;
+    # #   ----- regex trigger
+    # ```
+    protected def trigger! : {String, Regex | String}
       type, lexeme = @parser.word.type, @parser.word.lexeme
 
-      # If *type* is a user-defined keyword, consume & return
-      # out immediately.
-      if @parser.context.keyword?(lexeme)
-        return type, @parser.word!.lexeme
-      end
+      # Consume & quit immediately if *lexeme* is a user-
+      # defined keyword.
+      return trigger of: type if @parser.context.keyword?(lexeme)
 
       case type
       when "REGEX"
-        {gentype, Regex.new(@parser.word!.lexeme)}
+        begin
+          regex = Regex.new(lexeme)
+        rescue error : ArgumentError
+          die("'nud': bad trigger regex: #{error.message}")
+        end
+        # If there is an identical trigger regex in the reader
+        # context, use its type instead of making a new one.
+        trigger(of: @parser.context.typeof?(regex) || gentype, for: regex)
       when "SYMBOL"
-        {lexeme.upcase, @parser.word!.lexeme}
+        trigger(of: lexeme.upcase)
       else
         die("'nud': bad trigger: expected regex or symbol")
       end
-    rescue e : ArgumentError
-      die("'nud': bad trigger regex: #{e.message}")
     end
 
-    # Generates a fresh lead name.
+    # Constructs the trigger tuple. *Reads* the current word,
+    # and uses its lexeme for trigger unless given a *trigger*.
+    protected def trigger(of type, for trigger = nil)
+      word = @parser.word!
+
+      {type, trigger || word.lexeme}
+    end
+
+    # Defines a trigger of the given *type*, which will be
+    # matched by a regex *pattern*, in the current Reader's
+    # context.
+    protected def defword(type : String, pattern : Regex)
+      @parser.context.deftrigger(type, pattern)
+    end
+
+    # Defines a trigger *keyword* in the current Reader's
+    # context.
+    protected def defword(_type : String, keyword : String)
+      @parser.context.defkeyword(keyword)
+    end
+
+    # Makes an instance of `PNudMacro` from *params*, *body*,
+    # and stores that instance in the current Reader's context,
+    # in nuds, under *trigger*. Assumes all parameters of
+    # *params* are `QRuntimeSymbol`s.
+    protected def defnud(trigger : String, params : Quotes, body : Quotes)
+      params = PNudMacro.new(params.map &.as(QRuntimeSymbol).value, body)
+
+      @parser.context.defmacro(trigger, params)
+    end
+
+    # Makes sure *params* are sound, and returns them back.
+    #
+    # In particular, ensures that all quotes in *params* are
+    # `QRuntimeSymbol`s, and that none of those `QRuntimeSymbol`s
+    # are '$'s.
+    #
+    # Dies in case of failure.
+    protected def sound(params : Quotes)
+      params.each do |param|
+        case param
+        when QRuntimeSymbol
+          if param.value == "$"
+            die("cannot use '$' as the name of a nud parameter")
+          end
+        when QSuperlocalTake
+          die("nameless parses are illegal")
+        else
+          die("invalid nud parameter expression")
+        end
+      end
+
+      params
+    end
+
+    @@typeno = 0
+
+    # Returns a fresh trigger type.
     private def gentype
-      "__trigger-#{@@unique += 1}"
-    end
-
-    # Defines a word *type*, which will be triggered by *pattern*.
-    private def defword(type : String, pattern : Regex)
-      @parser.context[type] = pattern
-    end
-
-    # Defines a word *type*, which will be triggered *keyword*.
-    private def defword(type : String, keyword : String)
-      @parser.context << keyword
+      "__trigger#{@@typeno += 1}"
     end
   end
 
-  # Expands a nud macro when read.
+  # Expands the associated nud macro when read.
   #
-  # Makes sense of the nud parameters it was initialized with,
-  # and passes the results of that to the expansion visitor
-  # (see `ReadExpansion`).
+  # Interprets, and consequently reads, the nud parameters
+  # of the associated nud macro, and passes the results of
+  # that to the expansion visitor (see `ReadExpansion`).
   #
-  # This parselet is abstract, and serves the purposes of
-  # read-time interpretation. **It does not produce a quote**,
-  # which implies, say, that it won't appear in `-j read`.
+  # Expands to the quotes returned by the expansion visitor,
+  # in accordance with the established Ven semantics.
   class PNudMacro < Nud
     def initialize(@params : Array(String), @body : Quotes)
     end
@@ -654,33 +693,146 @@ module Ven::Parselet
     def parse
       definitions = {} of String => Quote
 
-      # Regex triggers export their named captures into
-      # their nud's definitions.
-      if matches = @token.matches?
-        matches.each do |capture, match|
-          definitions[capture] = match ? QString.new(@tag, match) : QFalse.new(@tag)
+      defcaptures(into: definitions)
+      defparameters(into: definitions)
+
+      group transform(given: definitions)
+    end
+
+    # Writes the named captures of the trigger token into the
+    # *definitions* hash: names are mapped to the corresponding
+    # lexeme citations (of `QString`), or `QFalse`. Returns nil.
+    #
+    # As per the established Ven semantics, regex triggers
+    # export their named captures ('matches') into the nud's
+    # definitions, like so:
+    #
+    # ```ven
+    # nud `(?<head>foo)(?<tail>bar)?` = <[head tail]>
+    # #       ----        ----            ^^^^ ^^^^
+    #
+    # foo    # ==> ["foo" false]
+    # foobar # ==> ["foo" "bar"]
+    # ```
+    def defcaptures(into definitions)
+      @token.matches?.try &.each do |capture, match|
+        if match
+          definitions[capture] = QString.new(@tag, match)
+        else
+          # Default to `false`: when a capture was declared,
+          # but did not really capture anything, it's false.
+          definitions[capture] = QFalse.new(@tag)
         end
       end
+    end
 
-      definitions.merge!(params!)
+    # Reads the arguments of this nud macro (if it takes any)
+    # into the *definitions* hash: parameters are mapped to
+    # their corresponding arguments. Returns nil.
+    #
+    # If this nud macro does not take any arguments, the
+    # call-like parentheses are optional:
+    #
+    # ```ven
+    # nud foo = 123;
+    #
+    # foo; # ==> 123
+    # foo(); # ditto
+    # ```
+    #
+    # If it does take some, they're required. A propriety check
+    # is performed to make sure the bounds are respected, and
+    # the arguments are sound.
+    #
+    # ```ven
+    # nud foo(a, b) = <a + b>;
+    #
+    # foo(1, 2); # ==> 3
+    # ensure foo $dies;
+    # ensure foo() $dies;
+    # ensure foo(1) $dies;
+    # ensure foo(1, 2, 3) $dies;
+    # ```
+    def defparameters(into definitions)
+      return if @params.empty? && !@parser.word?("(")
 
+      setparameters(definitions, sound args!)
+    end
+
+    # The core of `defparameters`: maps each parameter to the
+    # corresponding argument in *args*.
+    #
+    # Assumes that all checks listed in `defparameters` were
+    # performed successfully, and that the parameters of this
+    # nud are in proper arrangement.
+    def setparameters(definitions, args : Quotes)
+      @params.each_with_index do |name, index|
+        if name == "*"
+          definitions[name] = QVector.new(@tag, args[index..])
+        else
+          definitions[name] = args[index]
+        end
+      end
+    end
+
+    # Returns *args* if they are sound, otherwise dies of
+    # the appropriate `ReadError`.
+    def sound(args : Quotes)
+      unless @params.size == args.size || "*".in?(@params) && args.size >= @params.size
+        die("malformed nud: expected #{@params.size}, got " \
+            "#{args.size} argument(s)", on: @token)
+      end
+
+      args
+    end
+
+    # Reads the arguments of this nud macro: `(<>, <>, <>, ...)`.
+    def args!
+      @parser.after("(") do
+        @parser.repeat(")", ",")
+      end
+    end
+
+    # Initializes a `ReadExpansion` with *definitions*, and
+    # uses it to transform a clone of this nud macro's body.
+    # Returns the resulting quotes.
+    def transform(given definitions) : Quotes
       expansion = ReadExpansion.new(self, @parser, definitions)
 
       # Transform the clone of the body, so as to not modify
       # the original (remember, there is only one instance
-      # of this `PNudMacro` ever!)
+      # of this `PNudMacro`, ever!)
       transformed = expansion.transform(@body.clone)
 
-      # No need to nest blocks like that (this happens with
-      # queue, as example)
+      # No need to nest blocks like that:
+      #
+      # ```ven
+      # {
+      #   {
+      #     1;
+      #     2;
+      #     3;
+      #   }
+      # }
+      # ```
+      #
+      # Something like this happens when using readtime `queue`,
+      # for example. Eliminate.
       if transformed.size == 1 && (block = transformed.first.as? QBlock)
         transformed = block.body
       end
 
+      transformed
+    end
+
+    # Groups the *transformed* quotes. If *transformed* consists
+    # solely of statement quotes, groups in `QGroup`. If solely of
+    # expression quotes, in `QBlock`. Otherwise, dies of `ReadError`.
+    def group(transformed : Quotes)
       statements = Quotes.new
       expressions = transformed.reject do |quote|
         case quote
-        # Is this how good design looks like? XD
+        # XXX Generate these automatically, somehow?
         when QFun,
              QBox,
              QInfiniteLoop,
@@ -694,66 +846,15 @@ module Ven::Parselet
       end
 
       if !statements.empty? && expressions.empty?
-        # Expanded to statements.
+        # Did expand to statements.
         QGroup.new(@tag, statements)
       elsif statements.empty? && !expressions.empty?
-        # Expanded to expressions.
+        # Did expand to expressions.
         QBlock.new(@tag, expressions)
       else
-        # Expanded to both, or to nothing.
-        die("macro expanded to statements & expressions at the " \
-            "same time, or to nothing")
-      end
-    end
-
-    # Reads the parameters of this nud macro.
-    #
-    # If this nud takes no parameters, this is a no-op. The
-    # nud it is free to read the parameters itself.
-    #
-    # Returns a hash of parameter names mapped to arguments,
-    # otherwise an empty hash.
-    private def params!
-      names = {} of String => Quote
-
-      # If this nud takes no parameters, make the parentheses
-      # optional (parameterless nuds likely do not want to
-      # look like calls).
-      return names if @params.empty? && !@parser.word?("(")
-
-      args = @parser.after("(") do
-        @parser.repeat(")", ",")
-      end
-
-      # Do an arity check. As nuds allow the slurpie, we need
-      # to check for that too.
-      unless @params.size == args.size || "*".in?(@params) && args.size >= @params.size
-        die("malformed nud: expected #{@params.size}, " \
-            "got #{args.size} argument(s)", on: @token)
-      end
-
-      @params.each_with_index do |param, index|
-        if param == "*"
-          # It'll break right after the slice.
-          names[param] = QVector.new(@tag, args[index..])
-        else
-          names[param] = args[index]
-        end
-      end
-
-      names
-    end
-
-    # Serializes this nud macro into a JSON object.
-    #
-    # The object contains three fields: *tweakable*, which
-    # tells whether this object is tweakable, *params*, an
-    # array of parameters of this nud macro, and *body*, a
-    # serialized array of body Quotes.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("tweakable", false)
-        json.field("params", @params)
+        # Did expand to both, or to nothing.
+        die("nud macro expanded to statements & expressions " \
+            "at the same time, or to nothing")
       end
     end
   end

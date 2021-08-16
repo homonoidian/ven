@@ -27,48 +27,41 @@ module Ven::Suite
 
   # Reader context holds user-defined nuds, leds, and words.
   class CxReader
-    # Returns the user-bound nud macros (with key being the
-    # word type, and value a nud macro).
+    # Returns this context's nud macros: trigger types mapped
+    # to nud macro parselets.
     getter nuds = {} of String => Parselet::PNudMacro
-    # Returns the user-bound keywords.
+    # Returns this context's keyword triggers.
     getter keywords = [] of String
-    # Returns the user-bound words mapped to regexes they're
-    # matched by.
+    # Returns this context's triggers: trigger types mapped
+    # to triggers.
     getter triggers = {} of String => Regex
 
-    # Defines a new keyword.
-    delegate :<<, to: @keywords
-
-    # Returns whether *lexeme* is a keyword.
+    # Returns whether *lexeme* is a keyword trigger.
     def keyword?(lexeme : String)
       lexeme.in?(@keywords)
     end
 
-    # Returns the word type of *trigger* in this reader context,
-    # or, if not found, nil.
-    def trigger?(trigger : Regex)
+    # Returns the trigger type of *trigger* in this reader
+    # context, or nil if there is no such trigger type.
+    def typeof?(trigger : Regex)
       @triggers.key_for?(trigger)
     end
 
-    # Defines a reader macro that will be triggered by *trigger*,
-    # a word type (does not check whether it's valid).
-    def []=(trigger : String, nud : Parselet::PNudMacro)
-      @nuds[trigger] = nud
+    # Defines a reader macro that will be triggered by the
+    # given word *type*.
+    def defmacro(type : String, nud : Parselet::PNudMacro)
+      @nuds[type] = nud
     end
 
-    # Defines a trigger given *type*, a word type, and regex
-    # pattern *pattern*.
-    def []=(type : String, pattern : Regex)
+    # Defines a trigger given its *type*, and a regex *pattern*.
+    def deftrigger(type : String, pattern : Regex)
       @triggers[type] = pattern
     end
 
-    # Serializes this reader context into a JSON object.
-    def to_json(json : JSON::Builder)
-      json.object do
-        json.field("nuds", @nuds)
-        json.field("keywords", @keywords)
-        json.field("triggers", @triggers.transform_values(&.to_s))
-      end
+    # Defines a *keyword* (*keyword* is a sample citation of
+    # the keyword, e.g., a lexeme).
+    def defkeyword(keyword : String)
+      @keywords << keyword
     end
   end
 
