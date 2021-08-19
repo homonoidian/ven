@@ -153,7 +153,7 @@ module Ven::Parselet
         # - Resolve `(x) (y)` as `(x) y`, **not** `x(y)`;
         # - Resolve `(x) / y` as `x / y` BUT `(x) * y` as
         #   `(x) { * y }` [MALFORMED] (here, '*' is the slurpie).
-        return lambda!([subordinate.value]) if @parser.is_nud?(but: PUnary)
+        return lambda!([subordinate.value]) if @parser.is_nud_except?(PUnary)
       end
 
       # Fall back to the grouping behavior.
@@ -239,7 +239,7 @@ module Ven::Parselet
   # like so: `|(+_)| [1, "2", false]`
   class PSpread < Nud
     def parse
-      if @parser.is_led?(only: PBinary)
+      if @parser.is_led_of?(PBinary)
         return QReduceSpread.new(@tag,
           @parser.word!.lexeme,
           @parser.after("|"),
@@ -269,7 +269,7 @@ module Ven::Parselet
   class PFun < Nud
     def parse
       diamond = if? "<", diamond!
-      name = symbol
+      name = symbol name!
       params = if? "(", params!, Quotes.new
       givens = if? "GIVEN", given!, Quotes.new
 
@@ -312,6 +312,15 @@ module Ven::Parselet
     # starter, '<', was already consumed.**
     def diamond!
       @parser.before(">") { led(Precedence::IDENTITY) }
+    end
+
+    # Reads, and consequently returns, the name of this function.
+    def name!
+      if word = @parser.word!("SYMBOL", "$SYMBOL")
+        return word
+      end
+
+      die!("invalid word for function name")
     end
 
     # Reads, and consequently returns, an array of 'given'

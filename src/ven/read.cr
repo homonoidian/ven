@@ -569,13 +569,13 @@ module Ven
 
     # Returns whether the current word is a nud parselet of
     # type *pick*.
-    def is_nud?(only pick : Parselet::Nud.class) : Bool
+    def is_nud_of?(pick : Parselet::Nud.class) : Bool
       !!nud_for?(@word.type).try(&.class.== pick)
     end
 
     # Returns whether the current word is a nud parselet of
     # any type except *pick*.
-    def is_nud?(but pick : Parselet::Nud.class) : Bool
+    def is_nud_except?(pick : Parselet::Nud.class) : Bool
       !!nud_for?(@word.type).try(&.class.!= pick)
     end
 
@@ -586,7 +586,7 @@ module Ven
 
     # Returns whether the current word is a led parselet of
     # type *pick*.
-    def is_led?(only pick : Parselet::Led.class) : Bool
+    def is_led_of?(pick : Parselet::Led.class) : Bool
       !!led_for?(@word.type).try(&.class.== pick)
     end
 

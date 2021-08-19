@@ -96,10 +96,8 @@ module Ven::Parselet
         end
 
         QReadtimeSymbol.new(@tag, token.lexeme)
-      when "SYMBOL", "*"
-        QRuntimeSymbol.new(@tag, token.lexeme)
       else
-        raise "unknown symbol type"
+        QRuntimeSymbol.new(@tag, token.lexeme)
       end
     end
 
