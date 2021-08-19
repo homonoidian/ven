@@ -1117,8 +1117,15 @@ module Ven::Suite
     def is?(subject : Model)
       return false unless subject.is?(@lead)
 
-      case subject
-      when MMap
+      lead = @lead.as?(MType).try &.model || MAny
+
+      # .== seems to be the only working way to match, for
+      # reasons unknown to me, and the type of *subject*
+      # is broken & assumed to be MBool. Idk.
+      case lead
+      when .== MMap
+        subject = subject.as(Model).as(MMap)
+
         # Whether the shape of the subject map nonstrictly
         # (in a 'some' way) matches the content map.
         @contents.any? do |content|
@@ -1135,7 +1142,9 @@ module Ven::Suite
 
           true
         end
-      when Vec
+      when .== Vec
+        subject = subject.as(Model).as(Vec)
+
         # Whether each item of the subject vector matches
         # any content.
         subject.all? do |item|

@@ -191,8 +191,10 @@ ensure "Sanity of binary operators" {
 
   should "support corner cases of 'is'/'is not'"
     "hey" is not "hey" is false;
-    "hey" is not "world" is true;
+    "hey" is not "world" is true
+}
 
+ensure "Sanity of type, compound type" {
   should "check for types/type inheritance correctly"
     1 is num;
     1 is not str;
@@ -243,7 +245,80 @@ ensure "Sanity of binary operators" {
     typeof(vec(num)) is compound;
     typeof(vec(num, type)) is compound;
 
-  should "have proper spread & spread superlocal semantics"
+  should "match against compound lead when lead has no special meaning"
+    123 is num(123);
+    1 is num(1, 2, 3);
+    2 is num(1, 2, 3);
+    3 is num(1, 2, 3);
+    "3" is not num(1, 2, 3);
+    "3" is not num(1, 2, "3");
+    123 is not str(123);
+
+  should "match against compound lead when lead is any"
+    123 is any(123);
+    "123" is any("123");
+    [123] is any([123]);
+    %{a "b"} is any(%{a "b"});
+
+  should "match against compound lead when lead has special meaning"
+    [123] is vec(123);
+    [123] is not num([123]);
+    %{a "b"} is map(%{a "b"});
+    %{a "b"} is not vec(%{a "b"});
+
+  should "assign map lead special meaning, match against maps properly"
+    %{a 1} is not map(1);
+    %{a 1 b 2 c 3} is not map(1, 2, 3);
+
+    %{a 1} is map(%{a 1});
+    %{a 1} is map(%{a 1 b "missing"});
+    %{a 1 b "unspecified present"} is map(%{a 1});
+    %{a 1 b 2 c "unspecified present"} is map(%{a 1 b 2});
+
+    %{a 1 b 2} is map(%{a 1 b 2});
+    %{b 2 a 1} is map(%{a 1 b 2});
+    %{a "bad" b 2} is not map(%{a 1 b 2});
+    %{a 1 b "bad"} is not map(%{a 1 b 2});
+    %{b "bad" a 1} is not map(%{a 1 b 2});
+    %{a "bad" b "bad"} is not map(%{a 1 b 2});
+
+  should "assign vec lead special meaning, match against vecs properly"
+    [1 1 1] is vec(1);
+    [1 2 3] is not vec(1);
+    [1 2 2 1] is vec(1, 2);
+    [1 2 "2" 2] is not vec(1, 2);
+    [1 "2" 34] is vec(num, "2");
+    ["2" "2" 1] is vec(num, "2");
+    ["2" "2" "2"] is vec(num, "2");
+    [1 "2" "bad" 34] is not vec(num, "2");
+    [[1 2], [3 4]] is vec(vec);
+    ["bad", [3 4]] is not vec(vec);
+    [[3 4], "bad"] is not vec(vec);
+    # ... etc
+
+  should "match against anys properly: any works like or"
+    1 is any(1, 2);
+    2 is any(1, 2);
+    3 is not any(1, 2);
+    "3" is any(1, 2, "3");
+
+    [1 2 3] is any(vec(1, 2, 3), str);
+    "foobar" is any(vec(1, 2, 3), str);
+    [1 "foobar" 2] is not any(vec(1, 2, 3), str);
+    1 is not any(vec(1, 2, 3), str);
+    2 is not any(vec(1, 2, 3), str);
+    3 is not any(vec(1, 2, 3), str);
+
+    [1 2 3] is any(any(vec(num), "foobar", %{baz 0}), str);
+    [1 2 "foo"] is not any(any(vec(num), "foobar", %{baz 0}), str);
+    "foobar" is any(any(vec(num), "foobar", %{baz 0}), str);
+    %{baz 0} is any(any(vec(num), "foobar", %{baz 0}), str);
+    %{baz "bad"} is not any(any(vec(num), "foobar", %{baz 0}), str);
+    "foobarz" is any(any(vec(num), "foobar", %{baz 0}), str);
+}
+
+ensure "Sanity of spreads, superlocals in spreads" {
+  should "have proper spread semantics"
     (|+| [1, 2, 3]) is 6;
     (|*| [1, 2, 3, 4, 5]) is 120;
     (|is| 1 x 10) is 1;
@@ -253,6 +328,8 @@ ensure "Sanity of binary operators" {
     (|and| [true, false, 3]) is false;
     (|and| [false, false, 3]) is false;
     (|or| [false, false, 3]) is 3;
+
+  should "have proper superlocal in spread semantics"
     (|_ + 1| [2, 3, 4]) is [3, 4, 5];
     (|#_| [1, 2, 3]) is 1 x 3;
     (|&_ * _| [2, 3, 4]) is [4, 9, 16];

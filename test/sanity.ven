@@ -27,3 +27,5 @@ expose ven.tests.language.patterns;
 expose ven.tests.std.std;
 expose ven.tests.std.str;
 expose ven.tests.std.vec;
+
+expose ven.tests.bugfixes;

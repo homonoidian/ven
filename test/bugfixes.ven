@@ -1,0 +1,15 @@
+distinct ven.tests.bugfixes;
+
+ensure "fixed bugs are not present" {
+  should "compound: the 'x' bug with a bunch of anys is fixed" {
+    fun x(a, b) given any(vec, str), num = "$a x $b";
+    fun x(a, b) given num, any(vec, str) = x(b, a);
+    fun x(a, b) = x(&a, +b);
+
+    ensure x([1 2], 3) is x(3, [1 2]) is "[1, 2] x 3";
+    ensure x("foo", 3) is x(3, "foo") is "foo x 3";
+    ensure x(1, 2) is "[1] x 2";
+    ensure x(false, "13") is "[false] x 13";
+    ensure x(lambda, [31 32]) is "[type lambda] x 2";
+  }
+}
