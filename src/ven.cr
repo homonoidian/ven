@@ -60,9 +60,6 @@ module Ven
       # Whether to print the result of the program after it
       # is executed.
       property result = false
-      # Whether to enable the step-by-step inspector (scheduled
-      # for removal).
-      property inspect = false
       # The amount of octets of optimize passes.
       property optimize = 1
       # Whether to take overall (step) measurements, and
@@ -364,8 +361,6 @@ module Ven
           machine.measure = true
           machine.timetable = timetable
         end
-
-        machine.inspect = @config.inspect
       end
 
       # The measurement middleware should be the closest
@@ -553,14 +548,6 @@ module Ven
         end
 
         cmd.flags.add do |flag|
-          flag.name = "inspect"
-          flag.short = "-s"
-          flag.long = "--inspect"
-          flag.default = false
-          flag.description = "Enable instruction-by-instruction inspector."
-        end
-
-        cmd.flags.add do |flag|
           flag.name = "measure"
           flag.short = "-m"
           flag.long = "--measure"
@@ -648,7 +635,6 @@ module Ven
             end
           )
 
-          @config.inspect = options.bool["inspect"]
           @config.measure = options.bool["measure"]
           @config.timetable = options.bool["timetable"]
           @config.result = options.bool["result"]

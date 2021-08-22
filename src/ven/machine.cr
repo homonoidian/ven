@@ -1,4 +1,3 @@
-require "fancyline"
 require "./suite/*"
 
 module Ven
@@ -14,14 +13,9 @@ module Ven
     # fibers.
     SCHEDULER_TICK_PERIOD = 10
 
-    # Fancyline used by the debugger.
-    @@fancy = Fancyline.new
-
     # Origin chunk. It only makes sense to set it just before
     # evaluation, otherwise it is ignored.
     property origin = 0
-    # Whether to enable inspector functionality (see `inspector`)
-    property inspect = false
     # Whether to take the appropriate measurements, and write
     # them to the timetable.
     property measure = false
@@ -581,65 +575,13 @@ module Ven
       field?(head, field) || die("#{head.type?}: no such field or function: #{field}")
     end
 
-    # Starts a primitive state inspector prompt.
-    #
-    # Returns false if the user wanted to terminate the
-    # inspector altogether, or true if the user requested
-    # the next instruction.
-    def inspector
-      loop do
-        begin
-          got = @@fancy.readline("#{frame.ip}@#{chunk.name} :: ")
-        rescue Fancyline::Interrupt # CTRL-C
-          puts
-
-          return true
-        end
-
-        case got = got.try(&.strip)
-        when "."
-          puts stack.join(" ")
-        when ".."
-          puts chunk
-        when ".f"
-          puts frame
-        when ".fs"
-          @frames.each do |it|
-            puts "{\n  #{it}\n}\n"
-          end
-        when ".c"
-          puts control.join(" ")
-        when ".s"
-          @context.scopes.each do |scope|
-            scope.each do |name, value|
-              puts "#{name} = #{value}"
-            end
-
-            puts "-" * 32
-          end
-        when /^(\.h(elp)?|\?)$/
-          puts "?  : .h(elp) : display this",
-            ".  : display stack",
-            ".. : display chunk",
-            ".f : display frame",
-            ".s : display scopes",
-            ".c : display control",
-            "._ : display superlocals",
-            "CTRL-C : step",
-            "CTRL-D : skip all"
-        when nil # EOF (CTRL-D)
-          return false
-        else
-          puts @context[got]? || "variable not found: #{got}"
-        end
-      end
-    end
-
     # Starts the evaluation loop, which begins to fetch the
     # instructions from the active chunk and execute them,
     # until there aren't any.
     #
-    # If *schedule* is true, the scheduler is enabled.
+    # If *schedule* is true, the scheduler is enabled. All
+    # it currently does is it `Fiber.yield`s after set periods
+    # of time.
     def start(schedule = true)
       # The amount of ticks gone by. A tick is one iteration
       # of the interpreter loop. Ven runtime scheduler works
@@ -676,8 +618,6 @@ module Ven
             interrupt = false
 
             die("interrupted")
-          elsif @inspect
-            puts "(did) #{this}"
           end
 
           began = Time.monotonic
@@ -1157,16 +1097,7 @@ module Ven
 
           jump(dies)
         ensure
-          if @measure && began
-            record!(this, Time.monotonic - began, cp, ip)
-          end
-
-          # If there is anything left to inspect (there is
-          # nothing in case of an error), and if inspector
-          # itself is enabled, then inspect.
-          if !@frames.empty? && @inspect
-            @inspect = inspector
-          end
+          record!(this, Time.monotonic - began, cp, ip) if @measure && began
         end
 
         jump
