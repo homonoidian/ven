@@ -13,18 +13,18 @@ module Ven
   # context hub, i.e., interactive, stateful reloading (if
   # Ven would ever be able to handle that), and so on.
   #
-  # ```crystal
+  # ```
   # SOURCES = {
-  #   "foo.ven" => "distinct foo; x = 1",
-  #   "bar.ven" => "distinct foo; y = 2",
-  #   "baz.ven" => "distinct baz; expose foo; z = |+| [x y]",
-  #   "quux.ven" => "distinct quux; expose baz; result = [x y z]"
+  #   "foo.ven"  => "distinct foo; x = 1",
+  #   "bar.ven"  => "distinct foo; y = 2",
+  #   "baz.ven"  => "distinct baz; expose foo; z = |+| [x y]",
+  #   "quux.ven" => "distinct quux; expose baz; result = [x y z]",
   # }
   #
   # PULL = Ven::Orchestra::Pull.new do |distinct|
   #   # Distinct is an array: distinct foo is ["foo"],
   #   # distinct foo.bar is ["foo", "bar"], etc.
-  #    if distinct == ["foo"]
+  #   if distinct == ["foo"]
   #     ["foo.ven", "bar.ven"]
   #   elsif distinct == ["baz"]
   #     ["baz.ven"]
@@ -44,8 +44,8 @@ module Ven
   # alpha = Ven::Program.new("expose foo; [x y]", hub: hub)
   # beta = Ven::Program.new("expose quux; result", hub: hub)
   #
-  # puts orchestra.play(alpha) # ==> [1 2]
-  # puts orchestra.play(beta) # ==> [1 2 3]
+  # puts orchestra.play(alpha)    # ==> [1 2]
+  # puts orchestra.play(beta)     # ==> [1 2 3]
   # puts orchestra.play(["quux"]) # ==> [1 2 3]
   # ```
   class Orchestra
@@ -146,11 +146,11 @@ module Ven
         yielder.call(@chunks[origin..], compiler)
       end
 
-#       c = program.after_optimize.add do |chunks, optimizer, yielder|
-#         # The optimizer does return our slice, though, so
-#         # pass the next middleware our full chunk pool.
-#         yielder.call(@chunks, optimizer)
-#       end
+      #       c = program.after_optimize.add do |chunks, optimizer, yielder|
+      #         # The optimizer does return our slice, though, so
+      #         # pass the next middleware our full chunk pool.
+      #         yielder.call(@chunks, optimizer)
+      #       end
 
       d = program.before_eval do |machine|
         # We have to do this here so the users don't know
@@ -163,7 +163,7 @@ module Ven
         machine.origin = origin
       end
 
-      -> do
+      ->do
         program.before_compile.list.reject! &.hash.to_u64 == a
         program.after_compile.list.reject! &.hash.to_u64 == b
         # program.after_optimize.list.reject! &.hash.to_u64 == c
@@ -261,6 +261,7 @@ module Ven
       end
       readable = readables.first
       program = Program.new(read(readable), readable, hub: @hub)
+      @cache << readable
       dependencies(program).each do |dependency|
         expose(dependency, children)
       end
