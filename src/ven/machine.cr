@@ -339,147 +339,96 @@ module Ven
       @context[%target] = %value
     end
 
-    # Performs a binary operation on *left*, *right*.
+    # Handles a binary *operator* application to *left*, *right*.
     #
-    # Tries to normalize if *left*, *right* cannot be used
-    # with the *operator*.
+    # You should prefer this method to direct invokation of
+    # the appropriate `Model` methods (like `is?`, `add`),
+    # because this method handles a number of corner cases,
+    # including `Machine`-related corner cases.
+    #
+    # Dies on division by zero. Dies on `OverflowError`.
     def binary(operator : String, left : Model, right : Model)
-      case {operator, left, right}
-      when {"to", Num, Num}
-        MFullRange.new(left, right)
-      when {"is", Str, MRegex}
-        # `str is regex` does not return *left*, but instead
-        # full match result (or false if there isn't any).
-        #
-        # Also, if there are named groups in the regex, the
-        # matches for those named groups are bound in the
-        # current scope under the corresponding names, unless
-        # one of them conflicts with an existing symbol.
-        if match = right.regex.match(left.value)
-          match.named_captures.each do |capture, value|
-            if @context[capture]?
-              die("capture in conflict with an existing symbol: #{capture}")
+      {% begin %}
+        case {operator, left, right}
+        when {"is", Str, MRegex}
+          # `str is regex` does not return *left*, but instead
+          # full match result (or false if there isn't any).
+          #
+          # Also, if there are named groups in the regex, the
+          # matches for those named groups are bound in the
+          # current scope under the corresponding names, unless
+          # one of them conflicts with an existing symbol.
+          if match = right.regex.match(left.value)
+            match.named_captures.each do |capture, value|
+              if @context[capture]?
+                die("capture in conflict with an existing symbol: #{capture}")
+              end
+              @context[capture] = value ? str(value) : bool false
             end
-            @context[capture] = value ? str(value) : bool false
+            return str(match[0])
           end
-          return str(match[0])
+          bool false
+        when {"is", MBool, _}
+          # This makes clauses like `false is false` work. The
+          # following machinery will cause these to return the
+          # left `false`, but that would be incorrect.
+          bool left.is?(right)
+        when {"is", _, MBool}
+          # Returns whether *left*, converted to bool
+          # **non-semantically**, is *right*.
+          may_be left, if: left.to_bool.is?(right)
+        when {"is", _, _}
+          # Note that 'is' does not normalize; identity handling,
+          # with all its sugars & salts, is done by *left*.
+          may_be left, if: left.is?(right)
+        when {"in", Str, Str}
+          # Checks for substring. Returns *left*, or bool false.
+          may_be left, if: right.value.includes?(left.value)
+        when {"in", Num, MRange}
+          # Checks for presence in range. Returns *left*, or
+          # bool false.
+          may_be left, if: right.includes?(left.value)
+        when {"in", MCompoundType, Vec}
+          # Returns a vector of values matching the specified
+          # compound type, or an empty vector.
+          vec right.select(&.is? left)
+        when {"in", MBool, Vec}
+          # Returns whether boolean *left* is in the vector.
+          # Returns true or false.
+          truthy = left.true?
+          bool right.any? &.true?.==(truthy)
+        when {"in", _, Vec}
+          # Searches for an item matching *left* in the vector.
+          # Returns the found item, or bool false.
+          right.find &.is?(left) || bool false
+        when {"in", Str, MMap}
+          # Searches for a key named *left*, and returns the
+          # corresponding value. Otherwise, returns bool false.
+          may_be right[left.value], if: right.has_key?(left.value)
+        when {"in", _, MMap}
+          # Returns a subset map of *right* with only the values
+          # matching *left* kept.
+          MMap.new right.select { |_, v| v.is?(left) }
+        {% for operator, method in MODEL_BINARIES %}
+          when { {{operator}}, _, _ }
+            {% if method.is_a?(TupleLiteral) %}
+              # I understand this is heavily dependent on the
+              # syntax of `MODEL_BINARIES` (which is invisible
+              # from here), but nah.
+              {% method = method.first %}
+            {% end %}
+
+            left.{{method.id}}(right) ||
+              die("'#{{{operator}}}': unsupported given #{left}, #{right}")
+        {% end %}
+        else
+          raise "'#{operator}' not handled by models/Machine#binary()"
         end
-        bool false
-      when {"is", MBool, _}
-        # This makes clauses like `false is false` work. The
-        # following machinery will cause these to return the
-        # left `false`, but this is unwanted.
-        bool left.is?(right)
-      when {"is", _, MBool}
-        # Returns whether *left*, converted to bool
-        # **non-semantically**, is *right*.
-        may_be left, if: left.to_bool.is?(right)
-      when {"is", _, _}
-        # Note that 'is' does not normalize; identity handling,
-        # with all its sugars & salts, is done by *left*.
-        may_be left, if: left.is?(right)
-      when {"in", Str, Str}
-        # Checks for substring. Returns *left*, or bool false.
-        may_be left, if: right.value.includes?(left.value)
-      when {"in", Num, MRange}
-        # Checks for presence in range. Returns *left*, or
-        # bool false.
-        may_be left, if: right.includes?(left.value)
-      when {"in", MCompoundType, Vec}
-        # Returns a vector of values matching the specified
-        # compound type, or an empty vector.
-        vec right.select(&.is? left)
-      when {"in", MBool, Vec}
-        # Returns whether boolean *left* is in the vector.
-        # Returns true or false.
-        truthy = left.true?
-        bool right.any? &.true?.==(truthy)
-      when {"in", _, Vec}
-        # Searches for an item matching *left* in the vector.
-        # Returns the found item, or bool false.
-        right.find &.is?(left) || bool false
-      when {"in", Str, MMap}
-        # Searches for a key named *left*, and returns the
-        # corresponding value. Otherwise, returns bool false.
-        may_be right[left.value], if: right.has_key?(left.value)
-      when {"in", _, MMap}
-        # Returns a subset map of *right* with only the values
-        # matching *left* kept.
-        MMap.new right.select { |_, v| v.is?(left) }
-      when {"<", Num, Num}
-        left < right
-      when {">", Num, Num}
-        left > right
-      when {"<=", Num, Num}
-        left <= right
-      when {">=", Num, Num}
-        left >= right
-      when {"+", Num, Num}
-        left + right
-      when {"-", Num, Num}
-        left - right
-      when {"*", Num, Num}
-        left * right
-      when {"/", Num, Num}
-        left / right
-      when {"&", Vec, Vec}
-        left + right
-      when {"~", Str, Str}
-        left + right
-      when {"%", MMap, MMap}
-        MMap.new(left.merge(right.map))
-      when {"x", Vec, Num}
-        left * right
-      when {"x", Str, Num}
-        left * right
-      else
-        binary operator, *normalize(operator, left, right)
-      end
+      {% end %}
     rescue DivisionByZeroError
       die("'#{operator}': division by zero given #{left}, #{right}")
     rescue OverflowError
       die("'#{operator}': numeric overflow")
-    end
-
-    # Normalizes (converts down to the normal form) a binary
-    # operation. Returns nil if failed to convert.
-    def normalize?(operator : String, left : Model, right : Model)
-      case operator
-      when "to"
-        return left.to_num, right.to_num
-      when "x"
-        case {left, right}
-        when {_, Vec}, {_, Str}
-          return right, left.to_num
-        when {Str, _}, {Vec, _}
-          return left, right.to_num
-        else
-          return left.to_vec, right.to_num
-        end
-      when "<", ">", "<=", ">="
-        case {left, right}
-        when {Str, Str}
-          return left.to_num(parse: false), right.to_num(parse: false)
-        else
-          return left.to_num, right.to_num
-        end
-      when "+", "-", "*", "/"
-        return left.to_num, right.to_num
-      when "~"
-        return left.to_str, right.to_str
-      when "&"
-        return left.to_vec, right.to_vec
-      when "%"
-        return left.to_map, right.to_map
-      end
-    rescue ModelCastException
-    end
-
-    # Normalizes (converts down to the normal form) a binary
-    # operation. Dies if failed to convert.
-    def normalize(operator, left, right)
-      normalize?(operator, left, right) ||
-        die("'#{operator}': could not normalize: #{left.type?}, #{right.type?}")
     end
 
     # Defines an `MFunction` off the *informer* and *given*s.
@@ -537,25 +486,27 @@ module Ven
 
     # Reduces *operand*, a range, using a binary *operator*.
     def reduce(operator, operand : MFullRange)
-      start = operand.begin.value
-      end_ = operand.end.value
+      b = operand.begin.value
+      e = operand.end.value
 
       case operator
       when "+"
-        return num ((start + end_) * operand.length) / 2
+        return num ((b + e) * operand.length) / 2
       when "*"
-        start = operand.begin.value
-        end_ = operand.end.value
-        # Uses GMP's factorial, which is MUCH faster than any
-        # domestic implementation.
-        if start < 0 || end_ < 0
+        # Uses GMP's factorial, which is MUCH faster than
+        # any domestic implementation.
+        if b == 0 || e == 0
+          # Ven ranges are always inclusive: (n to 0)! will
+          # give you n * (n - 1) * (n - 2) * ... * 0 = 0.
+          return num 0
+        elsif b < 0 || e < 0
           die("|*|: negative ends disallowed")
-        elsif start == 1
-          return num end_.value.factorial
-        elsif start > end_
-          return num (start - end_).value.factorial
+        elsif b == 1
+          return num e.value.factorial
+        elsif e == 1
+          return num b.value.factorial
         else
-          return num (end_ - start).value.factorial
+          return num (b - e).abs.value.factorial
         end
       end
 

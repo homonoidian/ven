@@ -22,6 +22,38 @@ module Ven::Suite
   alias Str = MString
   alias Vec = MVector
 
+  # A hash that maps binary operators to the descriptions of
+  # their implementation.
+  #
+  # The syntax for a description is:
+  #
+  # ```
+  # # Either:
+  # {:method, :method_to_normalize_left, :method_to_normalize_right}
+  #
+  # # ... or:
+  # :method
+  # ```
+  #
+  # After a description is added here, the appropriate bang-
+  # method should be implemented on the model(s) you want the
+  # operator to work on.
+  MODEL_BINARIES = {
+    "to" => {:to, :to_num, :to_num},
+    "<"  => {:lt, :to_num, :to_num},
+    ">"  => {:gt, :to_num, :to_num},
+    "<=" => {:lte, :to_num, :to_num},
+    ">=" => {:gte, :to_num, :to_num},
+    "+"  => {:add, :to_num, :to_num},
+    "-"  => {:sub, :to_num, :to_num},
+    "*"  => {:mul, :to_num, :to_num},
+    "/"  => {:div, :to_num, :to_num},
+    "&"  => {:concat, :to_vec, :to_vec},
+    "~"  => {:stitch, :to_str, :to_str},
+    "%"  => {:merge, :to_map, :to_map},
+    "x"  => {:repeat, :to_vec, :to_num},
+  }
+
   # Model weight is, simply speaking, the priority, or
   # definedness, of a model.
   #
@@ -40,13 +72,15 @@ module Ven::Suite
   # :nodoc:
   macro model_template?
     # Yields with Union TypeDeclaration *joint* cast to its
-    # subtypes. E.g., when *joint* is `foo : Model`, the block
-    # will have *foo* cast to `MClass`, and then, separately,
-    # to `MStruct`, available in its scope.
+    # subtypes. E.g., when *joint* is `foo : Model` (where
+    # `Model` is `Union(MClass, MStruct)`), it yields first
+    # with *foo* cast to `MClass`, and then with *foo* cast
+    # to `MStruct`.
     #
-    # When *joint* is `@foo : Model`, a block argument that will
-    # specify the alternative name for `@foo` is required, as
-    # instance variables are not redefinable.
+    # When *joint* is `@foo : Model`, a block argument is
+    # required to specify the name to use, as `@foo`'s type,
+    # like with all instance variables, cannot be restricted
+    # by an assign-as.
     macro disunion(joint, &block)
       {% verbatim do %}
         {% if !joint.is_a?(TypeDeclaration) %}
@@ -59,6 +93,10 @@ module Ven::Suite
 
         {% if !joint_type.union? || joint_types.size < 2 %}
           {% raise "disunion: joint must be a Union" %}
+        {% end %}
+
+        {% if joint_name.is_a?(InstanceVar) && block.args.size != 1 %}
+          {% raise "disunion: joint var is an InstanceVar, expected a block argument" %}
         {% end %}
 
         if {{joint_name}}.is_a?({{joint_types[0]}})
@@ -82,7 +120,7 @@ module Ven::Suite
         else
           false
         end
-    {% end %}
+      {% end %}
     end
 
     # Converts (casts) this model into a `Num`.
@@ -112,11 +150,14 @@ module Ven::Suite
     end
 
     # Returns whether this model is true.
+    #
+    # A generic implementation is provided out of the box. It
+    # inverts the result of `false?`.
     def true? : Bool
-      true
+      !false?
     end
 
-    # Returns whether this model is a false.
+    # Returns whether this model is false.
     def false? : Bool
       false
     end
@@ -141,16 +182,18 @@ module Ven::Suite
     # ensure typeof is function; # of subtype: builtin is function
     # ```
     def is?(other : MType) : Bool
-      o_model = other.model
-      # Deconstruct ModelClass to ModelClass members, and
-      # check them with `<=`.
-      disunion(o_model : ModelClass) do
-        self.class <= o_model
+      model = other.model
+      # Deconstruct ModelClass union into its members, and
+      # check against each one of them with `<=`.
+      disunion(model : ModelClass) do
+        self.class <= model
       end
     end
 
     # Returns whether this model is of the compound type *other*.
-    # Delegates the implementation to `MCompoundType`.
+    # Delegates the implementation to `MCompoundType` by inverting
+    # the order: if you called `model.is?(compound)`, this changes
+    # it to `compound.is?(model)`.
     def is?(other : MCompoundType)
       other.is?(self)
     end
@@ -160,9 +203,52 @@ module Ven::Suite
     #
     # The whole concept of semantic equality is rather bland
     # in Ven. Models are free to choose the way they identify
-    # themselves, as well as compare one identity to another.
+    # themselves, and the way they compare their identities
+    # to the identities of others.
+    #
+    # If *other* is an `MAny`, though, any model *must* respond
+    # true (although this is not guaranteed when this method is
+    # overridden, or shadowed).
     def is?(other)
       other.is_a?(MAny)
+    end
+
+    # Make default implementations for the binary operators
+    # based on the `MODEL_BINARIES` hash.
+    {% for operator, default in MODEL_BINARIES %}
+      {% if default.is_a?(TupleLiteral) %}
+        {% method, n_left, n_right = default %}
+
+        # The implementation of the `{{operator.id}}` binary
+        # operator. May return nil, which means the operation
+        # was unsuccessful.
+        protected def {{method.id}}!(other) : Model?
+        end
+
+        # Tries to apply the `{{operator.id}}` binary operator.
+        # If unsuccessful, normalizes the sides using `{{n_left.id}}`,
+        # `{{n_right.id}}`, respectively, and tries again. If still
+        # unsuccessful, returns nil.
+        def {{method.id}}(other) : Model?
+          {{method.id}}!(other) || {{n_left.id}}.{{method.id}}!(other.{{n_right.id}})
+        end
+      {% else %}
+        # Tries to apply the `{{operator.id}}` binary operator.
+        # If unsuccessful, returns nil.
+        def {{default.id}}(other : Model) : Model?
+        end
+      {% end %}
+    {% end %}
+
+    # Delegates repetition to *other*: repeats *other*
+    # self times.
+    protected def repeat!(other : MVector)
+      other.repeat!(to_num)
+    end
+
+    # :ditto:
+    protected def repeat!(other : MString)
+      other.repeat!(to_num)
     end
 
     # Returns the weight (see `MWeight`) of this model.
@@ -208,7 +294,7 @@ module Ven::Suite
     # ```
     #
     # Where `foo` is this model.
-    def field?(name : String)
+    def field?(name : String) : Model?
     end
 
     # Returns the length of this model. Falls back to 1.
@@ -237,7 +323,8 @@ module Ven::Suite
     # Returns a subset of items in this model.
     #
     # Subclasses may override this method to add subset
-    # support.
+    # support through Ven ranges, or through Crystal
+    # translations of Ven ranges.
     #
     # Returns nil if *range* is invalid (too long, etc.)
     def []?(range : MFullRange) : Model?
@@ -257,9 +344,10 @@ module Ven::Suite
     def []?(index : Range) : Model?
     end
 
-    # Provides the subordinate policy for this model. In other
-    # words, a way to support the following syntax (also known
-    # as access-assign):
+    # Provides the subordinate policy for this model.
+    #
+    # In practice, it is a way to support the following syntax
+    # (upto compilation known as access-assign):
     #
     # ```ven
     # foo[subordinate] = value
@@ -267,8 +355,8 @@ module Ven::Suite
     #
     # Where `foo` is this model.
     #
-    # Returns nil if found no *subordinate* / has no support for
-    # such subordinate.
+    # Returns nil if found no *subordinate* / has no support
+    # for such subordinate.
     def []=(subordinate : Model, value : Model) : Model?
     end
 
@@ -286,22 +374,25 @@ module Ven::Suite
     def type : MType?
     end
 
-    # Dies. The implementing classes may decide to override
-    # handle to/from-JSON conversion.
+    # Dies. Subclasses may decide to override if they want
+    # to support to/from-JSON conversions (initiated mostly
+    # by mappings).
     def to_json(json : JSON::Builder)
       raise ModelCastException.new("cannot convert #{self} to JSON")
     end
 
     macro inherited
-      # Returns whether this model class is concrete (i.e.,
-      # is not an abstract class/struct).
-      def self.concrete?
-        \{{!@type.abstract?}}
-      end
+      {% verbatim do %}
+        # Returns whether this model class is concrete (i.e.,
+        # is not an abstract class/struct).
+        def self.concrete?
+          {{!@type.abstract?}}
+        end
 
-      \{% if !@type.abstract? %}
-        def_clone
-      \{% end %}
+        {% if !@type.abstract? %}
+          def_clone
+        {% end %}
+      {% end %}
     end
   end
 
@@ -311,47 +402,19 @@ module Ven::Suite
   end
 
   # The parent of all Class `Model`s (those that are stored
-  # on the heap and referred).
+  # on the heap and passed by reference).
   abstract class MClass
     Suite.model_template?
-
-    def to_s(io)
-      io << self
-    end
   end
 
   # A model that holds a *value* of type *T*.
   #
   # Forwards missing to *value*.
-  #
-  # Forwards operators `+`, `-`, `*`, `/` to *value*, and
-  # wraps the result in `MValue(T)`.
-  #
-  # Forwards operators `<`, `>`, `<=`, `>=` to *value*, and
-  # wraps the result in `MBool`.
   abstract struct MValue(T) < MStruct
     getter value : T
 
     def initialize(@value : T)
     end
-
-    {% for operator in ["<", ">", "<=", ">="] %}
-      # Applies `{{operator.id}}` to the value of this `MValue`,
-      # and the value of the *other* `MValue`. Wraps the result
-      # in `MBool`.
-      def {{operator.id}}(other : MValue(T))
-        MBool.new(@value {{operator.id}} other.value)
-      end
-    {% end %}
-
-    {% for operator in ["+", "-", "*", "/"] %}
-      # Applies `{{operator.id}}` to the value of this `MValue`,
-      # and the value of the *other* `MValue`. Wraps the result
-      # into the same `MValue` type as this `MValue`.
-      def {{operator.id}}(other : MValue(T))
-        \{{@type}}.new(@value {{operator.id}} other.value)
-      end
-    {% end %}
 
     def is?(other : MValue)
       @value == other.value
@@ -387,6 +450,56 @@ module Ven::Suite
       other.includes?(@value)
     end
 
+    # Makes a full range from this number, to (and including)
+    # the *other* number.
+    protected def to!(other : Num)
+      MFullRange.new(self, other)
+    end
+
+    # Returns whether this number is less than the
+    # *other* number.
+    protected def lt!(other : Num)
+      MBool.new(@value < other.value)
+    end
+
+    # Returns whether this number is greater than the
+    # *other* number.
+    protected def gt!(other : Num)
+      MBool.new(@value > other.value)
+    end
+
+    # Returns whether this number is less than, or equal to,
+    # the *other* number.
+    protected def lte!(other : Num)
+      MBool.new(@value <= other.value)
+    end
+
+    # Returns whether this number is greater than, or equal
+    # to, the *other* number.
+    protected def gte!(other : Num)
+      MBool.new(@value >= other.value)
+    end
+
+    # Adds this number to the *other* number.
+    protected def add!(other : Num)
+      Num.new(@value + other.value)
+    end
+
+    # Subtracts this number from the *other* number.
+    protected def sub!(other : Num)
+      Num.new(@value - other.value)
+    end
+
+    # Multiplies this number by the *other* number.
+    protected def mul!(other : Num)
+      Num.new(@value * other.value)
+    end
+
+    # Divides this number by the *other* number.
+    protected def div!(other : Num)
+      Num.new(@value / other.value)
+    end
+
     # Returns the Int32 version of this number.
     #
     # Raises `ModelCastException` on overflow.
@@ -401,7 +514,7 @@ module Ven::Suite
       Num.new(-@value)
     end
 
-    # Writes a JSON number.
+    # Writes this number as a JSON number.
     def to_json(json : JSON::Builder)
       json.number(@value)
     end
@@ -428,25 +541,54 @@ module Ven::Suite
   end
 
   # Ven's string data type (type str).
-  #
-  # Ven strings are immutable.
   struct MString < MValue(String)
     delegate :size, to: @value
 
-    # Repeats the value of this string *n* times. Converts
-    # *n* to Int32 (see `MNumber#to_i`).
-    def *(n : Num)
-      Str.new(@value * n.to_i)
+    # Returns whether this string is shorter than the
+    # *other* string.
+    protected def lt!(other : Str)
+      MBool.new(size < other.size)
+    end
+
+    # Returns whether this string is longer than the
+    # *other* string.
+    protected def gt!(other : Str)
+      MBool.new(size > other.size)
+    end
+
+    # Returns whether this string is shorter than, or of same
+    # length as, the *other* string.
+    protected def lte!(other : Str)
+      MBool.new(size <= other.size)
+    end
+
+    # Returns whether this string is shorter than, or of same
+    # length as, the *other* string.
+    protected def gte!(other : Str)
+      MBool.new(size >= other.size)
+    end
+
+    # Stitches this string with the *other* string.
+    protected def stitch!(other : Str)
+      Str.new(@value + other.value)
+    end
+
+    # Repeats the value of this string *amount* times. Converts
+    # *amount* to Int32 (see `MNumber#to_i`).
+    protected def repeat!(amount : Num)
+      Str.new(@value * amount.to_i)
+    end
+
+    # Repeats the value of this string *amount* times. This is
+    # a normalization method, see `repeat!(amount : Num)` for
+    # the actual repeat implementation.
+    protected def repeat!(amount)
+      repeat!(amount.to_num)
     end
 
     # Converts this string into a `Num`.
-    #
-    # If *parse* is true, it parses this string into a number.
-    # Raises `ModelCastException` on parse error.
-    #
-    # If *parse* is false, it returns the length of this string.
-    def to_num(parse = true)
-      Num.new(parse ? @value : size)
+    def to_num
+      Num.new(@value)
     rescue InvalidBigDecimalException
       raise ModelCastException.new("'#{value}' is not a base-10 number")
     end
@@ -511,8 +653,6 @@ module Ven::Suite
   end
 
   # Ven's regular expression data type (type regex).
-  #
-  # Ven regexes are immutable.
   struct MRegex < MStruct
     getter regex : Regex
 
@@ -564,9 +704,9 @@ module Ven::Suite
 
   # Ven's vector data type (type vec).
   #
-  # Ven vector is a model wrapper around a reference to an
-  # Array (*items*). If necessary, mutate the *items*, not
-  # your MVector.
+  # Note that Ven vector is a model wrapper around an Array
+  # (see `MVector#items`). If necessary, mutate that array,
+  # not the MVector.
   struct MVector < MStruct
     property items : Models
 
@@ -580,14 +720,21 @@ module Ven::Suite
     end
 
     # Concatenates this vector with the *other* vector.
-    def +(other : Vec)
+    protected def concat!(other : Vec)
       Vec.new(@items + other.items)
     end
 
-    # Repeats the items of this vector *n* times. Converts
-    # *n* to Int32 (see `MNumber#to_i`).
-    def *(n : Num)
-      Vec.new(@items * n.to_i)
+    # Repeats the items of this vector *amount* times. Converts
+    # *amount* to Int32 (see `MNumber#to_i`).
+    protected def repeat!(amount : Num)
+      Vec.new(@items * amount.to_i)
+    end
+
+    # Repeats the items of this vector *amount* times. This
+    # is a normalization method, see `repeat!(amount : Num)`
+    # for the actual repeat implementation.
+    protected def repeat!(amount)
+      repeat!(amount.to_num)
     end
 
     # Returns the length of this vector.
@@ -696,8 +843,9 @@ module Ven::Suite
       new(items.map { |item| type.new(item) })
     end
 
-    # Makes a **raw vector** from *items*. Raw vectors provide
-    # direct access to *items*.
+    # Makes a **raw vector** from *items*. Raw vectors refer
+    # to *items* directly, i.e., any mutation of the resulting
+    # `Vec`'s items will directly affect *items*..
     def self.around(items)
       vec = new
       vec.items = items
@@ -713,8 +861,6 @@ module Ven::Suite
   end
 
   # Ven's umbrella range data type (type range).
-  #
-  # Ven ranges are immutable.
   abstract struct MRange < MStruct
   end
 
@@ -994,6 +1140,12 @@ module Ven::Suite
       end
 
       true
+    end
+
+    # Merges this map with the *other* map. Returns the
+    # resulting map.
+    protected def merge!(other : MMap)
+      MMap.new @map.merge(other.map)
     end
 
     # Accesses by key, and provides `.keys`, `.vals`.
