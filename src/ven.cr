@@ -277,12 +277,12 @@ module Ven
     #
     # Returns nothing.
     def show(timetable : Machine::Timetable)
-      timetable.each do |cidx, stats|
-        puts "chunk #{cidx}".colorize.underline
+      timetable.chunks do |c_stat|
+        puts "chunk #{c_stat.cp}".colorize.underline
 
-        stats.each do |ip, report|
-          amount = report[:amount]
-          duration = report[:duration]
+        c_stat.instructions do |i_stat|
+          amount = i_stat.amount
+          duration = i_stat.duration
 
           amount =
             if amount < 100
@@ -308,7 +308,11 @@ module Ven
             unit = unit.colorize.red.bright
           end
 
-          puts "@#{ip}| #{report[:instruction]} [#{amount} time(s), took #{duration} #{unit}]"
+          # Let the subject chunk, with all its knowledge,
+          # format the subject instruction.
+          instruction = c_stat.subject.to_s(i_stat.subject, i_stat.ip)
+
+          puts "#{instruction} [#{amount} time(s), took #{duration} #{unit}]"
         end
       end
     end

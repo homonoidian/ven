@@ -4,9 +4,58 @@ module Ven
   class Machine
     include Suite
 
-    alias Timetable = Hash(Int32, IStatistics)
-    alias IStatistics = Hash(Int32, IStatistic)
-    alias IStatistic = {amount: Int32, duration: Time::Span, instruction: Instruction}
+    # Represents the time/statistical data for all chunks
+    # that a `Machine` has evaluated/is evaluating.
+    record Timetable, chunks = {} of Int32 => ChunkStatistic do
+      # Returns the `ChunkStatistic` at *cp*, or creates a new
+      # `ChunkStatistic` at *cp* and returns it. *chunk* stands
+      # for the subject chunk.
+      def chunk(cp : Int32, chunk : Chunk)
+        chunks[cp] ||= ChunkStatistic.new(cp, chunk)
+      end
+
+      # Yields each `ChunkStatistic` of this timetable.
+      def chunks
+        @chunks.each do |_, statistic|
+          yield statistic
+        end
+      end
+    end
+
+    # Represents the time/statistical data for a stitched chunk.
+    record ChunkStatistic, cp : Int32, subject : Chunk, instructions = {} of Int32 => IStatistic do
+      # Updates, or builds, the `IStatistic` for the *instruction* at *ip*.
+      #
+      # Assumes `cp`s stand for one and only one chunk, and
+      # *ip*s stand for one and only one instruction within
+      # a chunk.
+      def update(ip : Int32, instruction : Instruction, duration : Time::Span)
+        if statistic = instructions[ip]?
+          instructions[ip] = statistic.copy_with(
+            amount: statistic.amount + 1,
+            duration: statistic.duration + duration,
+          )
+        else
+          instructions[ip] = IStatistic.new(ip, duration, instruction)
+        end
+      end
+
+      # Yields each `IStatistic` of this `ChunkStatistic`.
+      def instructions
+        @instructions.each do |_, statistic|
+          yield statistic
+        end
+      end
+    end
+
+    # Represents the time/statistical data for an instruction.
+    #
+    # `IStatistic#amount` returns the total number of times
+    # this instruction was executed.
+    #
+    # `IStatistic#duration` returns the **overall** time this
+    # instruction took.
+    record IStatistic, ip : Int32, duration : Time::Span, subject : Instruction, amount = 1
 
     # How many interpreter loop ticks to wait before Ven
     # scheduling logic gives way to the other, enqueued
@@ -19,7 +68,7 @@ module Ven
     # Whether to take the appropriate measurements, and write
     # them to the timetable.
     property measure = false
-    # The target `Timetable` Hash.
+    # The target timetable. See `Timetable` to learn more.
     property timetable = Timetable.new
     # Returns the current frame stack of this machine.
     property frames = Array(Frame).new
@@ -47,33 +96,16 @@ module Ven
       raise RuntimeError.new(traces.uniq, file, line, message)
     end
 
-    # Builds an `IStatistic` given *amount*, *duration*
-    # and *instruction*.
-    private macro stat(amount, duration, instruction)
-      { amount: {{amount}},
-        duration: {{duration}},
-        instruction: {{instruction}} }
-    end
-
     # Updates the timetable entry for the given *instruction*.
     #
     # *duration* is the time *instruction* took to execute.
     #
-    # *cp* is the index of the chunk where the *instruction*
-    # is found.
-    #
-    # *ip* is an instruction pointer to the *instruction*.
-    def record!(instruction, duration, cp, ip)
-      if !(stats = @timetable[cp]?)
-        @timetable[cp] = {ip => stat(1, duration, instruction)}
-      elsif !(stat = stats[ip]?)
-        stats[ip] = stat(1, duration, instruction)
-      else
-        stats[ip] = stat(
-          stat[:amount] + 1,
-          stat[:duration] + duration,
-          instruction)
-      end
+    # *cp* is the chunk, and *ip* is the instruction pointer
+    # of the instruction. They have to be provided, because
+    # at `record!`-time, the current chunk/instruction pointer
+    # may not point where expected anymore.
+    def record!(cp : Int32, ip : Int32, duration : Time::Span)
+      @timetable.chunk(cp, @chunks[cp]).update(ip, @chunks[cp][ip], duration)
     end
 
     # Returns the current frame.
@@ -1097,7 +1129,7 @@ module Ven
 
           jump(dies)
         ensure
-          record!(this, Time.monotonic - began, cp, ip) if @measure && began
+          record!(cp, ip, Time.monotonic - began) if @measure && began
         end
 
         jump

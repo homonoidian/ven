@@ -174,7 +174,7 @@ module Ven::Suite
 
     # Same as `to_s(io, instruction)`.
     def to_s(instruction : Instruction, index : Int32? = nil)
-      to_s(String.new, instruction, index)
+      String.build { |io| to_s(io, instruction, index) }
     end
 
     # Disassembles `seamless` if available, otherwise `snippets`.
@@ -200,7 +200,7 @@ module Ven::Suite
 
     # Disassembles this chunk given no IO (see `to_s(io)`)
     def to_s
-      to_s(String.new)
+      String.build { |io| to_s(io) }
     end
   end
 
