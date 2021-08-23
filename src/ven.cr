@@ -675,8 +675,8 @@ module Ven
             # library.
             @hub.machine["ARGS"] = Vec.from(arguments[1...], Str)
 
-            if File.file?(file) && File.readable?(file)
-              run File.expand_path(file), File.read(file)
+            if content = read(file)
+              run File.expand_path(file), content
             elsif file =~ /^(\w[\.\w]*[^\.])$/
               play file.split('.')
             else
