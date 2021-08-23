@@ -49,9 +49,10 @@ module Ven
 
     # Represents the CLI configuration.
     #
-    # This might have been just a bunch of instance variables,
-    # I don't know why it's an object...
-    private class Config
+    # Every property in this class is mapped to the appropriate
+    # command line flag, so you are free to use this as (more
+    # verbose) help.
+    class Config
       # Whether to quit after the program is executed.
       property quit = true
       # Consider the program executed when the execution
@@ -75,6 +76,17 @@ module Ven
       property timetable = false
       # Whether to enable test mode.
       property test_mode = false
+      # Whether to read all Ven input files using Inqurer's
+      # `SourceFor` command. This affects:
+      #
+      #   - `ven path/to/file.ven`,
+      #   - `ven distinct`,
+      #   - all `expose`s.
+      #
+      # XXX: Whether this should be `true` by default, or `true`
+      # when a connection with Inquirer is established, is still
+      # undecided.
+      property using_inquirer = false
     end
 
     # The buffer of lines (used by the REPL to show excerpts
@@ -104,31 +116,59 @@ module Ven
       )
     end
 
+    # Sends a *command*, *argument* Request to the Inquirer
+    # from the configuration object (see `Config#inquirer`).
+    #
+    # Warns & returns nil if not connected to Inquirer.
+    #
+    # Returns nil if generally unsuccessful. Otherwise, returns
+    # Inquirer's `Inquirer::Protocol::Response::RType`.
+    def inquire(command : Inquirer::Protocol::Command, argument : String)
+      unless @config.inquirer.running?
+        return warn("this instance of Ven is not connected to Inquirer")
+      end
+
+      request = Inquirer::Protocol::Request.new(command, argument)
+      response = @config.inquirer.send(request)
+
+      if response.status.err?
+        {% if flag?(:release) %}
+          return
+        {% else %}
+          return warn("inquire(#{command}, #{argument}): #{response.result}")
+        {% end %}
+      end
+
+      response.result
+    end
+
+    # :ditto:
+    def inquire(command : String, argument : String)
+      inquire(Inquirer::Protocol::Command.parse(command), argument)
+    end
+
     # Implements the pull function for the Orchestra.
     #
     # If isolated, prints a warning and returns nil. Otherwise,
     # makes a FilesFor request to Inquirer, and returns the
     # array of filenames (or nil).
     def pull(distinct : Distinct)
-      unless @config.inquirer.running?
-        return warn("this instance of Ven is not connected to Inquirer")
-      end
-
-      response = @config.inquirer.send(
-        Inquirer::Protocol::Request.new(
-          # Request an array of files for the given distinct.
-          Inquirer::Protocol::Command::FilesFor,
-          distinct.join('.')
-        )
-      )
-
-      # As per the Protocol, this is either the array, or nil.
-      response.result.as?(Array(String))
+      inquire("FilesFor", distinct.join('.')).as?(Array(String))
     end
 
-    # Implements the read function for the Orchestra. Currently,
-    # just a safety wrapper around `File.read`.
+    # Implements the read function for the Orchestra.
+    #
+    # If `--using-inquirer` flag (see `Config#using_inquirer`)
+    # is true, sends a `SourceFor` to Inqurer, and returns the
+    # resulting source (or nil).
+    #
+    # Otherwise, it is just a safety wrapper around `File.read`,
+    # which returns nil if the file does not exist.
     def read(readable : String)
+      if @config.using_inquirer
+        return inquire("SourceFor", readable).as?(String)
+      end
+
       if File.file?(readable) && File.readable?(readable)
         File.read(readable)
       end
@@ -144,8 +184,8 @@ module Ven
 
       index = 0
 
-      if File.file?(filename) && File.readable?(filename)
-        File.each_line(filename) do |line|
+      if contents = read(filename)
+        contents.each_line do |line|
           return line.strip if index + 1 == lineno
 
           index += 1
@@ -605,6 +645,13 @@ module Ven
           flag.description = "(bloaty!) Propagate these flags to exposed programs"
         end
 
+        cmd.flags.add do |flag|
+          flag.name = "using-inquirer"
+          flag.long = "--using-inquirer"
+          flag.default = false
+          flag.description = "Whether to read all input files using Inqurer"
+        end
+
         # Generate flags for each `BaseAction` subclasses'
         # category. Automake the description.
         categories = {{BaseAction.subclasses}}.map(&.category).uniq.reject("screen")
@@ -645,6 +692,7 @@ module Ven
           @config.optimize = options.int["optimize"].as(Int32)
           @config.test_mode = options.bool["test-mode"]
           @config.propagate = options.bool["propagate"]
+          @config.using_inquirer = options.bool["using-inquirer"]
 
           if step = Program::Step.parse?(final = options.string["final"])
             @config.final = step
