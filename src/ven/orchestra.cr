@@ -230,6 +230,7 @@ module Ven
       unless program.hub.same?(@hub)
         raise InternalError.new("program hub not the same as this orchestra's")
       end
+      @cache << program.filename
       dependencies(program).each do |dependency|
         expose(dependency, children)
       end
