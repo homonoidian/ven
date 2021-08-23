@@ -676,14 +676,19 @@ module Ven
                 || options.bool["with-#{%category}"]
           {% end %}
 
-          # Try to connect to Inquirer. The pull function
-          # will use it.
+          # Try to connect to Inquirer. The PULL Proc will use
+          # this connection to communicate with Inquirer.
+          #
+          # Get `VEN_INQUIRER_HOST` from the environment, or
+          # use the default 0.0.0.0. This is mostly useful
+          # for Docker Compose / Docker.
           @config.inquirer = Inquirer::Client.new(
             begin
               config = Inquirer::Config.new
               config.port = options.int["inquirer"].as(Int32)
               config
-            end
+            end,
+            ENV["VEN_INQUIRER_HOST"]? || "0.0.0.0"
           )
 
           @config.measure = options.bool["measure"]
