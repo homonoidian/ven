@@ -92,14 +92,51 @@ module Ven
 
     # The Dis formatter implementation used in `show(chunk)`.
     class ShowChunkFormat < Dis::DefaultFormat
-      # Paints the super instruction pointer in dark gray.
+      @jumps = {} of VJump => Colorize::ColorRGB
+
+      # Paints the super instruction pointer in dark gray,
+      # or in a color from *@jumps*, if this IP is the target
+      # of one of the jumps there.
       def on_ip(io, ctx)
-        Colorize.with.dark_gray.surround(io) { super }
+        if kv = @jumps.find { |k, _| k.target == ctx.ip }
+          _, rgb = kv
+          # Colorize with the random colors picked by the
+          # jump adder.
+          color = "".colorize(rgb)
+        else
+          color = Colorize.with.dark_gray
+        end
+
+        color.surround(io) { super }
       end
 
       # Makes the super opcode bold.
       def on_opcode(io, ctx)
         Colorize.with.bold.surround(io) { super }
+      end
+
+      # Redirects to super unless current instruction argument
+      # resolves to a `VJump`. If it does, makes a random RGB
+      # color & puts it into *@jumps* under the corresponding
+      # jump, colorizes the jump with that random color, and
+      # appends it to *io*.
+      def on_argument(io, ctx)
+        return super unless ctx.instruction.argument.is_a?(Int32)
+        return super unless jump = ctx.chunk.resolve(ctx.instruction).as?(VJump)
+
+        # Make a random RGB color, and record it in the hash.
+        #
+        # Very unlikely, but it can exhaust/randomize its way
+        # to the same color.
+        color = @jumps[jump] ||= Colorize::ColorRGB.new(
+          rand(UInt8),
+          rand(UInt8),
+          rand(UInt8),
+        )
+
+        "".colorize(color).surround(io) do
+          io << jump
+        end
       end
     end
 
