@@ -1,6 +1,6 @@
 require "big"
 
-module Ven::Suite
+module Ven::Suite::PayloadSuite
   alias Static = Int32 | BigDecimal | String
 
   # A payload is a remotely stored argument of an instruction.
@@ -117,4 +117,8 @@ module Ven::Suite
       io << "fun " << @symbol << "@" << @target
     end
   end
+end
+
+module Ven::Suite
+  include PayloadSuite
 end

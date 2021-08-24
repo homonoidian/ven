@@ -1,9 +1,9 @@
 require "http"
 
-module Ven
-  class Network < Suite::Extension
-    include Suite
+module Ven::Library
+  include Suite
 
+  class Network < Extension
     # A handler callback together with an `HTTP::Server`.
     alias Server = {MFrozenLambda, HTTP::Server}
 

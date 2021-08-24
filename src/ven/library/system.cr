@@ -1,5 +1,7 @@
 module Ven::Library
   class System < Extension
+    include Actions
+
     on_load do
       # Contains the available actions' `initialize` methods
       # wrapped in Ven builtins. Use `actions.dir()` to display

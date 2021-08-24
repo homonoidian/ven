@@ -15,6 +15,7 @@ module Ven
   # plus a nice way to show Ven errors and program results.
   class CLI
     include Suite
+    include Actions
 
     # The source code of the basis file. It is embedded into
     # the executable.

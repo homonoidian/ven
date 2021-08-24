@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::ErrorSuite
   # The base class of all Ven exceptions.
   class VenError < Exception
   end
@@ -76,4 +76,8 @@ module Ven::Suite
   # a distinct.
   class ExposeError < VenError
   end
+end
+
+module Ven::Suite
+  include ErrorSuite
 end

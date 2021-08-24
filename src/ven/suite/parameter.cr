@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::ParameterSuite
   # Holds Ven function/box parameter information at read-time
   # & compile-time.
   struct Parameter
@@ -142,4 +142,8 @@ module Ven::Suite
 
     forward_missing_to @parameters
   end
+end
+
+module Ven::Suite
+  include ParameterSuite
 end

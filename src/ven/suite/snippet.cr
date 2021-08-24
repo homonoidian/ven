@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # A snippet (known as *basic block* outside of Ven) is a
   # *mutable* collection of `Instruction`s emitted under
   # a `Label`.
@@ -64,4 +64,8 @@ module Ven::Suite
       new(Label.new)
     end
   end
+end
+
+module Ven::Suite
+  include MachineSuite
 end

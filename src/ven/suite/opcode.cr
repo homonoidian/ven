@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # The list of all opcodes.
   #
   # Sectioning matters for further execution. Opcodes must be
@@ -117,4 +117,8 @@ module Ven::Suite
         ANY)
     end
   end
+end
+
+module Ven::Suite
+  include MachineSuite
 end

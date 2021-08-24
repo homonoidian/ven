@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # A chunk is a collection of `Snippet`s.
   class Chunk
     # Returns the filename of the file this chunk was
@@ -163,4 +163,8 @@ module Ven::Suite
   end
 
   alias Chunks = Array(Chunk)
+end
+
+module Ven::Suite
+  include MachineSuite
 end

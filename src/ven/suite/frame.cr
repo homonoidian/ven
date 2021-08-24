@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # A frame is an element of current runtime state.
   class Frame
     # The label of this frame. It can be used to search for
@@ -52,4 +52,8 @@ module Ven::Suite
 
     def_clone
   end
+end
+
+module Ven::Suite
+  include MachineSuite
 end

@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::FieldAccessorSuite
   # A field accessor is an individual piece of a field path.
   #
   # For example, in `a.b.c` `a` is the head, and `b.c` is the
@@ -82,4 +82,8 @@ module Ven::Suite
   end
 
   alias FieldAccessors = Array(FieldAccessor)
+end
+
+module Ven::Suite
+  include FieldAccessorSuite
 end

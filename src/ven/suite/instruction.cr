@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # A bytecode instruction.
   #
   # A bytecode instruction may have an argument, which must be
@@ -23,4 +23,8 @@ module Ven::Suite
     def initialize(@opcode, @label : Label, @line)
     end
   end
+end
+
+module Ven::Suite
+  include MachineSuite
 end

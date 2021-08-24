@@ -1,6 +1,6 @@
 require "./model"
 
-module Ven::Suite
+module Ven::Suite::CxSuite
   # Unites instances of `CxReader`, `CxCompiler`, and `CxMachine`.
   class CxHub
     # Returns the instance of reader context.
@@ -306,4 +306,8 @@ module Ven::Suite
 
     def_clone
   end
+end
+
+module Ven::Suite
+  include CxSuite
 end

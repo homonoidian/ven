@@ -1,4 +1,4 @@
-module Ven::Suite
+module Ven::Suite::MachineSuite
   # An *offset reference* to a snippet.
   #
   # Labels are prominent at compile-time, but are replaced
@@ -14,4 +14,8 @@ module Ven::Suite
       io << "(" << (@target || "core") << ")"
     end
   end
+end
+
+module Ven::Suite
+  include MachineSuite
 end

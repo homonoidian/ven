@@ -1,6 +1,6 @@
 require "big"
 
-module Ven::Suite
+module Ven::Suite::ModelSuite
   # Model casting (aka internal conversion) will raise this
   # exception on failure (e.g. if a string cannot be parsed
   # into a number.)
@@ -398,13 +398,13 @@ module Ven::Suite
 
   # The parent of all Struct `Model`s.
   abstract struct MStruct
-    Suite.model_template?
+    ModelSuite.model_template?
   end
 
   # The parent of all Class `Model`s (those that are stored
   # on the heap and passed by reference).
   abstract class MClass
-    Suite.model_template?
+    ModelSuite.model_template?
   end
 
   # A model that holds a *value* of type *T*.
@@ -1977,4 +1977,8 @@ module Ven::Suite
       io << "internal " << @desc
     end
   end
+end
+
+module Ven::Suite
+  include ModelSuite
 end

@@ -1,6 +1,14 @@
 require "big/json"
 
-module Ven::Suite
+module Ven::Suite::QuoteSuite
+  # Pretty self-explanatory: an array of quotes.
+  alias Quotes = Array(Quote)
+
+  # Although this alias may seem redundant, `MaybeQuote` is
+  # detectable by `Suite::Transformer` (contrary to `Quote?`),
+  # and is useful because of that.
+  alias MaybeQuote = Quote?
+
   # The location (*file*name and *line*number) of a `Quote`.
   struct QTag
     include JSON::Serializable
@@ -45,87 +53,70 @@ module Ven::Suite
     include JSON::Serializable
 
     macro finished
-      # This (supposedly) makes it possible to reconstruct
-      # a Quote tree from JSON. Will probably be useful in
-      # the future, i.e., when debugging?
-      use_json_discriminator("__quote", {
-        {% for subclass in @type.all_subclasses %}
-          {{subclass.name.split("::").last}} => {{subclass}},
-        {% end %}
-      })
-    end
+        # This (supposedly) makes it possible to reconstruct
+        # a Quote tree from JSON. Will probably be useful in
+        # the future, i.e., when debugging?
+        use_json_discriminator("__quote", {
+          {% for subclass in @type.all_subclasses %}
+            {{subclass.name.split("::").last}} => {{subclass}},
+          {% end %}
+        })
+      end
 
     macro inherited
-      # Internal (although not so much) instance variable that
-      # stores the typename of this quote (QRuntimeSymbol, QBox,
-      # QFun, etc.) It is used to determine the type of Quote
-      # to deserialize to.
-      @__quote = {{@type.name.split("::").last}}
+        # Internal (although not so much) instance variable that
+        # stores the typename of this quote (QRuntimeSymbol, QBox,
+        # QFun, etc.) It is used to determine the type of Quote
+        # to deserialize to.
+        @__quote = {{@type.name.split("::").last}}
 
-      # Returns whether this quote is a `QFalse`.
-      def false?
-        {{@type.resolve.id.ends_with?("QFalse")}}
-      end
+        # Returns whether this quote is a `QFalse`.
+        def false?
+          {{@type.resolve.id.ends_with?("QFalse")}}
+        end
 
-      macro defquote!(*fields)
-        # Returns the location of this quote. See `QTag`.
-        getter tag : QTag
+        macro defquote!(*fields)
+          # Returns the location of this quote. See `QTag`.
+          getter tag : QTag
 
-        property \{{*fields.map(&.var.id)}}
+          property \{{*fields.map(&.var.id)}}
 
-        def initialize(@tag,
-          \{% for field in fields %}
-            @\{{field}},
-          \{% end %})
-          # If @field is a `Quote`, we probably don't want it
-          # to be a `QGroup`. QGroups are for `Quotes`, not
-          # `Quote`. Many things will break otherwise. Same in
-          # `Parameter`, `FieldAccessor`, which are wrappers
-          # around `Quote`.
-          \{% for field in fields %}
-            \{% if field.type.resolve == Quote %}
-              if @\{{field.var}}.is_a?(QGroup)
-                raise ReadError.new(@tag, "got group where expression expected")
-              end
+          def initialize(@tag,
+            \{% for field in fields %}
+              @\{{field}},
+            \{% end %})
+            # If @field is a `Quote`, we probably don't want it
+            # to be a `QGroup`. QGroups are for `Quotes`, not
+            # `Quote`. Many things will break otherwise. Same in
+            # `Parameter`, `FieldAccessor`, which are wrappers
+            # around `Quote`.
+            \{% for field in fields %}
+              \{% if field.type.resolve == Quote %}
+                if @\{{field.var}}.is_a?(QGroup)
+                  raise ReadError.new(@tag, "got group where expression expected")
+                end
+              \{% end %}
             \{% end %}
-          \{% end %}
+          end
+
+          # Internal, fallback quote pretty-printing. Consider
+          # using `Detree` instead.
+          def to_s(io)
+            io << "(" << {{@type.name.split("::").last}}
+
+            \{% for field in fields %}
+              %field = \{{field.var}}
+              %field.is_a?(Array) \
+                ? io << " " << "[" << %field.join(" ") << "]"
+                : io << " " << %field
+            \{% end %}
+
+            io << ")"
+          end
         end
 
-        # Internal, fallback quote pretty-printing. Consider
-        # using `Detree` instead.
-        def to_s(io)
-          io << "(" << {{@type.name.split("::").last}}
-
-          \{% for field in fields %}
-            %field = \{{field.var}}
-            %field.is_a?(Array) \
-              ? io << " " << "[" << %field.join(" ") << "]"
-              : io << " " << %field
-          \{% end %}
-
-          io << ")"
-        end
+        def_clone
       end
-
-      def_clone
-    end
-  end
-
-  # :nodoc:
-  alias Quotes = Array(Quote)
-
-  # :nodoc:
-  alias MaybeQuote = Quote?
-
-  # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
-  private macro defquote(quote, *fields, desc = "something", under parent = Quote)
-    class {{quote}} < {{parent}}
-      defquote!({{*fields}})
-
-      def self.to_s(io)
-        io << "quote of " << {{desc}}
-      end
-    end
   end
 
   # A dummy Quote that can be used to experiment with the
@@ -145,8 +136,6 @@ module Ven::Suite
       io << "quote of nothing"
     end
   end
-
-  defquote(QQuoteEnvelope, quote : Quote, desc: "quote envelope")
 
   # The parent of all kinds of Ven symbols.
   #
@@ -186,6 +175,19 @@ module Ven::Suite
       io << "quote of generic symbol"
     end
   end
+
+  # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
+  private macro defquote(quote, *fields, desc = "something", under parent = Quote)
+    class {{quote}} < {{parent}}
+      defquote!({{*fields}})
+
+      def self.to_s(io)
+        io << "quote of " << {{desc}}
+      end
+    end
+  end
+
+  defquote(QQuoteEnvelope, quote : Quote, desc: "quote envelope")
 
   defquote(QRuntimeSymbol,
     value : String,
@@ -333,4 +335,8 @@ module Ven::Suite
   defquote(QHole, value : MaybeQuote = nil, desc: "readtime hole")
 
   defquote(QImmediateBox, box : QBox, desc: "immediate box")
+end
+
+module Ven::Suite
+  include QuoteSuite
 end
