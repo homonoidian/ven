@@ -160,48 +160,6 @@ module Ven::Suite
 
       self
     end
-
-    # Disassembles an *instruction*, assuming this chunk is
-    # its context. Prints *index* before the instruction
-    # (if specified).
-    def to_s(io : IO, instruction : Instruction, index : Int32? = nil)
-      argument = resolve?(instruction)
-
-      io << sprintf("%05d", index) << "| " if index
-      io << instruction
-      io << " (" << argument << ")" if argument
-    end
-
-    # Same as `to_s(io, instruction)`.
-    def to_s(instruction : Instruction, index : Int32? = nil)
-      String.build { |io| to_s(io, instruction, index) }
-    end
-
-    # Disassembles `seamless` if available, otherwise `snippets`.
-    def to_s(io : IO, deepen = 2)
-      io << @name << " {\n"
-
-      if !@seamless.empty?
-        @seamless.each_with_index do |instruction, index|
-          io << " " * deepen; to_s(io, instruction, index); io << "\n"
-        end
-      else
-        @snippets.each do |snippet|
-          io << " " * deepen << snippet.label << ":\n"
-
-          snippet.code.each do |instruction|
-            io << " " * (deepen * 2); to_s(io, instruction); io << "\n"
-          end
-        end
-      end
-
-      io << "}\n"
-    end
-
-    # Disassembles this chunk given no IO (see `to_s(io)`)
-    def to_s
-      String.build { |io| to_s(io) }
-    end
   end
 
   alias Chunks = Array(Chunk)

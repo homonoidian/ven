@@ -89,8 +89,68 @@ module Ven
       property using_inquirer = false
     end
 
-    # The buffer of lines (used by the REPL to show excerpts
-    # of code in error messages).
+    # The Dis formatter implementation used in `show(chunk)`.
+    class ShowChunkFormat < Dis::DefaultFormat
+      # Paints the super instruction pointer in dark gray.
+      def on_ip(io, ctx)
+        Colorize.with.dark_gray.surround(io) { super }
+      end
+
+      # Makes the super opcode bold.
+      def on_opcode(io, ctx)
+        Colorize.with.bold.surround(io) { super }
+      end
+    end
+
+    # The Dis formatter implementation used in `show(timetable)`.
+    class ShowTimetableFormat < ShowChunkFormat
+      # Initializes this formatter with the given chunk *statistic*.
+      def initialize(@statistic : Machine::ChunkStatistic)
+      end
+
+      # Appends the relevant time/statistical data to the
+      # super instruction argument.
+      def on_argument(io, ctx)
+        super
+
+        # Get the instruction statistic for the current
+        # instruction. Thankfully, the context has the
+        # IP we can use.
+        for_ins = @statistic.instructions[ctx.ip]
+
+        amt = for_ins.amount
+        dur = for_ins.duration
+
+        amt =
+          if amt < 100
+            amt.colorize.green
+          elsif amt < 1_000
+            amt.colorize.yellow
+          elsif amt < 10_000
+            amt.colorize.light_red
+          else
+            amt.colorize.red
+          end
+
+        dur, unit = Utils.with_unit(dur)
+
+        case unit
+        when "ns"
+          unit = unit.colorize.green
+        when "us"
+          unit = unit.colorize.yellow
+        when "ms"
+          unit = unit.colorize.light_red
+        else
+          unit = unit.colorize.red.bright
+        end
+
+        io << " [" << amt << " time(s), took " << dur << unit << "]"
+      end
+    end
+
+    # The line buffer (used by the REPL to show excerpts of
+    # code in error messages).
     @lines = [] of String
 
     def initialize
@@ -102,24 +162,23 @@ module Ven
       # CLI machinery will fill it in.
       @config = Config.new
 
-      # Extend with all builtin libraries. This might need
-      # some control later on. Some libraries, like `http`
-      # right now, should be `expose`d by the user, not
-      # imported automatically.
+      # Extend with all builtin libraries. This might need some
+      # control later on. Some libraries, `http`, for example,
+      # should be `expose`d by the user, not auto-imported.
       {% for library in Extension.subclasses %}
         @hub.extend({{library}}.new)
       {% end %}
 
       @orchestra = Orchestra.new(@hub,
-        Orchestra::Pull.new { |distinct| pull(distinct) },
-        Orchestra::Read.new { |readable| read(readable) },
+        ->pull(Distinct),
+        ->read(String),
       )
     end
 
-    # Sends a *command*, *argument* Request to the Inquirer
-    # from the configuration object (see `Config#inquirer`).
+    # Sends a *command*, *argument* Request using the Inquirer
+    # connection from the configuration object (`Config#inquirer`).
     #
-    # Warns & returns nil if not connected to Inquirer.
+    # If isolated, prints a warning and returns nil.
     #
     # Returns nil if generally unsuccessful. Otherwise, returns
     # Inquirer's `Inquirer::Protocol::Response::RType`.
@@ -152,7 +211,7 @@ module Ven
     # If isolated, prints a warning and returns nil. Otherwise,
     # makes a FilesFor request to Inquirer, and returns the
     # array of filenames (or nil).
-    def pull(distinct : Distinct)
+    def pull(distinct : Distinct) : Array(String)?
       inquire("FilesFor", distinct.join('.')).as?(Array(String))
     end
 
@@ -164,7 +223,7 @@ module Ven
     #
     # Otherwise, it is just a safety wrapper around `File.read`,
     # which returns nil if the file does not exist.
-    def read(readable : String)
+    def read(readable : String) : String?
       if @config.using_inquirer
         return inquire("SourceFor", readable).as?(String)
       end
@@ -182,14 +241,11 @@ module Ven
     def getline?(filename : String, lineno : Int32) : String?
       return @lines[lineno - 1]? if filename == INTERACTIVE
 
-      index = 0
-
       if contents = read(filename)
-        contents.each_line do |line|
-          return line.strip if index + 1 == lineno
-
-          index += 1
-        end
+        # This looks rather inefficient compared to reading
+        # line-by-line, and stopping on the line requested,
+        # but `read` compatibility is more important.
+        contents.lines[lineno]?.try &.strip
       end
     end
 
@@ -199,6 +255,7 @@ module Ven
     end
 
     # Prints an error with the given *category* and *comment*.
+    #
     # If `Config#quit` is set to true, quits with status 1.
     def err(category : String, comment : String) : Nil
       puts "[#{category.colorize.light_red}] #{comment}"
@@ -310,50 +367,21 @@ module Ven
     #
     # Returns nothing.
     def show(chunks : Chunks)
-      puts chunks.join("\n\n")
+      chunks.each do |chunk|
+        puts Dis.dis(chunk, ShowChunkFormat.new)
+        puts
+      end
     end
 
     # Formats, and consequently prints, the given *timetable*.
     #
     # Returns nothing.
     def show(timetable : Machine::Timetable)
-      timetable.chunks do |c_stat|
-        puts "chunk #{c_stat.cp}".colorize.underline
+      timetable.chunks do |statistic|
+        fmt = ShowTimetableFormat.new(statistic)
 
-        c_stat.instructions do |i_stat|
-          amount = i_stat.amount
-          duration = i_stat.duration
-
-          amount =
-            if amount < 100
-              amount.colorize.green
-            elsif amount < 1_000
-              amount.colorize.yellow
-            elsif amount < 10_000
-              amount.colorize.light_red
-            else
-              amount.colorize.red
-            end
-
-          duration, unit = Utils.with_unit(duration)
-
-          case unit
-          when "ns"
-            unit = unit.colorize.green
-          when "us"
-            unit = unit.colorize.yellow
-          when "ms"
-            unit = unit.colorize.light_red
-          else
-            unit = unit.colorize.red.bright
-          end
-
-          # Let the subject chunk, with all its knowledge,
-          # format the subject instruction.
-          instruction = c_stat.subject.to_s(i_stat.subject, i_stat.ip)
-
-          puts "#{instruction} [#{amount} time(s), took #{duration} #{unit}]"
-        end
+        puts Dis.dis(statistic.subject, fmt)
+        puts
       end
     end
 

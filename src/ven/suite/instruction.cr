@@ -22,9 +22,5 @@ module Ven::Suite
 
     def initialize(@opcode, @label : Label, @line)
     end
-
-    def to_s(io)
-      io << @opcode << " " << (@argument || @label)
-    end
   end
 end
