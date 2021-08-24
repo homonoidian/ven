@@ -95,12 +95,12 @@ module Ven::Suite
       end
 
       def on_argument(io, ctx)
-        arg = ctx.instruction.argument
+        ins = ctx.instruction
 
-        if arg.is_a?(Label)
-          io << arg
-        elsif arg.is_a?(Int32)
-          io << ctx.chunk.resolve(ctx.instruction)
+        if ins.label
+          io << " " << ins.label
+        elsif ins.argument
+          io << ctx.chunk.resolve(ins)
         end
       end
 
