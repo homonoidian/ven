@@ -283,7 +283,7 @@ module Ven
         # This looks rather inefficient compared to reading
         # line-by-line, and stopping on the line requested,
         # but `read` compatibility is more important.
-        contents.lines[lineno]?.try &.strip
+        contents.lines[lineno - 1]?.try &.strip
       end
     end
 
