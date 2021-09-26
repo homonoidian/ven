@@ -8,9 +8,15 @@ module Ven::Suite
 
     # Maps `visit(quote)` on *quotes*.
     def visit(quotes : Quotes)
-      quotes.map do |quote|
-        visit(@last = quote).as(T)
-      end
+      {% if T == Nil %}
+        quotes.each do |quote|
+          visit(quote)
+        end
+      {% else %}
+        quotes.map do |quote|
+          visit(quote).as(T)
+        end
+      {% end %}
     end
 
     # Remembers *quote* as the last visited quote, and hands

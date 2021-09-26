@@ -15,6 +15,7 @@ distinct sanity;
 
 expose ven.tests.readtime.core;
 expose ven.tests.readtime.builtins;
+expose ven.tests.readtime.detree;
 
 expose ven.tests.language.base;
 expose ven.tests.language.scope;

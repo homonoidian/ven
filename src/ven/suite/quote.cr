@@ -53,70 +53,77 @@ module Ven::Suite::QuoteSuite
     include JSON::Serializable
 
     macro finished
-        # This (supposedly) makes it possible to reconstruct
-        # a Quote tree from JSON. Will probably be useful in
-        # the future, i.e., when debugging?
-        use_json_discriminator("__quote", {
-          {% for subclass in @type.all_subclasses %}
-            {{subclass.name.split("::").last}} => {{subclass}},
-          {% end %}
-        })
-      end
+      # This (supposedly) makes it possible to reconstruct
+      # a Quote tree from JSON. Will probably be useful in
+      # the future, i.e., when debugging?
+      use_json_discriminator("__quote", {
+        {% for subclass in @type.all_subclasses %}
+          {{subclass.name.split("::").last}} => {{subclass}},
+        {% end %}
+      })
+    end
 
     macro inherited
-        # Internal (although not so much) instance variable that
-        # stores the typename of this quote (QRuntimeSymbol, QBox,
-        # QFun, etc.) It is used to determine the type of Quote
-        # to deserialize to.
-        @__quote = {{@type.name.split("::").last}}
+      # Internal (although not so much) instance variable that
+      # stores the typename of this quote (QRuntimeSymbol, QBox,
+      # QFun, etc.) It is used to determine the type of Quote
+      # to deserialize to.
+      @__quote = {{@type.name.split("::").last}}
 
-        # Returns whether this quote is a `QFalse`.
-        def false?
-          {{@type.resolve.id.ends_with?("QFalse")}}
-        end
-
-        macro defquote!(*fields)
-          # Returns the location of this quote. See `QTag`.
-          getter tag : QTag
-
-          property \{{*fields.map(&.var.id)}}
-
-          def initialize(@tag,
-            \{% for field in fields %}
-              @\{{field}},
-            \{% end %})
-            # If @field is a `Quote`, we probably don't want it
-            # to be a `QGroup`. QGroups are for `Quotes`, not
-            # `Quote`. Many things will break otherwise. Same in
-            # `Parameter`, `FieldAccessor`, which are wrappers
-            # around `Quote`.
-            \{% for field in fields %}
-              \{% if field.type.resolve == Quote %}
-                if @\{{field.var}}.is_a?(QGroup)
-                  raise ReadError.new(@tag, "got group where expression expected")
-                end
-              \{% end %}
-            \{% end %}
-          end
-
-          # Internal, fallback quote pretty-printing. Consider
-          # using `Detree` instead.
-          def to_s(io)
-            io << "(" << {{@type.name.split("::").last}}
-
-            \{% for field in fields %}
-              %field = \{{field.var}}
-              %field.is_a?(Array) \
-                ? io << " " << "[" << %field.join(" ") << "]"
-                : io << " " << %field
-            \{% end %}
-
-            io << ")"
-          end
-        end
-
-        def_clone
+      # Returns whether this quote is a `QFalse`.
+      def false?
+        {{@type.resolve.id.ends_with?("QFalse")}}
       end
+
+      # Free to interpret by quotes, but generally tells
+      # whether a quote is expected to be in a statement
+      # position.
+      def stmtish?
+        false
+      end
+
+      macro defquote!(*fields)
+        # Returns the location of this quote. See `QTag`.
+        getter tag : QTag
+
+        property \{{*fields.map(&.var.id)}}
+
+        def initialize(@tag,
+          \{% for field in fields %}
+            @\{{field}},
+          \{% end %})
+          # If @field is a `Quote`, we probably don't want it
+          # to be a `QGroup`. QGroups are for `Quotes`, not
+          # `Quote`. Many things will break otherwise. Same in
+          # `Parameter`, `FieldAccessor`, which are wrappers
+          # around `Quote`.
+          \{% for field in fields %}
+            \{% if field.type.resolve == Quote %}
+              if @\{{field.var}}.is_a?(QGroup)
+                raise ReadError.new(@tag, "got group where expression expected")
+              end
+            \{% end %}
+          \{% end %}
+        end
+
+        # Internal, fallback quote pretty-printing. Consider
+        # using `Detree` instead.
+        def to_s(io)
+          io << "(" << {{@type.name.split("::").last}}
+
+          \{% for field in fields %}
+            %field = \{{field.var}}
+            %field.is_a?(Array) \
+              ? io << " " << "[" << %field.join(" ") << "]"
+              : io << " " << %field
+          \{% end %}
+
+          io << ")"
+        end
+      end
+
+      def_clone
+    end
   end
 
   # A dummy Quote that can be used to experiment with the
@@ -177,9 +184,14 @@ module Ven::Suite::QuoteSuite
   end
 
   # Defines a *quote* with *fields*, which are `TypeDeclaration`s.
-  private macro defquote(quote, *fields, desc = "something", under parent = Quote)
+  private macro defquote(quote, *fields, desc = "something", under parent = Quote, stmtish = false)
     class {{quote}} < {{parent}}
       defquote!({{*fields}})
+
+      # See `Quote#stmtish?`.
+      def stmtish?
+        {{stmtish}}
+      end
 
       def self.to_s(io)
         io << "quote of " << {{desc}}
@@ -192,12 +204,14 @@ module Ven::Suite::QuoteSuite
   defquote(QRuntimeSymbol,
     value : String,
     under: QSymbol,
-    desc: "runtime symbol")
+    desc: "runtime symbol",
+  )
 
   defquote(QReadtimeSymbol,
     value : String,
     under: QSymbol,
-    desc: "readtime symbol")
+    desc: "readtime symbol",
+  )
 
   defquote(QString, value : String, desc: "string")
   defquote(QRegex, value : String, desc: "regex")
@@ -207,7 +221,8 @@ module Ven::Suite::QuoteSuite
   defquote(QFilterOver,
     vector : Quote,
     filter : Quote,
-    desc: "filtered vector")
+    desc: "filtered vector",
+  )
 
   defquote(QMap, keys : Quotes, vals : Quotes, desc: "map")
 
@@ -220,13 +235,15 @@ module Ven::Suite::QuoteSuite
   defquote(QUnary,
     operator : String,
     operand : Quote,
-    desc: "unary operation")
+    desc: "unary operation",
+  )
 
   defquote(QBinary,
     operator : String,
     left : Quote,
     right : Quote,
-    desc: "binary operation")
+    desc: "binary operation",
+  )
 
   defquote(QCall, callee : Quote, args : Quotes, desc: "call")
 
@@ -234,13 +251,15 @@ module Ven::Suite::QuoteSuite
     target : Quote,
     value : Quote,
     global : Bool,
-    desc: "assignment")
+    desc: "assignment",
+  )
 
   defquote(QBinaryAssign,
     operator : String,
     target : Quote,
     value : Quote,
-    desc: "binary assignment")
+    desc: "binary assignment",
+  )
 
   defquote(QDies, operand : Quote, desc: "postfix dies")
   defquote(QIntoBool, operand : Quote, desc: "postfix into-bool")
@@ -248,93 +267,132 @@ module Ven::Suite::QuoteSuite
   defquote(QReturnIncrement, target : QSymbol, desc: "return-increment")
 
   defquote(QAccess, head : Quote, args : Quotes, desc: "access")
-  defquote(QAccessField, head : Quote, tail : FieldAccessors, desc: "field access")
+  defquote(QAccessField,
+    head : Quote,
+    tail : FieldAccessors,
+    desc: "field access",
+  )
 
   defquote(QMapSpread,
     operator : Quote,
     operand : Quote,
     iterative : Bool,
-    desc: "map spread")
+    desc: "map spread",
+  )
 
   defquote(QReduceSpread,
     operator : String,
     operand : Quote,
-    desc: "reduce spread")
+    desc: "reduce spread",
+  )
 
   defquote(QBlock, body : Quotes, desc: "block")
   defquote(QGroup, body : Quotes, desc: "group")
 
-  defquote(QIf, cond : Quote, suc : Quote, alt : MaybeQuote, desc: "if-else")
+  defquote(QIf,
+    cond : Quote,
+    suc : Quote,
+    alt : MaybeQuote,
+    desc: "if-else",
+  )
 
   defquote(QFun,
     name : QSymbol,
     params : Parameters,
     body : Quotes,
     blocky : Bool,
-    desc: "fun definition")
+    desc: "fun definition",
+    stmtish: true,
+  )
 
   defquote(QQueue, value : Quote, desc: "queue")
 
   defquote(QInfiniteLoop,
     repeatee : Quote,
-    desc: "infinite loop")
+    desc: "infinite loop",
+    stmtish: true,
+  )
 
   defquote(QBaseLoop,
     base : Quote,
     repeatee : Quote,
-    desc: "base loop")
+    desc: "base loop",
+    stmtish: true,
+  )
 
   defquote(QStepLoop,
     base : Quote,
     step : Quote,
     repeatee : Quote,
-    desc: "step loop")
+    desc: "step loop",
+    stmtish: true,
+  )
 
   defquote(QComplexLoop,
     start : Quote,
     base : Quote,
     step : Quote,
     repeatee : Quote,
-    desc: "complex (full) loop")
+    desc: "complex (full) loop",
+    stmtish: true,
+  )
 
   defquote(QNext, scope : String?, args : Quotes, desc: "next")
 
   defquote(QReturnQueue, desc: "return queue statement")
-  defquote(QReturnStatement, value : Quote, desc: "return statement")
-  defquote(QReturnExpression, value : Quote, desc: "return expression")
+  defquote(QReturnStatement,
+    value : Quote,
+    desc: "return statement",
+    stmtish: true,
+  )
+  defquote(QReturnExpression,
+    value : Quote,
+    desc: "return expression",
+  )
 
   defquote(QBox,
     name : QSymbol,
     params : Parameters,
     namespace : Hash(QSymbol, Quote),
-    desc: "box definition")
+    desc: "box definition",
+    stmtish: true,
+  )
 
   defquote(QLambda,
     params : Array(String),
     body : Quote,
     slurpy : Bool,
-    desc: "lambda definition")
+    desc: "lambda definition",
+  )
 
   defquote(QEnsure,
     expression : Quote,
-    desc: "ensure expression")
+    desc: "ensure expression",
+  )
 
   defquote(QEnsureTest,
     comment : Quote,
     shoulds : Quotes,
-    desc: "ensure test")
+    desc: "ensure test",
+    stmtish: true,
+  )
 
   defquote(QEnsureShould,
     section : String,
     pad : Quotes,
-    desc: "enshure 'should' case")
+    desc: "ensure 'should' case",
+  )
 
   defquote(QPatternEnvelope, pattern : Quote, desc: "pattern")
   defquote(QReadtimeEnvelope, expression : Quote, desc: "readtime envelope")
 
   defquote(QHole, value : MaybeQuote = nil, desc: "readtime hole")
 
-  defquote(QImmediateBox, box : QBox, desc: "immediate box")
+  defquote(QImmediateBox,
+    box : QBox,
+    desc: "immediate box",
+    stmtish: true,
+  )
 end
 
 module Ven::Suite

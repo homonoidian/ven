@@ -366,12 +366,20 @@ module Ven::Parselet
         return QEnsure.new(@tag, subordinate)
       end
 
+      quote = QEnsureTest.new(@tag, subordinate,
+        @parser.repeat("}") { should! })
+
       # Ensure tests do not require a semicolon after
       # the block.
+      #
+      # TODO: make this less ugly (with_semicolon or
+      # smth like that, mb macro?) safen from @semicolon
+      # overwrites by subparses !!!
+      #
+      # or semicolon?(quote) : Bool for all Parselets?
       @semicolon = false
 
-      QEnsureTest.new(@tag, subordinate,
-        @parser.repeat("}") { should! })
+      quote
     end
 
     # Reads a should.

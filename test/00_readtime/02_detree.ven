@@ -1,0 +1,388 @@
+distinct ven.tests.readtime.detree;
+
+nud TEST = <{
+  ensure "~ detrees numbers, symbols" {
+    should "detree numbers"
+      ~0 is "0";
+      ~4 is "4";
+      ~12 is "12";
+      ~12.34 is "12.34";
+      ~12_000 is "12000";
+      ~.34 is "0.34";
+
+    should "detree symbols (+ quote() works)"
+      ~quote(x) is "x";
+      ~quote(*) is "*";
+      ~quote(foo) is "foo";
+  }
+
+  ensure "~ detrees strings" {
+    # Need to use quote() here since ~str is identity
+    # in both readtime & runtime Ven (i.e., no detreeing
+    # is actually performed).
+    should "detree empty string"
+      ~quote("") is "\"\"";
+
+    should "detree nonempty with no escapes"
+      ~quote("foobar baz") is "\"foobar baz\"";
+
+    should "detree nonempty with all escapes"
+      ~quote("\$\e\n\r\t\"\\\\") is "\"\\\$\\e\\n\\r\\t\\\"\\\\\\\\\"";
+
+    should "detree nonempty with some escapes"
+      ~quote("I have a lot\n of \$money!") is "\"I have a lot\\n of \\\$money!\"";
+
+    should "detree nonempty with all escape-likes"
+      ~quote("\a\b\c\d\f\g") is "\"\\\\a\\\\b\\\\c\\\\d\\\\f\\\\g\"";
+
+    should "detree nonempty with some escape-likes"
+      ~quote("This is \a string with \invali\dish es\cape\s") is
+        "\"This is \\\\a string with \\\\invali\\\\dish es\\\\cape\\\\s\"";
+  }
+
+  ensure "~ detrees regexes" {
+    should "detree empty regex"
+      ~`` is "``";
+
+    should "detree nonempty regex with no escape-likes"
+      ~`[a-z]` is "`[a-z]`";
+
+    should "detree nonempty regex with some escape-likes"
+      ~`\W+foobarz` is "`\\W+foobarz`";
+
+    should "detree nonempty regex with spacing escape-likes"
+      ~`(?:\n\t\r)` is "`(?:\\n\\t\\r)`";
+  }
+
+  ensure "~ detrees vectors" {
+    should "detree empty vector"
+      ~[] is "[]";
+
+    should "ignore trailing comma"
+      ~[1,] is "[1]";
+
+    should "detree vector with one unamb"
+      ~[1] is "[1]";
+
+    should "detree vector with one amb"
+      ~quote([foobar()]) is "[foobar()]";
+
+    should "detree vector with all unamb"
+      ~quote([1, "foobar", `.+`, true, false, &_, _]) is "[1 \"foobar\" `.+` true false &_ _]"
+
+    should "detree vector with some amb items"
+      ~quote([false, "quux", x x x, 12, foobar()]) is "[false, \"quux\", x x x, 12, foobar()]";
+
+    should "detree vector with many amb items"
+      ~quote([x x x, [3, 4], foobar(), -baz]) is "[x x x, [3 4], foobar(), -baz]";
+  }
+
+  ensure "~ detrees filter over" {
+    should "detree filter over with one elem"
+      ~quote([1 | x > 5]) is "[1 | x > 5]";
+
+    should "detree filter over with many unamb items"
+      ~quote([1, "foobar", 3 | x > 5]) is "[1 \"foobar\" 3 | x > 5]";
+
+    should "detree filter over with some amb items"
+      ~quote(["quux", x x x, 12, foobar() | x > 6]) is "[\"quux\", x x x, 12, foobar() | x > 6]";
+
+    should "detree filter over with many amb items"
+      ~quote([x x x, [3, 4], foobar(), -baz | x > 6]) is "[x x x, [3 4], foobar(), -baz | x > 6]";
+  }
+
+  ensure "~ detrees map" {
+    should "detree empty map"
+      ~quote(%{}) is "%{}";
+
+    should "put no comma if one kv pair"
+      ~quote(%{a 1}) is "%{ \"a\" 1 }";
+      ~quote(%{a foobar()}) is "%{ \"a\" foobar() }";
+
+    should "put no commas if many unamb kv pairs"
+      ~quote(%{a 1 b 2 c 3}) is "%{ \"a\" 1 \"b\" 2 \"c\" 3 }"
+
+    should "put commas if mixed amb kv pairs"
+      ~quote(%{a 1, b foo(), x false}) is "%{ \"a\" 1, \"b\" foo(), \"x\" false }"
+
+    should "put commas if all amb kv pairs"
+      ~quote(%{a foo(), b x + y, c -x}) is "%{ \"a\" foo(), \"b\" x + y, \"c\" -x }"
+
+    should "not paren key if symbol, string"
+      ~quote(%{x "a" y "z"}) is "%{ \"x\" \"a\" \"y\" \"z\" }";
+      ~quote(%{"x" 1 "y" 2}) is "%{ \"x\" 1 \"y\" 2 }";
+
+    should "paren key if non-symbol, non-string"
+      ~quote(%{ (non-sym(1, 2, 3)) foo, ([1, 2, 3]) bar }) is
+        "%{ (non-sym(1, 2, 3)) foo, ([1 2 3]) bar }"
+  }
+
+  ensure "~ detrees true, false" {
+    should "detree true"
+      ~true is "true";
+
+    should "detree false"
+      ~false is "false";
+  }
+
+  ensure "~ detrees &_, _" {
+    should "detree &_"
+      ~quote(&_) is "&_";
+
+    should "detree _"
+      ~quote(_) is "_";
+  }
+
+  ensure "~ detrees unaries" {
+    should "detree alphanumeric unaries"
+      ~quote(not true) is "not true";
+      ~quote(to infinity) is "to infinity";
+
+    should "detree non-alphanumeric unaries"
+      ~quote(+100) is "+100";
+      ~quote(~"foobarz") is "~\"foobarz\"";
+
+    should "parenthesize chained unaries"
+      ~quote(+(+x)) is "+(+x)";
+      ~quote(not not true) is "not (not true)";
+      ~quote(+(-x)) is "+(-x)";
+      ~quote(not to infinity) is "not (to infinity)";
+  }
+
+  ensure "~ detrees binaries" {
+    should "detree basic binaries"
+      ~quote(2 + 2) is "2 + 2";
+      ~quote("foo" is "bar") is "\"foo\" is \"bar\"";
+      ~quote("foo" is not "bar") is "not (\"foo\" is \"bar\")";
+
+    should "parenthesize chained binaries with diff op"
+      ~quote(2 + 2 * 2) is "2 + (2 * 2)";
+      ~quote(2 + 2 is 3) is "(2 + 2) is 3";
+
+    should "not parenthesize chained binaries with same op"
+      ~quote(2 + 2 + 2) is "2 + 2 + 2";
+      ~quote(1 is 2 is 3) is "1 is 2 is 3";
+
+    should "always parenthesize assignments"
+      ~quote(x + (y = z)) is "x + (y = z)";
+      ~quote(x is not (y = z)) is "not (x is (y = z))"
+  }
+
+  ensure "~ detrees calls" {
+    should "detree call with no args"
+      ~quote(foo()) is "foo()";
+
+    should "detree call with one arg"
+      ~quote(foo(1)) is "foo(1)";
+
+    should "detree call with many args"
+      ~quote(foo(1, 2, x x x, 4)) is "foo(1, 2, x x x, 4)";
+
+    should "parenthesize nonstandard callee in call"
+      ~quote((2 + 2)(1, 2, 3)) is "(2 + 2)(1, 2, 3)";
+  }
+
+  ensure "~ detrees assign" {
+    should "detree bind assign"
+      ~quote(x := y) is "x := y";
+
+    should "detree free assign"
+      ~quote(x = y) is "x = y";
+  }
+
+  ensure "~ detrees binary assign" {
+    should "detree binary assign"
+      ~quote(x += y) is "x += y";
+      ~quote(x *= y) is "x *= y";
+  }
+
+  ensure "~ detrees dies" {
+    should "detree dies with non-unary, non-binary op"
+      ~quote(1234 dies) is "1234 dies";
+      ~quote(foobar(1234) dies) is "(foobar(1234)) dies";
+
+    should "detree dies with unary, paren"
+      ~quote(-1 dies) is "(-1) dies";
+      ~quote((not 1) dies) is "(not 1) dies";
+
+    should "detree dies with binary, paren"
+      ~quote(2 + 2 dies) is "(2 + 2) dies";
+      ~quote(2 is 2 dies) is "(2 is 2) dies";
+  }
+
+  ensure "~ detrees into bool" {
+    should "detree with literal op"
+      ~quote(1?) is "1?";
+      ~quote("foo"?) is "\"foo\"?";
+
+    should "parenthesize symbols"
+      ~quote((xyzzy)?) is "(xyzzy)?";
+
+    should "parenthesize nonliteral ops"
+      ~quote((1 + 1)?) is "(1 + 1)?";
+      ~quote(foobar(1, 2, 3)?) is "(foobar(1, 2, 3))?";
+      ~quote((-2)?) is "(-2)?";
+  }
+
+  ensure "~ detrees ++, --" {
+    should "detree ++"
+      ~quote(x++) is "x++";
+
+    should "detree --"
+      ~quote(x--) is "x--";
+  }
+
+  ensure "~ detrees access" {
+    should "detree access with no args"
+      ~quote(foo[]) is "foo[]";
+
+    should "detree access with one arg"
+      ~quote(foo[1]) is "foo[1]";
+
+    should "detree access with many args"
+      ~quote(foo[1, 2, 3]) is "foo[1, 2, 3]";
+
+    should "parenthesize nonstandard accessee"
+      ~quote((2 + 2)[1, 2, 3]) is "(2 + 2)[1, 2, 3]";
+  }
+
+  ensure "~ detrees access field" {
+    should "with one immediate accessor"
+      ~quote(a.b) is "a.b";
+
+    should "with many immediate accessors"
+      ~quote(a.b.c) is "a.b.c";
+
+    should "with branches field accessor"
+      ~quote(a.[b, c].d) is "a.[b, c].d";
+
+    should "with branches field accessor"
+      ~quote(a.[b, c].d) is "a.[b, c].d";
+
+    should "with dynamic field accessor"
+      ~quote(a.("b").(c)) is "a.(\"b\").(c)";
+  }
+
+  ensure "~ detrees map spread" {
+    should "detree normal map spreads"
+      ~quote(|&_ > 5 and _ < 10| [1 2 3]) is
+        "|{\n  (&_ > 5) and (_ < 10)\n}| [1 2 3]";
+
+    should "detree map spreads with parenthesized unary operators"
+      ~quote(|(-x)| [1 2 3]) is
+        "|{\n  -x\n}| [1 2 3]"
+
+    should "detree iterative map spreads"
+      ~quote(|say(x)|: [1 2 3]) is
+        "|{\n  say(x)\n}|: [1 2 3]";
+  }
+
+  ensure "~ detrees reduce spread" {
+    should "support alphanumeric ops"
+      ~quote(|and| [1 2 3]) is "|and| [1 2 3]";
+
+    should "support non-alphanumeric ops"
+      ~quote(|+| [1 2 3]) is "|+| [1 2 3]";
+  }
+
+  # TODO:
+  #
+  # - QBlock
+  # - QGroup
+  # - QIf
+  # - QFun
+  # - QInfiniteLoop
+  # - QBaseLoop
+  # - QStepLoop
+  # - QComplexLoop
+  # - QBox
+  # - QEnsureTest
+  # - QEnsureShould
+  #
+  # These are quite hard to test right now, since
+  # (a) we don't have any way of reading files at
+  # readtime (required for toplevel spacing tests),
+  # and (b) Ven doesn't have multiline strings -- and
+  # the quotes listed, when detreed, output multiline
+  # strings.
+
+  ensure "~ detrees queue" {
+    should "detree queue"
+      ~quote(queue 123) is "queue 123";
+  }
+
+  ensure "~ detrees next" {
+    should "with no args"
+      ~quote(next) is "next";
+
+    should "with one arg"
+      ~quote(next 1) is "next 1";
+
+    should "with many args"
+      ~quote(next 1, 2, 3) is "next 1, 2, 3";
+
+    should "with no args, with scope"
+      ~quote(next fun) is "next fun";
+      ~quote(next loop) is "next loop";
+
+    should "with one arg, scope"
+      ~quote(next fun 1) is "next fun 1";
+      ~quote(next loop 1) is "next loop 1";
+
+    should "with many args, scope"
+      ~quote(next fun 1, 2, 3) is "next fun 1, 2, 3";
+      ~quote(next loop 1, 2, 3) is "next loop 1, 2, 3";
+  }
+
+  ensure "~ detrees return queue" {
+    should "detree return queue"
+      ~quote(return queue) is "return queue";
+  }
+
+  ensure "~ detrees return statement" {
+    should "detree return statement"
+      ~quote({ return 100 }) is "{\n  return 100\n}";
+  }
+
+  ensure "~ detrees return expression" {
+    should "detree return expression"
+      ~quote(return 100) is "(return 100)";
+  }
+
+  ensure "~ detrees lambda" {
+    should "detree lambda with no args"
+      ~quote(() foo) is "() foo";
+
+    should "detree lambda with one arg"
+      ~quote((foo) foo) is "(foo) foo";
+
+    should "detree lambda with many args"
+      ~quote((foo, bar, baz) foo) is "(foo, bar, baz) foo";
+
+    should "detree lambda with slurpie"
+      ~quote((*) foo) is "(*) foo";
+
+    should "detree lambda with args and slurpie"
+      ~quote((x, y, z, *) foo) is "(x, y, z, *) foo";
+  }
+
+  ensure "~ detrees ensure" {
+    should "detree atomar ensure"
+      ~quote(ensure foo) is "ensure foo";
+
+    should "detree expr ensure"
+      ~quote(ensure foo is bar) is "ensure foo is bar";
+  }
+
+  ensure "~ detrees pattern envelope" {
+    should "detree pattern envelope"
+      ~quote('[1 2 3]) is "'[1 2 3]";
+  }
+
+  ensure "~ detrees immediate box" {
+    should "detree blockless immediate box"
+      ~quote({ immediate box Foo }) is "{\n  immediate box Foo\n}"
+  }
+}>;
+
+TEST();
