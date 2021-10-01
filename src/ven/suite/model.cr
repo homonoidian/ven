@@ -1820,8 +1820,27 @@ module Ven::Suite::ModelSuite
     getter target : Int32
     getter params : Array(String)
 
+    # Returns the inital superlocal of this lambda.
+    #
+    # Since lambdas are instances of this class, *superlocal*
+    # persists between multiple lambda invokations. So make
+    # sure to have it under your control.
+    getter superlocal = Superlocal(Model).new
+
     def initialize(@scope, @arity, @slurpy, @params, @target)
       @myselfed = false
+    end
+
+    # Appends *models* to the superlocal of this lambda.
+    #
+    # Bang reminds that a persistant mutation will happen, so note:
+    # a persistant mutation will happen.
+    #
+    # Meant to be called in an imperative manner. Returns nothing.
+    def inject!(models : Models) : Nil
+      @superlocal.@values.concat(models)
+
+      nil
     end
 
     # Returns the specificity of this lambda. Since lambdas
@@ -1881,9 +1900,18 @@ module Ven::Suite::ModelSuite
   # provides (a) a safe way to call Ven code from Crystal,
   # and (b) a safe way to parallelize Ven code execution.
   class MFrozenLambda < MFunction
-    def initialize(parent : Machine, @lambda : MLambda)
-      @scope = @lambda.scope.clone.as(Hash(String, Model))
-      @chunks = parent.chunks.as(Chunks)
+    # Returns the lambda that was frozen.
+    getter lambda : MLambda
+    # Returns the parent machine. The parent machine is the machine
+    # that froze the lambda.
+    getter machine : Machine
+
+    @scope : Hash(String, Model)
+    @chunks : Chunks
+
+    def initialize(@machine, @lambda)
+      @scope = @lambda.scope
+      @chunks = @machine.chunks
     end
 
     delegate :variant?, :specificity, to: @lambda

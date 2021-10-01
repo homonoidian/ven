@@ -47,6 +47,20 @@ say("00_language/05_lambdas.ven");
 
   rec = (n) if n < 10 rec(n + 1) else n;
   ensure rec(0) is 10;
+
+  # Insanely inefficient, WTF?
+  a = () _ + _;
+  b = a.inject([1 2]);
+
+  c = a.inject([1]);
+  d = c.inject([2]);
+
+  ensure a() dies; # could not borrow both
+  ensure b() is 3; # 1 + 2
+  ensure c() dies; # could not borrow the second one
+  ensure d() is 3;
+  ensure a() dies;
+  ensure c() dies;
 };
 
 say("-> [PASS]")

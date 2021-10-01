@@ -57,6 +57,56 @@ module Ven::Library
       defbuiltin "apply", callee : MFunction, args : Vec do
         MPartial.new(callee, args.items)
       end
+
+      # Injects *injection* into *injectable*.
+      #
+      # *injectable*, although defined to be `MFunction`, accepts
+      # only `MLambda`s and `MFrozenLambda`s. This is due to the
+      # fact that Crystal doesn't support multiple inheritance/
+      # role types, which would be necessary, e.g., for an injectable
+      # interface type.
+      #
+      # In Ven speak, to inject means to return a **very shallow copy**
+      # of *injectable* with superlocal set to *injection*.
+      #
+      # Injection inheritance works, too:
+      #
+      # ```ven
+      # add = () _ + _;
+      #
+      # add-with-a = add.inject([1]);
+      # add-with-ab = add-with-a.inject([2]);
+      #
+      # ensure add-with-b() is 3;
+      # ```
+      #
+      # Notice how `add-with-ab` inherited `add-with-a`'s injection.
+      defbuiltin "inject", injectable : MFunction, injection : Vec do
+        if injectable.is_a?(MLambda)
+          copy = MLambda.new(
+            injectable.scope,
+            injectable.arity,
+            injectable.slurpy,
+            injectable.params,
+            injectable.target,
+          )
+          copy.superlocal.merge!(injectable.superlocal)
+          copy.inject!(injection.items)
+        elsif injectable.is_a?(MFrozenLambda)
+          copy = MLambda.new(
+            injectable.lambda.scope,
+            injectable.lambda.arity,
+            injectable.lambda.slurpy,
+            injectable.lambda.params,
+            injectable.lambda.target,
+          ).freeze(injectable.machine)
+          copy.lambda.superlocal.merge!(injectable.lambda.superlocal)
+          copy.lambda.inject!(injection.items)
+        else
+          machine.die("'inject': injectable must be lambda, or frozen lambda")
+        end
+        copy
+      end
     end
   end
 end

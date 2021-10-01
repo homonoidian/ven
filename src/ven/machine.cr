@@ -866,7 +866,11 @@ module Ven
                   # Make an isolated context, and clone the original
                   # scope to make sure the user doesn't change it in
                   # the lambda body.
-                  next @context.push(isolated: true, initial: found.scope.clone)
+                  @context.push(isolated: true, initial: found.scope.clone)
+                  # Set the lambda scope's superlocals to its associated
+                  # (injected) superlocals.
+                  @context.current.superlocal.merge!(found.superlocal)
+                  next
                 else
                   die("argument/parameter mismatch for " \
                       "#{callee.to_s}: #{args.join(", ")}")
