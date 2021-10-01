@@ -169,22 +169,28 @@ module Ven::Parselet
   end
 
   # Reads a vector into `QVector`.
+  #
+  # Reads a vector filter expression into `QFilterOver`.
   class PVector < Nud
     def parse
       items, filter = items!
 
-      vector = QVector.new(@tag, items)
+      return QVector.new(@tag, items) if filter.nil?
 
-      unless filter.nil?
-        return QFilterOver.new(@tag, vector, filter)
+      if items.size == 1
+        # E.g., [foo | _ > 5] makes little sense if viewed as one-
+        # element filter. Interpolate rawly instead.
+        subject = items.first
+      else
+        subject = QVector.new(@tag, items)
       end
 
-      vector
+      QFilterOver.new(@tag, subject, filter)
     end
 
     # Reads the items. Returns a tuple of `{items, filter?}`.
-    # Allows trailing commas. Does not allow filtering an
-    # empty vector.
+    # Allows trailing commas (except when there's filter).
+    # Does not allow filtering an empty vector.
     private def items!
       items = Quotes.new
       filter = nil

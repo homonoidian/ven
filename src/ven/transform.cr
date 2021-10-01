@@ -48,7 +48,7 @@ module Ven
       end
 
       # And pass it to the consensus filter hook.
-      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK), [q.vector, lambda])
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK), [q.subject, lambda])
     end
 
     # Transforms an immediate box statement into a box

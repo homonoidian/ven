@@ -219,7 +219,7 @@ module Ven::Suite::QuoteSuite
 
   defquote(QVector, items : Quotes, desc: "vector")
   defquote(QFilterOver,
-    vector : Quote,
+    subject : Quote,
     filter : Quote,
     desc: "filtered vector",
   )

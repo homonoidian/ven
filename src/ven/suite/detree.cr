@@ -554,8 +554,17 @@ module Ven::Suite
     end
 
     def visit!(q : QFilterOver)
+      subject = q.subject
+
       surround "[" do
-        write_items q.vector.as(QVector).items
+        if subject.is_a?(QVector)
+          # Splice items if subject is a vector.
+          write_items subject.items
+        else
+          # Otherwise paste raw. Shouldn't cause any ambiguities,
+          # since there's no trailing comma & '|' is powerful.
+          visit subject
+        end
         write_ws
         write "|"
         write_ws

@@ -11,7 +11,7 @@
 # item **if it is callable**, orelse ignoring the item.
 #
 # ```ven
-# [2, (n) n + 1, 4](1) # => [2, 3, 4]
+# [2, (n) n + 1, 4](1) # => [2, 2, 4]
 # ```
 fun<vec> __iter(*) given any =
   |&_.callable? and apply(_, *)() or _| $;
@@ -26,11 +26,10 @@ fun<vec> __iter(*) given any =
 # say(foo); # ["1" 0 0 0 0 0 0 ...];
 #
 # # Usage with box instances:
-# immediate box Bar;
+# immediate box Bar { x = 0; y = 0 };
 # Bar["x"] = 1;
 # Bar["y"] = 2;
 # Bar.[x, y].say(); # [1 2]
-#
 #
 # # Usage with maps:
 # person = %{ first-name "John" last-name "Doe" };
@@ -69,12 +68,15 @@ fun<any> __access_assign(value, items) given any, range =
 #    under the cursor) are passed to *fn*.
 fun<vec> __filter(fn) given any(concrete, lambda, builtin, frozen) =
   if #fn is 0
-    die("todo")
-    #  $.__filter_inject(fn)
+    $.__filter_inject(fn)
   else if #fn is 1
     $.__filter_call(fn)
   else
     die("$.__filter_take(fn, #fn)");
+
+# Converts this value into a vector, and passes it to `__filter<vec>`.
+fun<any> __filter(fn) given any(concrete, lambda, builtin, frozen) =
+  __filter(&$, fn);
 
 # Dies: can inject only into lambdas.
 fun<vec> __filter_inject(fn) given function =
@@ -82,7 +84,7 @@ fun<vec> __filter_inject(fn) given function =
 
 # Queues only those items for which *fn* returns a non-false.
 fun<vec> __filter_inject(fn) given lambda {
-  |(fn["refs"] = [&_]) and fn() and queue _|: $;
+  |fn.inject([&_])() and queue _|: $;
   # Force-return the queue, even if it is empty.
   return queue
 }

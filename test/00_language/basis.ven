@@ -1,0 +1,58 @@
+distinct ven.tests.language.basis;
+
+ensure "Basis functions do what they're supposed to do" {
+  should "implement __iter"
+    [2, (n) n + 1, 4](1) is  [2, 2, 4];
+
+  should "implement __access_assign with vector" {
+    foo = 0 x 10;
+    foo[0] = "1";
+    foo is ["1" 0 0 0 0 0 0 0 0 0]
+  }
+
+  should "implement __access_assign with box instances" {
+    immediate box Bar { x = 0; y = 0 };
+    ensure Bar.[x y] is [0 0];
+    Bar["x"] = 1;
+    Bar["y"] = 2;
+    Bar.[x y] is [1 2]
+  }
+
+  should "implement __access_assign with maps" {
+    person = %{ first-name "John" last-name "Doe" };
+    person["first-name"] = "Samuel";
+    person.[first-name last-name] is ["Samuel" "Doe"]
+  }
+
+  should "implement __access_assign with ranges" {
+    # TODO: test all kinds of ranges!
+    foo = 0 x 10;
+    foo[to 2] = 1;
+    foo is [1 1 0 0 0 0 0 0 0 0]
+  }
+
+  should "implement __filter with #fn = 0"
+    [1 2 3 | _ > 3] is [];
+    [1 2 3 | _ > 2] is [3];
+    [1 2 3 | () _ <= 2] is [1 2];
+    {
+      x = () _ > 2;
+      fun y(_) = _ > 2;
+      [1 2 3 | x] is [1 2 3 | y] is [3]
+    };
+    [1 to 10 | _ > 5] is [6 7 8 9 10];
+
+  should "implement __filter with #fn = 1"
+    [1 2 3 | (x) x > 3] is [];
+    [1 2 3 | (x) x > 2] is [3];
+    {
+      x = (a) a > 2;
+      fun y(a) = a > 2;
+      [1 2 3 | x] is [1 2 3 | y] is [3]
+    };
+    [1 to 10 | (a) a > 5] is [6 7 8 9 10];
+
+  should "implement __filter with #fn >= 2"
+    [1 2 3 | (a, b) a < b] dies; # TODO
+    [1 2 3 | (a, b, c) a < b + c] dies;
+}
