@@ -208,7 +208,7 @@ module Ven::Suite
       else
         # Which means it's stitched.
         chunk.seamless.each_with_index do |instruction, index|
-          ctx = ctx.copy_with(ip: index, instruction: instruction)
+          ctx = ctx.copy_with(ip: index)
 
           indent do
             write @fmt.on_ip(@io, ctx)

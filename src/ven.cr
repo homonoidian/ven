@@ -154,7 +154,7 @@ module Ven
         # Get the instruction statistic for the current
         # instruction. Thankfully, the context has the
         # IP we can use.
-        for_ins = @statistic.instructions[ctx.ip]
+        return unless for_ins = @statistic.instructions[ctx.ip]?
 
         amt = for_ins.amount
         dur = for_ins.duration
