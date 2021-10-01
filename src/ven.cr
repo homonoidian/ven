@@ -159,7 +159,7 @@ module Ven
         amt = for_ins.amount
         dur = for_ins.duration
 
-        amt =
+        amt_s =
           if amt < 100
             amt.colorize.green
           elsif amt < 1_000
@@ -170,7 +170,7 @@ module Ven
             amt.colorize.red
           end
 
-        dur, unit = Utils.with_unit(dur)
+        dur_s, unit = Utils.with_unit(dur)
 
         case unit
         when "ns"
@@ -183,7 +183,19 @@ module Ven
           unit = unit.colorize.red.bright
         end
 
-        io << " [" << amt << " time(s), took " << dur << unit << "]"
+        Colorize.with.dark_gray.surround(io) do
+          io << " [N: " << amt_s << ", T: " << dur_s.colorize.white << unit
+
+          # If this instruction was called more than once, print T/N
+          # too (arithmetic mean time of instruction in the run).
+          if amt > 1
+            mean, mean_unit = Utils.with_unit(dur / amt)
+
+            io << ", T/N: " << mean.colorize.white << mean_unit
+          end
+
+          io << "]"
+        end
       end
     end
 
