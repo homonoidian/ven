@@ -794,12 +794,24 @@ module Ven
               operand = lookup(this)
               @context[this] = num operand.to_num.value + 1
               put operand
+            in Opcode::FAST_INC
+              # A ~10-20% faster INC instruction, which doesn't
+              # put the old value. Useful mainly to speed up
+              # INC POP, which is most common in loops:
+              #   (--)
+              @context[this = symbol] = lookup(this).add(num 1) || die("bad '++'")
             in Opcode::DEC
               # Implements inplace-decrement semantics: (-- x1)
               this = symbol
               operand = lookup(this)
               @context[this] = num operand.to_num.value - 1
               put operand
+            in Opcode::FAST_DEC
+              # A ~10-20% faster DEC instruction, which doesn't
+              # put the old value. Useful mainly to speed up
+              # DEC POP, which is most common in loops:
+              #   (--)
+              @context[this = symbol] = lookup(this).sub(num 1) || die("bad '--'")
             in Opcode::REST
               # Defines the `*`. Pops `stack.size - static` values,
               # and makes a vector of them. Subsequently, this vector
@@ -866,7 +878,7 @@ module Ven
                   # Make an isolated context, and clone the original
                   # scope to make sure the user doesn't change it in
                   # the lambda body.
-                  @context.push(isolated: true, initial: found.scope.clone)
+                  @context.push(isolated: true, initial: found.scope)
                   # Set the lambda scope's superlocals to its associated
                   # (injected) superlocals.
                   @context.current.superlocal.merge!(found.superlocal)

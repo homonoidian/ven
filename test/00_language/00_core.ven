@@ -426,3 +426,17 @@ ensure "vec indexing works" {
     [1 2 3][to -4] is [];
     [1 2 3][to -100000] is [];
 }
+
+ensure "Loop increment, decrement works" {
+  should "increment properly" {
+    loop i = 0, i < 100, i++
+      true; # almost do nothing
+    ensure i is 100
+  }
+
+  should "decrement properly" {
+    loop i = 100, i > 0, i--
+      true; # almost do nothing
+    ensure i is 0
+  }
+}

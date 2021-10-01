@@ -127,7 +127,7 @@ module Ven::Suite::CxSuite
     private struct Scope
       # Returns whether this scope allows a superlocal borrow
       # to pass through.
-      getter borrow = false
+      getter borrow : Bool
       # Returns whether this scope is isolated.
       getter isolated : Bool
       # Returns the superlocal of this scope.
@@ -256,19 +256,15 @@ module Ven::Suite::CxSuite
         return field
       end
 
-      # If the local scope is isolated, or has *symbol* in
-      # it, return right away.
-      if local.isolated || local.has_key?(symbol)
-        return local[symbol]?
-      end
-
       if value = @scopes[nest][symbol]?
         return value
+      elsif local.isolated
+        return
       end
 
       # Otherwise, ascend, trying to find *symbol* in the
       # upper scopes. Take upper metacontexts into account.
-      @scopes.reverse_each do |scope|
+      @scopes[...-1].reverse_each do |scope|
         if value = meta_ns?(scope, &.[symbol]?) || scope[symbol]?
           return value
         end

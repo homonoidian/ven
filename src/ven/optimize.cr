@@ -138,6 +138,10 @@ module Ven
             break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument of: head)
           when {Opcode::POP_SFILL, Opcode::STAKE}
             break snippet.remove(start, 2)
+          when {Opcode::INC, Opcode::POP}
+            break snippet.replace(start, 2, Opcode::FAST_INC, argument of: head)
+          when {Opcode::DEC, Opcode::POP}
+            break snippet.replace(start, 2, Opcode::FAST_DEC, argument of: head)
           when {Opcode::J, _}
             # There are only cross-snippet jumps. In one snippet
             # therefore, everything past an absolute jump is

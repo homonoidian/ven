@@ -78,7 +78,9 @@ module Ven::Suite::MachineSuite
     POP_ASSIGN
     TAP_ASSIGN
     INC
+    FAST_INC
     DEC
+    FAST_DEC
 
     # Opcodes that take a function payload.
 
