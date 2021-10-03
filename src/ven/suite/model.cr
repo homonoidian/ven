@@ -1933,7 +1933,7 @@ module Ven::Suite::ModelSuite
       ]
 
       # Put the lambda scope clone onto the scopes stack.
-      machine.context.push(isolated: true, initial: @scope.clone)
+      machine.context.push(isolated: true, initial: @scope)
 
       # Run! Disable the scheduler: *parent* is the one who
       # schedules stuff (?)
