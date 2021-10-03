@@ -128,15 +128,15 @@ module Ven::Suite::CxSuite
       # Returns whether this scope allows a superlocal borrow
       # to pass through.
       getter borrow : Bool
-      # Returns whether this scope is isolated.
-      getter isolated : Bool
+      # Returns whether this scope is opaque.
+      getter opaque : Bool
       # Returns the superlocal of this scope.
       getter superlocal = Superlocal(Model).new
 
       def initialize(
         @scope = {} of String => Model,
         @borrow = false,
-        @isolated = false
+        @opaque = false
       )
       end
 
@@ -196,13 +196,13 @@ module Ven::Suite::CxSuite
     end
 
     # Introduces a deeper scope. It can be initialized with
-    # some *initial* entries. It can be *isolated* (and thus
-    # im*borrow*able). If the scope is not *isolated*, you
+    # some *initial* entries. It can be *opaque* (and thus
+    # im*borrow*able). If the scope is not *opaque*, you
     # can specify its *borrow* separately.
-    def push(borrow = false, isolated = false, initial = {} of String => Model)
+    def push(borrow = false, opaque = false, initial = {} of String => Model)
       @scopes << Scope.new(initial,
-        borrow: !isolated || borrow,
-        isolated: isolated,
+        borrow: !opaque || borrow,
+        opaque: opaque,
       )
     end
 
@@ -251,12 +251,12 @@ module Ven::Suite::CxSuite
     # is supposed to be found.
     def []?(symbol : String, nest = -1)
       # Metacontext has the highest priority everywhere, even
-      # when isolated.
+      # when opaque.
       if field = meta_ns?(&.[symbol]?)
         return field
       end
 
-      if local.isolated
+      if local.opaque
         return local[symbol]?
       elsif value = @scopes[nest][symbol]?
         return value
@@ -276,9 +276,9 @@ module Ven::Suite::CxSuite
     # *nest* is the index of scope in `@scopes` where *symbol*
     # would like to be assigned in.
     def []=(symbol : String, value : Model, nest = -1)
-      # If the local scope is isolated, or has *symbol* defined,
+      # If the local scope is opaque, or has *symbol* defined,
       # don't look at *nest* and assign immediately.
-      if local.isolated || local.has_key?(symbol)
+      if local.opaque || local.has_key?(symbol)
         return local[symbol] = value
       end
 

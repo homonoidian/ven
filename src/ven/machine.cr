@@ -286,12 +286,12 @@ module Ven
     # of the frame. Initiates the frame's stack with *initial*
     # values. Sets the frame's label to *label*.
     #
-    # See `Context#push` to learn about *borrow* and *isolated*.
-    private macro invoke(origin, desc = nil, initial = nil, label = nil, borrow = false, isolated = false)
+    # See `Context#push` to learn about *borrow* and *opaque*.
+    private macro invoke(origin, desc = nil, initial = nil, label = nil, borrow = false, opaque = false)
       # Push the scope:
       @context.push(
         borrow: {{borrow}},
-        isolated: {{isolated}},
+        opaque: {{opaque}},
       )
       # ... and the frame:
       @frames << Frame.new(
@@ -875,10 +875,10 @@ module Ven
                   put found.call(args)
                 when MLambda
                   @frames << Frame.new(Frame::Label::Function, args, found.target)
-                  # Make an isolated context, and clone the original
+                  # Make an opaque context, and clone the original
                   # scope to make sure the user doesn't change it in
                   # the lambda body.
-                  @context.push(isolated: true, initial: found.scope)
+                  @context.push(opaque: true, initial: found.scope)
                   # Set the lambda scope's superlocals to its associated
                   # (injected) superlocals.
                   @context.current.superlocal.merge!(found.superlocal)
