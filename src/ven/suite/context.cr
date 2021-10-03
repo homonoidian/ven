@@ -256,10 +256,10 @@ module Ven::Suite::CxSuite
         return field
       end
 
-      if value = @scopes[nest][symbol]?
+      if local.isolated
+        return local[symbol]?
+      elsif value = @scopes[nest][symbol]?
         return value
-      elsif local.isolated
-        return
       end
 
       # Otherwise, ascend, trying to find *symbol* in the
