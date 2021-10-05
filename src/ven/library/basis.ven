@@ -6,6 +6,10 @@
 # - Do not specify 'distinct': basis lives inside the executable,
 #   and therefore is not accessible to the lookup infrastructure.
 
+# `function` types that have arity. `generic` isn't one of them,
+# for example.
+_WithArity = any(concrete, lambda, builtin, frozen);
+
 
 # Maps over this vector, performing `apply(item, *)` for each
 # item **if it is callable**, orelse ignoring the item.
@@ -15,6 +19,7 @@
 # ```
 fun<vec> __iter(*) given any =
   |&_.callable? and apply(_, *)() or _| $;
+
 
 # Assigns this value's subordinates, specified by the rest,
 # to *value*.
@@ -57,16 +62,17 @@ fun<any> __access_assign(value, items) given any, range =
   else
     die(typeof($) ~ ": cannot apply '$items'");
 
+
 # Returns a new vector, with all items for which *fn* returned
 # `false` removed.
 #
 # If *fn*'s arity:
 #
-# 1. = 0, the filteree is put onto *fn*'s references stack.
+# 1. = 0, the filteree is injected into *fn*.
 # 2. = 1, the filteree is passed to *fn*.
 # 3. = N, N consequent filterees (including the filteree
 #    under the cursor) are passed to *fn*.
-fun<vec> __filter(fn) given any(concrete, lambda, builtin, frozen) =
+fun<vec> __filter(fn) given _WithArity =
   if #fn is 0
     $.__filter_inject(fn)
   else if #fn is 1
@@ -75,8 +81,9 @@ fun<vec> __filter(fn) given any(concrete, lambda, builtin, frozen) =
     die("$.__filter_take(fn, #fn)");
 
 # Converts this value into a vector, and passes it to `__filter<vec>`.
-fun<any> __filter(fn) given any(concrete, lambda, builtin, frozen) =
+fun<any> __filter(fn) given _WithArity =
   __filter(&$, fn);
+
 
 # Dies: can inject only into lambdas.
 fun<vec> __filter_inject(fn) given function =
@@ -84,17 +91,19 @@ fun<vec> __filter_inject(fn) given function =
 
 # Queues only those items for which *fn* returns a non-false.
 fun<vec> __filter_inject(fn) given lambda {
-  |fn.inject([&_])() and queue _|: $;
-  # Force-return the queue, even if it is empty.
+  loop i = 0, i < $, i++
+    fn.inject([ $[i] ])() and queue $[i];
   return queue
 }
 
+
 # :ditto:
 fun<vec> __filter_call(fn) given function {
-  |fn(&_) and queue _|: $;
-  # Force-return the queue, even if it is empty.
+  loop i = 0, i < $, i++
+    fn($[i]) and queue $[i];
   return queue
 }
+
 
 # Prints the argument to `STDOUT`. Submits `actions.Say` with
 # the argument it received.
@@ -104,6 +113,7 @@ fun say(_) =
 # Prints each argument to `STDOUT`. See `say(_)`.
 fun say(*) =
   |say(_)| *;
+
 
 # Prints the argument to `STDOUT`, and blocks, waiting for
 # user input. Returns the user input as string. Dies if got
@@ -115,14 +125,68 @@ fun ask(_) =
 fun ask(*) =
   |ask(_)| *;
 
+
 # Returns the contents of *filename*.
 fun slurp(filename) given str =
   actions.Slurp(filename).submit();
+
 
 # Appends *content* to *filename*.
 fun burp(filename, content) given str =
   actions.Burp(filename, content).submit();
 
+
 # Writes *content* to *filename*.
 fun write(filename, content) given str =
   actions.Write(filename, content).submit();
+
+# Implements map spread. Very similar to `[... | ...]`, the
+# filter operator (see `__filter`).
+#
+# # If *fn*'s arity:
+#
+# 1. = 0, the item is injected into *fn*.
+# 2. = 1, the item is passed to *fn*.
+# 3. = N, N consequent items (including the item under
+#   the cursor) are passed to *fn*.
+#
+# Returns this vector if *iterative* is true, otherwise the vector of
+# *fn* return results.
+fun<vec> __map_spread(fn, iterative) given _WithArity, bool =
+  if #fn is 0
+    $.__map_spread_inject(fn, iterative)
+  else if #fn is 1
+    $.__map_spread_call(fn, iterative)
+  else
+    die("unimplemented");
+
+# Converts this value into a vector (using `&`), and passes
+# it to `__map_spread(fn)`.
+fun<any> __map_spread(fn, iterative) given _WithArity, bool =
+  __map_spread(&$, fn, iterative);
+
+# Fallback: dies of invalid operator.
+fun<any> __map_spread(fn, iterative) =
+  die("invalid map spread operator: $fn");
+
+
+# Implements the inject variant of map spread.
+fun<vec> __map_spread_inject(fn, iterative) given any(lambda, frozen), bool {
+  loop i = 0, i < $, i++ {
+    item = fn.inject([ $[i] ])();
+    if not iterative
+      queue item
+  }
+  if iterative return $ else return queue
+}
+
+
+# Implements the call variant of map spread.
+fun<vec> __map_spread_call(fn, iterative) given function, bool {
+  loop i = 0, i < $, i++ {
+    item = fn($[i]);
+    if not iterative
+      queue item
+  }
+  if iterative return $ else return queue
+}

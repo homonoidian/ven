@@ -314,44 +314,6 @@ module Ven
       issue(Opcode::REDUCE, q.operator)
     end
 
-    def visit!(q : QMapSpread)
-      start = label
-      stop = label
-
-      unless q.iterative
-        issue(Opcode::VEC, 0)
-      end
-
-      visit(q.operand)
-      issue(Opcode::TOV)
-      issue(Opcode::MAP_SETUP)
-      label start
-      issue(Opcode::MAP_ITER, stop)
-
-      @context.child do
-        under chunk: "<map block>" do |target|
-          visit(q.operator.as(QBlock).body)
-          issue(Opcode::RET)
-        end
-
-        issue(Opcode::MAP_OPERATE, target)
-      end
-
-      if q.iterative
-        issue(Opcode::POP)
-      else
-        issue(Opcode::MAP_APPEND)
-      end
-
-      issue(Opcode::J, start)
-
-      label stop
-
-      unless q.iterative
-        issue(Opcode::POP)
-      end
-    end
-
     def visit!(q : QIf)
       finish = label
       else_b = label

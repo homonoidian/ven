@@ -25,8 +25,6 @@ module Ven::Suite::MachineSuite
     STAKE
     STAP
     RET
-    MAP_SETUP
-    MAP_APPEND
     FALSE_IF_EMPTY
     FIELD_DYNAMIC
     RESET_DIES
@@ -49,7 +47,6 @@ module Ven::Suite::MachineSuite
     VEC
     PCRE
     GOTO
-    MAP_OPERATE
     CALL
     REDUCE
     BINARY
@@ -67,7 +64,6 @@ module Ven::Suite::MachineSuite
     J            = 512
     JIT
     JIF
-    MAP_ITER
     JIT_ELSE_POP
     JIF_ELSE_POP
     SETUP_DIES

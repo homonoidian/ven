@@ -266,15 +266,15 @@ nud TEST = <{
   ensure "~ detrees map spread" {
     should "detree normal map spreads"
       ~quote(|&_ > 5 and _ < 10| [1 2 3]) is
-        "|{\n  (&_ > 5) and (_ < 10)\n}| [1 2 3]";
+        "|(&_ > 5) and (_ < 10)| [1 2 3]";
 
     should "detree map spreads with parenthesized unary operators"
       ~quote(|(-x)| [1 2 3]) is
-        "|{\n  -x\n}| [1 2 3]"
+        "|(-x)| [1 2 3]"
 
     should "detree iterative map spreads"
       ~quote(|say(x)|: [1 2 3]) is
-        "|{\n  say(x)\n}|: [1 2 3]";
+        "|say(x)|: [1 2 3]";
   }
 
   ensure "~ detrees reduce spread" {

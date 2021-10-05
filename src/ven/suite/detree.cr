@@ -722,7 +722,11 @@ module Ven::Suite
 
     def visit!(q : QMapSpread)
       write "|"
-      visit q.operator
+      if q.operator.is_a?(QUnary)
+        in_parens q.operator
+      else
+        visit q.operator
+      end
       write "|"
       write ":" if q.iterative
       write_ws

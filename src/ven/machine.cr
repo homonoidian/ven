@@ -915,35 +915,6 @@ module Ven
             in Opcode::STAP
               # Same as `STAKE`, but taps.
               put @context.stap? || die("'&_': could not borrow")
-            in Opcode::MAP_SETUP
-              # Prepares for a series of map iterations.
-              control << tap.length << 0 << stack.size - 2
-            in Opcode::MAP_ITER
-              # Executes a map iteration. Assumes that control[-2]
-              # is the index of the current item in the operand
-              # vector, and that control[-3] is the length of
-              # the operand vector.
-              length, index, _ = control.last(3)
-              if index >= length
-                control.pop(3) && jump target
-              else
-                put tap.as(Vec)[index]
-              end
-              control[-2] += 1
-            in Opcode::MAP_APPEND
-              # A variation of binary "&", used exclusively
-              # during map spreads. Assumes that control[-1]
-              # is a stack pointer to the destination vector.
-              stack[control.last].as(Vec) << pop
-            in Opcode::MAP_OPERATE
-              # Same as `GOTO`, but fills the superlocals
-              # with the popped value.
-              item = pop
-              # Switch to the target chunk.
-              invoke(static(Int32), label: Frame::Label::Unknown)
-              # Fill the superlocals stack with the current
-              # item, and go execute.
-              next @context.sfill(item)
             in Opcode::REDUCE
               # Pops a vector, and reduces it using a binary
               # operator. The operator is provided by a `VStatic`

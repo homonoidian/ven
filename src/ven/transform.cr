@@ -10,6 +10,10 @@ module Ven
     # is transformed into `FILTER_HOOK([1, 2, 3], () _ > 5)`
     FILTER_HOOK = "__filter"
 
+    # Consensus map spread hook name. For example, `|_ + 1| [1 2 3]`
+    # is transformed into `MAP_SPREAD_HOOK([1 2 3], () _ + 1, false)`
+    MAP_SPREAD_HOOK = "__map_spread"
+
     # Consensus access assign hook name. For example, `a[b] = c`
     # is transformed into `ACCESS_ASSIGN_HOOK(a, c, b)`
     ACCESS_ASSIGN_HOOK = "__access_assign"
@@ -24,30 +28,62 @@ module Ven
       QRuntimeSymbol.new(tag, "__temp#{@@symno += 1}")
     end
 
+    # Transforms this map spread expression into a consensus
+    # map spread hook call expression (see `MAP_SPREAD_HOOK`).
+    #
+    # Unless the map operator is a lambda already, or if it's
+    # a symbol (which implies it stands for a callable), makes
+    # a lambda that wraps around it.
+    #
+    # ```ven
+    # # Before:
+    #
+    # |_ + 1| [1 2 3];
+    # |foo| [1 2 3];
+    #
+    # # After (`false` is for iterativity):
+    #
+    # __map_spread([1 2 3], () _ + 1, false);
+    # __map_spread([1 2 3], foo, false);
+    # ```
+    def transform!(q : QMapSpread)
+      case q.operator
+      when QSymbol, QLambda
+        lambda = q.operator
+      else
+        lambda = QLambda.new(q.tag, [] of String, q.operator, slurpy: false)
+      end
+
+      QCall.new(q.tag, QRuntimeSymbol.new(q.tag, MAP_SPREAD_HOOK),
+        [q.operand, lambda, q.iterative ? QTrue.new(q.tag) : QFalse.new(q.tag)])
+    end
+
     # Transforms this vector filter expression into a consensus
     # filter hook call expression (see `FILTER_HOOK`).
+    #
+    # Unless the filter is a lambda already, or if it's a
+    # symbol (which implies it stands for a callable), makes
+    # a lambda that wraps around it.
     #
     # ```ven
     # # Before:
     #
     # [1, 2, 3 | _ > 5];
+    # [1, 2, 3 | foo];
     #
     # # After:
     #
     # __filter([1, 2, 3], () _ > 5);
+    # __filter([1, 2, 3], foo);
     # ```
     def transform!(q : QFilterOver)
-      # Unless the filter is a lambda already, or if it's a
-      # symbol (which implies it stands for a lambda), make
-      # a lambda that wraps around it.
       case q.filter
       when QSymbol, QLambda
         lambda = q.filter
       else
-        lambda = QLambda.new(q.tag, [] of String, q.filter, false)
+        lambda = QLambda.new(q.tag, [] of String, q.filter, slurpy: false)
       end
 
-      # And pass it to the consensus filter hook.
       QCall.new(q.tag, QRuntimeSymbol.new(q.tag, FILTER_HOOK), [q.subject, lambda])
     end
 

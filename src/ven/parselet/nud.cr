@@ -252,8 +252,7 @@ module Ven::Parselet
         )
       end
 
-      # `|_ + 1| ...` is the same as `|{ _ + 1 }| ...`
-      operator = QBlock.new(@tag, [led])
+      operator = led
       iterative = @parser.expect("|") && @parser.word!(":")
 
       QMapSpread.new(@tag, operator, led, !!iterative)

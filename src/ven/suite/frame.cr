@@ -22,11 +22,6 @@ module Ven::Suite::MachineSuite
     # Returns the operand stack (aka stack) of this frame.
     property stack : Models
 
-    # Returns the control stack of this frame.
-    #
-    # Scheduled for removal.
-    property control = [] of Int32
-
     # The instruction pointer to jump to if there was a death,
     # and it got intercepted by this frame.
     property dies : Int32?
