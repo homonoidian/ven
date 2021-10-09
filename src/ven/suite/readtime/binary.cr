@@ -165,14 +165,14 @@ module Ven::Suite::Readtime::Binary
 
   # Concatenates two vectors, *left* and *right*. Returns the
   # resulting vector.
-  def veccat(left : QVector, right : QVector) : QVector
+  def concat(left : QVector, right : QVector) : QVector
     QVector.new(left.tag, left.items + right.items)
   end
 
   # Converts *left*, *right* to vectors (see `Unary.to_vec`),
-  # and passes them to `veccat`.
-  def veccat(left : Quote, right : Quote) : QVector
-    veccat(
+  # and passes them to `concat`.
+  def concat(left : Quote, right : Quote) : QVector
+    concat(
       Unary.to_vec(left),
       Unary.to_vec(right),
     )
@@ -180,14 +180,14 @@ module Ven::Suite::Readtime::Binary
 
   # Concatenates two strings, *left* and *right*. Returns the
   # resulting string.
-  def strcat(left : QString, right : QString) : QString
+  def stitch(left : QString, right : QString) : QString
     QString.new(left.tag, left.value + right.value)
   end
 
   # Converts *left*, *right* to strings (see `Unary.to_str`),
-  # and passes them to `strcat`.
-  def strcat(left : Quote, right : Quote) : QString
-    strcat(
+  # and passes them to `stitch`.
+  def stitch(left : Quote, right : Quote) : QString
+    stitch(
       Unary.to_str(left),
       Unary.to_str(right)
     )
@@ -249,8 +249,8 @@ module Ven::Suite::Readtime::Binary
     when "or"  then disj(left, right)
     when "is"  then is?(left, right)
     when "in"  then in?(left, right)
-    when "&"   then veccat(left, right)
-    when "~"   then strcat(left, right)
+    when "&"   then concat(left, right)
+    when "~"   then stitch(left, right)
     when "x"   then repeat(left, right)
     when "<", ">", "<=", ">="
       cmp(operator, left, right)
