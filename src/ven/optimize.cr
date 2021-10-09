@@ -138,6 +138,14 @@ module Ven
             break snippet.replace(start, 2, Opcode::POP_ASSIGN, argument of: head)
           when {Opcode::POP_SFILL, Opcode::STAKE}
             break snippet.remove(start, 2)
+          when {Opcode::TAP_SFILL, Opcode::POP}
+            break snippet.replace(start, 2, Opcode::POP_SFILL, argument of: head)
+          when {Opcode::TAP_SFILL, Opcode::IF_SFILL}
+            # Forced if superlocal fill:
+            #   ~> if ^true say("Hi!")
+            #
+            # ... doesn't need double/if-sfilling. Get rid of the IF_SFILL.
+            break snippet.remove(start + 1, 1)
           when {Opcode::INC, Opcode::POP}
             break snippet.replace(start, 2, Opcode::FAST_INC, argument of: head)
           when {Opcode::DEC, Opcode::POP}

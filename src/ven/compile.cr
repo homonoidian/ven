@@ -215,6 +215,7 @@ module Ven
         when "#"    then Opcode::LEN
         when "&"    then Opcode::TOV
         when "%"    then Opcode::TOM
+        when "^"    then Opcode::TAP_SFILL
         when "not"  then Opcode::TOIB
         when "to"   then Opcode::TOR_BL
         when "from" then Opcode::TOR_EL

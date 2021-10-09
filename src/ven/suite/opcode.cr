@@ -20,6 +20,7 @@ module Ven::Suite::MachineSuite
     NEG
     LEN
     ENS
+    TAP_SFILL
     POP_SFILL
     IF_SFILL
     STAKE

@@ -73,7 +73,7 @@ module Ven
     {% elsif type == :NUMBER %}
       /(?:(?:\d(?:_?\d)*)?\.(?:_?\d)+|[1-9](?:_?\d)*|0)/
     {% elsif type == :SPECIAL %}
-      /(?:%\{|-[->]|\+\+|=>|[-+*\/~<>&:%]=|[-'<>~+\/()[\]{},:;=?.|#&*%])/
+      /(?:%\{|-[->]|\+\+|=>|[-+*\/~<>&:%]=|[-'<>~+\/()[\]{},:;=?.|#&*%^])/
     {% elsif type == :IGNORE %}
       /(?:[ \n\r\t]+|#(?:[ \t][^\n]*|\n+))/
     {% else %}
@@ -665,7 +665,7 @@ module Ven
     def prepare
       # Prefixes (NUDs):
 
-      defnud("+", "-", "~", "&", "#", "%", "NOT", "TO", "FROM")
+      defnud("+", "-", "~", "&", "#", "%", "^", "NOT", "TO", "FROM")
 
       defnud("TRUE", Parselet::PTrue)
       defnud("FALSE", Parselet::PFalse)

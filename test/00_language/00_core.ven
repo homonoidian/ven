@@ -134,6 +134,14 @@ ensure "Sanity of unary operators" {
     %[1 2] is %{(1) 2};
     %[1 2 3] dies;
     %[1 2 3 4] is %{(1) 2, (3) 4}
+
+  should "support '^' for superlocal fill" {
+    # Block isolates the superlocal fills.
+    ^1 + _ is 2
+    # and ...
+    #  more tests?
+  };
+
 }
 
 ensure "Sanity of binary operators" {

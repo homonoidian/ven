@@ -904,6 +904,9 @@ module Ven
             in Opcode::POP_SFILL
               # Fills the superlocals with the popped value.
               @context.sfill(pop)
+            in Opcode::TAP_SFILL
+              # Fills the superlocals with the tapped value.
+              @context.sfill(tap)
             in Opcode::IF_SFILL
               # Fills the superlocals with the tapped value
               # unless it is a boolean.
