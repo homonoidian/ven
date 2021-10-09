@@ -12,4 +12,9 @@ ensure "fixed bugs are not present" {
     ensure x(false, "13") is "[false] x 13";
     ensure x(lambda, [31 32]) is "[type lambda] x 2";
   }
+
+  should "read symbol x correctly, and string \"x\" correctly" {
+    x = 2;
+    x is 2 and x x x is [2 2] and ["x" "x" "10"] is ["x" "x" "10"];
+  }
 }

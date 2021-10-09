@@ -436,7 +436,7 @@ module Ven
 
       # 'x' is special. If met in nud position, it's a symbol;
       # if met in operator position, it's a keyword operator.
-      if @word.lexeme == "x"
+      if @word.type == "SYMBOL" && @word.lexeme == "x"
         @word = word("X", "x")
       end
 
